@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{title}}</title>
+    <link rel="stylesheet" href="/assets/css/main.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="topbar__left">
+        <strong>slotm wallet</strong>
+        <span class="topbar__muted">{{user_email}}</span>
+      </div>
+      <nav class="topbar__right">
+        <a href="/games/slot-machine">Game</a>
+        <a href="/logout">Logout</a>
+      </nav>
+    </header>
+
+    <main class="wallet-page">
+      <section class="wallet-balance-card">
+        <h1>Wallet</h1>
+        <p class="wallet-balance-value"><span id="walletBalance">{{user_balance_coins}}</span> credits</p>
+        <p class="wallet-muted">Stripe configured: {{stripe_configured}}</p>
+        <p class="flash-msg" id="walletFlash">{{flash_message}}</p>
+      </section>
+
+      <section class="wallet-actions-card">
+        <h2>Add Credits</h2>
+        <div class="wallet-quick-actions">
+          <button class="btn btn--primary wallet-topup-btn" data-amount="500">+500</button>
+          <button class="btn btn--primary wallet-topup-btn" data-amount="1000">+1000</button>
+          <button class="btn btn--primary wallet-topup-btn" data-amount="2500">+2500</button>
+          <button class="btn btn--primary wallet-topup-btn" data-amount="5000">+5000</button>
+        </div>
+
+        <form id="customTopupForm" class="wallet-custom-form">
+          <label>
+            Custom credits
+            <input id="customTopupAmount" type="number" min="1" max="100000" value="1000">
+          </label>
+          <button class="btn btn--primary" type="submit">Pay with Stripe</button>
+        </form>
+
+        <div class="wallet-card-actions">
+          <button id="addCardBtn" class="btn btn--ghost" type="button">Add / Update Card</button>
+          <a class="btn btn--ghost" href="/games/slot-machine">Back to Game</a>
+        </div>
+      </section>
+
+      <section class="wallet-table-card">
+        <h2>Saved Cards</h2>
+        <table class="wallet-table">
+          <thead>
+            <tr>
+              <th>Brand</th>
+              <th>Card</th>
+              <th>Expiry</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{{cards_rows_html}}}
+          </tbody>
+        </table>
+      </section>
+
+      <section class="wallet-table-card">
+        <h2>Transaction History</h2>
+        <table class="wallet-table">
+          <thead>
+            <tr>
+              <th>When</th>
+              <th>Type</th>
+              <th>Amount</th>
+              <th>Description</th>
+              <th>Provider</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{{transactions_rows_html}}}
+          </tbody>
+        </table>
+      </section>
+    </main>
+
+    <script type="module" src="/assets/js/wallet.js"></script>
+  </body>
+</html>

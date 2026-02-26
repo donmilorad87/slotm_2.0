@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{title}}</title>
+    <link rel="stylesheet" href="/assets/css/main.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="topbar__left">
+        <strong>slotm</strong>
+        <span class="topbar__muted">{{user_email}}</span>
+      </div>
+      <nav class="topbar__right">
+        <a href="/wallet">Wallet</a>
+        <a href="/logout">Logout</a>
+      </nav>
+    </header>
+
+    <main class="game-page">
+      <header class="game-page__header">
+        <h1>Slot Machine</h1>
+      </header>
+
+      <section class="quick-credits-card">
+        <div>
+          <h2>Quick Credits</h2>
+          <p>Add credits without leaving the game.</p>
+          <p class="balance-chip">Balance: <strong id="hostBalanceLabel">{{user_balance_coins}}</strong> credits</p>
+        </div>
+        <div class="quick-credits-actions">
+          <button class="btn btn--primary quick-topup-btn" data-amount="500">+500</button>
+          <button class="btn btn--primary quick-topup-btn" data-amount="1000">+1000</button>
+          <button class="btn btn--primary quick-topup-btn" data-amount="2000">+2000</button>
+          <a class="btn btn--ghost" href="/wallet">Open Wallet</a>
+        </div>
+      </section>
+
+      <p class="flash-msg">{{flash_message}}</p>
+
+      <section class="game-page__content">
+        <slot-machine
+          data-balance="{{user_balance_coins}}"
+          data-user-id="{{user_id}}"
+          data-jwt-token="{{jwt_token}}"
+          data-games-url="/games"
+        ></slot-machine>
+      </section>
+    </main>
+
+    <script>
+      window.USER_BALANCE_COINS = Number("{{user_balance_coins}}");
+      window.JWT_TOKEN = "{{jwt_token}}";
+      window.USER_ID = Number("{{user_id}}");
+      window.STRIPE_PUBLISHABLE_KEY = "{{stripe_public_key}}";
+
+      window.showToast = function showToast(message, type) {
+        const toast = document.createElement("div");
+        toast.className = "toast toast--" + (type || "info");
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(function hide() {
+          toast.remove();
+        }, 3200);
+      };
+    </script>
+    <script type="module" src="/assets/js/main.js"></script>
+    <script type="module" src="/assets/js/slot-page.js"></script>
+  </body>
+</html>

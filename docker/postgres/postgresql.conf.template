@@ -1,0 +1,34 @@
+# ============================================
+# slotm – PostgreSQL Configuration (dev)
+# ============================================
+
+listen_addresses = '${POSTGRES_HOST}, 127.0.0.1'
+port = ${POSTGRES_PORT}
+
+# --- Connection ---
+max_connections = 50
+
+# --- Memory ---
+shared_buffers = 128MB
+work_mem = 4MB
+maintenance_work_mem = 64MB
+effective_cache_size = 256MB
+
+# --- WAL ---
+wal_level = replica
+max_wal_size = 256MB
+min_wal_size = 64MB
+
+# --- Logging ---
+log_destination = 'stderr'
+logging_collector = off
+log_min_duration_statement = 500
+log_line_prefix = '%t [%p] %u@%d '
+
+# --- SSL ---
+ssl = on
+ssl_cert_file = '/etc/ssl/certs/ssl-cert-snakeoil.pem'
+ssl_key_file = '/etc/ssl/private/ssl-cert-snakeoil.key'
+
+# --- Misc ---
+timezone = 'UTC'

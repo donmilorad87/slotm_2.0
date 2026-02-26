@@ -1,0 +1,16 @@
+{
+  "name": "slotm",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node ./scripts/build.mjs",
+    "start": "node ./dist/server.js",
+    "start:lan": "HOST=0.0.0.0 node ./dist/server.js",
+    "dev": "node ./scripts/build.mjs && node ./dist/server.js",
+    "test:parity": "npm run build && node --test tests/parity/*.test.mjs"
+  },
+  "dependencies": {
+    "pg": "^8.13.1"
+  }
+}

@@ -1,0 +1,24 @@
+# Build output
+app/dist/
+
+# Dependencies
+app/node_modules/
+node_modules/
+
+# Data
+data/
+*.sqlite
+
+# Environment (contains secrets)
+.env
+!.env.example
+
+# Docker volumes
+pgdata/
+
+# SSL certificates (generated at build)
+docker/nginx/ssl/
+
+# OS
+.DS_Store
+Thumbs.db
