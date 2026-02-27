@@ -1,9 +1,17 @@
-export function parseCookies(cookieHeader) {
+export interface SerializeCookieOptions {
+  maxAge?: number;
+  path?: string;
+  httpOnly?: boolean;
+  sameSite?: "Strict" | "Lax" | "None";
+  secure?: boolean;
+}
+
+export function parseCookies(cookieHeader: string | undefined | null): Record<string, string> {
   if (!cookieHeader) {
     return {};
   }
 
-  const out = {};
+  const out: Record<string, string> = {};
   const pairs = String(cookieHeader).split(";");
   for (const part of pairs) {
     const trimmed = part.trim();
@@ -21,7 +29,11 @@ export function parseCookies(cookieHeader) {
   return out;
 }
 
-export function serializeCookie(name, value, options = {}) {
+export function serializeCookie(
+  name: string,
+  value: string,
+  options: SerializeCookieOptions = {},
+): string {
   const parts = [`${encodeURIComponent(name)}=${encodeURIComponent(value)}`];
 
   if (options.maxAge !== undefined) {

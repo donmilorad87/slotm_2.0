@@ -14,6 +14,7 @@
  */
 
 const template = document.createElement('template');
+const HISTORY_PAGE_SIZE = 20;
 template.innerHTML = `
   <style>
     :host {
@@ -35,13 +36,17 @@ template.innerHTML = `
       --slot-card-bg: var(--card-bg, #ffffff);
       --slot-input-bg: var(--input-bg, #ffffff);
       --slot-border-color: var(--input-border, #e0e0e0);
-      --bg-gradient: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
+      --bg-gradient: var(--slot-bg-gradient, linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab));
+      --slot-panel-shadow: var(--panel-shadow, 0 4px rgba(0,0,0,0.3));
       /* Carousel Cell Colors (theme-aware) */
       --slot-cell-border: var(--card-bg, #ffffff);
       --slot-cell-shadow-light: var(--cell-shadow-light, rgba(255, 255, 255, 0.5));
       --slot-cell-shadow-dark: var(--cell-shadow-dark, rgba(0, 0, 0, 1));
       --slot-cell-shadow-gray: var(--cell-shadow-gray, gray);
       --slot-cell-inset-border: var(--card-bg, #ffffff);
+      --slot-symbol-text: var(--symbol-text, #f5da76);
+      --slot-symbol-border: var(--symbol-border, rgba(245, 218, 118, 0.24));
+      --slot-symbol-glow: var(--symbol-glow, rgba(245, 218, 118, 0.55));
     }
 
     * {
@@ -53,10 +58,185 @@ template.innerHTML = `
     .slot-game {
       background: var(--bg-gradient);
       background-attachment: fixed;
+      border: 1px solid var(--slot-border-color);
+      box-shadow: var(--slot-panel-shadow);
       border-radius: 1rem;
       padding: 1.5rem;
       user-select: none;
       -webkit-user-select: none;
+    }
+
+    .slot-menu {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .slot-menu-tab {
+      border-radius: 6px;
+      border: 2px solid var(--slot-border-color);
+      background: color-mix(in srgb, var(--slot-card-bg) 60%, transparent);
+      color: var(--slot-text-primary);
+      padding: 0.55rem 1rem;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 4px rgba(0,0,0,0.3);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .slot-menu-tab:hover {
+      background: color-mix(in srgb, var(--primary-color) 60%, transparent);
+      color: white;
+      border-color: var(--primary-color);
+    }
+
+    .slot-menu-tab.active {
+      background: color-mix(in srgb, var(--success-color) 60%, transparent);
+      color: white;
+    }
+
+    .slot-view[hidden] {
+      display: none !important;
+    }
+
+    .slot-rules-panel {
+      background: color-mix(in srgb, var(--slot-card-bg) 60%, transparent);
+      border: 2px solid var(--slot-border-color);
+      border-radius: 6px;
+      box-shadow: 0 4px rgba(0,0,0,0.3);
+      color: var(--slot-text-primary);
+      padding: 1rem;
+      display: grid;
+      gap: 1rem;
+    }
+
+    .slot-rules-quote {
+      border: 1px solid color-mix(in srgb, var(--slot-border-color) 70%, transparent);
+      border-radius: 6px;
+      background: color-mix(in srgb, var(--slot-input-bg) 45%, transparent);
+      padding: 0.85rem;
+      font-style: italic;
+      color: var(--slot-text-secondary);
+      line-height: 1.45;
+    }
+
+    .slot-rules-section h2 {
+      font-size: 1rem;
+      margin-bottom: 0.45rem;
+      color: var(--slot-text-primary);
+    }
+
+    .slot-rules-section ul {
+      margin: 0;
+      padding-left: 1rem;
+      color: var(--slot-text-secondary);
+      line-height: 1.45;
+      display: grid;
+      gap: 0.35rem;
+    }
+
+    .slot-history-panel {
+      background: color-mix(in srgb, var(--slot-card-bg) 60%, transparent);
+      border: 2px solid var(--slot-border-color);
+      border-radius: 6px;
+      box-shadow: 0 4px rgba(0,0,0,0.3);
+      color: var(--slot-text-primary);
+      padding: 1rem;
+      display: grid;
+      gap: 0.8rem;
+    }
+
+    .slot-history-status {
+      color: var(--slot-text-secondary);
+      font-size: 0.9rem;
+      min-height: 1.2rem;
+    }
+
+    .slot-history-table-wrap {
+      overflow-x: auto;
+      border: 1px solid color-mix(in srgb, var(--slot-border-color) 70%, transparent);
+      border-radius: 6px;
+      background: color-mix(in srgb, var(--slot-input-bg) 45%, transparent);
+    }
+
+    .slot-history-table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 940px;
+    }
+
+    .slot-history-table th,
+    .slot-history-table td {
+      padding: 0.45rem 0.5rem;
+      border-bottom: 1px solid color-mix(in srgb, var(--slot-border-color) 65%, transparent);
+      font-size: 0.82rem;
+      text-align: left;
+      color: var(--slot-text-secondary);
+    }
+
+    .slot-history-table th {
+      color: var(--slot-text-primary);
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .slot-history-table td.slot-history-net-positive {
+      color: var(--success-color);
+      font-weight: 700;
+    }
+
+    .slot-history-table td.slot-history-net-negative {
+      color: var(--danger-color);
+      font-weight: 700;
+    }
+
+    .slot-history-controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.6rem;
+      flex-wrap: wrap;
+    }
+
+    .slot-history-pagination {
+      display: flex;
+      gap: 0.35rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .slot-history-pagination button {
+      min-width: 34px;
+      height: 34px;
+      padding: 0.3rem 0.5rem;
+      border-radius: 6px;
+      border: 2px solid var(--slot-border-color);
+      background: color-mix(in srgb, var(--slot-card-bg) 60%, transparent);
+      color: var(--slot-text-primary);
+      box-shadow: 0 4px rgba(0,0,0,0.3);
+      font-weight: 700;
+    }
+
+    .slot-history-pagination button.active {
+      background: color-mix(in srgb, var(--success-color) 60%, transparent);
+      color: white;
+    }
+
+    .slot-history-jump {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      color: var(--slot-text-secondary);
+      font-size: 0.82rem;
+    }
+
+    .slot-history-jump input {
+      width: 64px;
+      text-align: center;
     }
 
     /* Top Controls Row */
@@ -96,14 +276,21 @@ template.innerHTML = `
     }
 
     .spins-counter {
-      background: color-mix(in srgb, var(--slot-card-bg) 60%, transparent);
-      border: 2px solid var(--slot-border-color);
-      border-radius: 6px;
-      padding: 8px;
-      box-shadow: 0 4px rgba(0,0,0,0.3);
-      font-size: 0.875rem;
+      width: 100%;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      box-shadow: none;
+      font-size: 0.75rem;
       text-align: center;
+      line-height: 1.2;
+      color: var(--slot-text-secondary);
+    }
+
+    .spins-counter span {
       color: var(--slot-text-primary);
+      font-weight: bold;
     }
 
     /* Buttons */
@@ -187,14 +374,14 @@ template.innerHTML = `
     /* Progress Bar Container */
     .progress-container {
       display: flex;
-      justify-content: flex-end;
+      justify-content: center;
       align-items: center;
       flex-direction: column;
-      gap: 4px;
+      gap: 0.375rem;
       background: color-mix(in srgb, var(--slot-card-bg) 60%, transparent);
       border: 2px solid var(--slot-border-color);
       border-radius: 6px;
-      padding: 6px 20px 1rem 20px;
+      padding: 0.5rem 20px;
       width: 200px;
       height: 96px;
       box-shadow: 0 4px rgba(0,0,0,0.3);
@@ -213,23 +400,26 @@ template.innerHTML = `
       width: 160px;
       height: 25px;
       padding: 4px;
-      border: 0 none;
-      background: #444;
-      border-radius: 14px;
-      box-shadow: inset 0 1px 1px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.2);
+      border: 1px solid color-mix(in srgb, var(--slot-border-color) 60%, transparent);
+      background: color-mix(in srgb, var(--slot-card-bg) 50%, transparent);
+      border-radius: 20px;
+      box-shadow: 0 4px rgba(0, 0, 0, 0.3);
     }
 
     progress::-webkit-progress-bar {
-      background: transparent;
+      border-radius: 20px;
+      background: color-mix(in srgb, var(--slot-card-bg) 50%, transparent);
+      box-shadow: inset 0 0px 12px 1px rgba(0, 0, 0, 0.3);
     }
     progress::-webkit-progress-value {
-      border-radius: 12px;
-      background: #fff;
-      box-shadow: inset 0 -2px 4px rgba(0,0,0,0.4), 0 2px 5px rgba(0,0,0,0.3);
+      border-radius: 20px;
+      background: color-mix(in srgb, var(--slot-card-bg) 60%, transparent);
+      box-shadow: inset 0 0px 12px 1px rgba(0, 0, 0, 0.3);
     }
     progress::-moz-progress-bar {
-      border-radius: 12px;
-      background: #fff;
+      border-radius: 20px;
+      background: color-mix(in srgb, var(--slot-card-bg) 60%, transparent);
+      box-shadow: inset 0 0px 12px 1px rgba(0, 0, 0, 0.3);
     }
 
     /* Main Game Layout */
@@ -472,7 +662,8 @@ template.innerHTML = `
     }
 
     .carousel__cell p {
-      color: white;
+      color: var(--slot-symbol-text);
+      text-shadow: 0 2px 2px rgba(0, 0, 0, 0.85), 0 0 8px var(--slot-symbol-glow), 0 0 22px rgba(200, 255, 255, 0.55), 0 0 38px rgba(200, 255, 255, 0.35);
       will-change: auto;
       height: 100%;
       font-size: 4rem;
@@ -481,30 +672,27 @@ template.innerHTML = `
       width: 100%;
       width: -webkit-fill-available;
       margin: 0;
-      box-shadow:
-        0px -1px 2px var(--slot-cell-shadow-gray) inset,
-        0px 0px 0px 3px var(--slot-cell-inset-border) inset,
-        0px 1px 5px 2px var(--slot-cell-shadow-dark) inset,
-        0px 15px 0px 3px var(--slot-cell-shadow-light) inset,
-        0px -8px 15px 0px var(--slot-cell-shadow-dark) inset;
-      border: 10px solid var(--slot-cell-border);
+      box-shadow: 0px -1px 2px var(--slot-cell-shadow-gray) inset, 0px 0px 0px 3px var(--slot-cell-inset-border) inset, 0px 1px 55px 2px var(--slot-cell-shadow-dark) inset, 0px 15px 0px 3px var(--slot-cell-shadow-light) inset, 0px -8px 44px 0px var(--slot-cell-shadow-dark) inset;
+      border: 5px solid rgb(245 218 118 / 55%);
       display: flex;
       justify-content: center;
       align-items: center;
+      border-radius: 1rem;
+      margin: 0.2rem;
     }
 
-    .carousel__cell:nth-child(1) p { background: hsla(0, 100%, 50%, 1); }
-    .carousel__cell:nth-child(2) p { background: hsla(40, 100%, 50%, 1); }
-    .carousel__cell:nth-child(3) p { background: hsla(80, 100%, 50%, 1); }
-    .carousel__cell:nth-child(4) p { background: hsla(120, 100%, 50%, 1); }
-    .carousel__cell:nth-child(5) p { background: hsla(160, 100%, 50%, 1); }
-    .carousel__cell:nth-child(6) p { background: hsla(200, 100%, 50%, 1); }
-    .carousel__cell:nth-child(7) p { background: hsla(0, 100%, 50%, 1); }
-    .carousel__cell:nth-child(8) p { background: hsla(40, 100%, 50%, 1); }
-    .carousel__cell:nth-child(9) p { background: hsla(80, 100%, 50%, 1); }
-    .carousel__cell:nth-child(10) p { background: hsla(120, 100%, 50%, 1); }
-    .carousel__cell:nth-child(11) p { background: hsla(160, 100%, 50%, 1); }
-    .carousel__cell:nth-child(12) p { background: hsla(200, 100%, 50%, 1); }
+    .carousel__cell:nth-child(1) p { background: hsla(0, 100%, 50%, 0.42); }
+    .carousel__cell:nth-child(2) p { background: hsla(40, 100%, 50%, 0.42); }
+    .carousel__cell:nth-child(3) p { background: hsla(80, 100%, 50%, 0.42); }
+    .carousel__cell:nth-child(4) p { background: hsla(120, 100%, 50%, 0.42); }
+    .carousel__cell:nth-child(5) p { background: hsla(160, 100%, 50%, 0.42); }
+    .carousel__cell:nth-child(6) p { background: hsla(200, 100%, 50%, 0.42); }
+    .carousel__cell:nth-child(7) p { background: hsla(0, 100%, 50%, 0.42); }
+    .carousel__cell:nth-child(8) p { background: hsla(40, 100%, 50%, 0.42); }
+    .carousel__cell:nth-child(9) p { background: hsla(80, 100%, 50%, 0.42); }
+    .carousel__cell:nth-child(10) p { background: hsla(120, 100%, 50%, 0.42); }
+    .carousel__cell:nth-child(11) p { background: hsla(160, 100%, 50%, 0.42); }
+    .carousel__cell:nth-child(12) p { background: hsla(200, 100%, 50%, 0.42); }
 
     .canvas-overlay {
       border: solid var(--primary-color);
@@ -624,8 +812,9 @@ template.innerHTML = `
 
     /* Win Overlay */
     .win-overlay {
-      padding: 20px;
-      background: rgba(255,255,255,0.95);
+      padding: 1.25rem;
+      background: color-mix(in srgb, var(--slot-card-bg) 45%, rgba(18, 20, 24, 0.96));
+      border: 2px solid var(--slot-border-color);
       position: fixed;
       top: 50%;
       left: 50%;
@@ -635,58 +824,92 @@ template.innerHTML = `
       justify-content: center;
       align-items: center;
       flex-direction: column;
-      border-radius: 16px;
-      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+      border-radius: 6px;
+      box-shadow: 0 4px rgba(0,0,0,0.3);
       min-width: 300px;
+      max-width: calc(100vw - 2rem);
+      color: var(--slot-text-primary);
+      margin: 0;
     }
 
     .win-overlay h1 {
-      margin: 10px 0;
-      color: var(--success-color);
+      margin: 0.5rem 0;
+      color: var(--slot-text-primary);
     }
 
     .win-overlay h2 {
-      margin: 10px 0;
-      color: #333;
+      margin: 0.5rem 0;
+      color: var(--slot-text-primary);
     }
 
-    .win-overlay button {
-      margin: 10px 5px;
-      padding: 10px 30px;
+    .win-overlay p {
+      color: var(--slot-text-secondary);
+      margin: 0.25rem 0;
+    }
+
+    .win-overlay-actions {
+      margin-top: 0.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .win-overlay .btn-primary,
+    .win-overlay .btn-secondary {
+      min-width: 130px;
+      height: auto;
+      margin: 0;
+    }
+
+    .win-overlay::backdrop {
+      background: rgba(8, 10, 16, 0.45);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
     }
 
     /* Bingo Mini Game Overlay */
     .minigame-overlay {
       position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.9);
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: min(920px, calc(100vw - 1.5rem));
+      max-width: calc(100vw - 1.5rem);
+      max-height: calc(100vh - 1.5rem);
+      padding: 0;
+      margin: 0;
+      border: 2px solid var(--slot-border-color);
+      border-radius: 16px;
+      background: color-mix(in srgb, var(--slot-card-bg) 45%, rgba(18, 20, 24, 0.94));
+      box-shadow: 0 4px rgba(0,0,0,0.3);
       z-index: 100002;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      padding: 20px;
-      box-sizing: border-box;
+      overflow: hidden;
+      color: var(--slot-text-primary);
+    }
+
+    .minigame-overlay::backdrop {
+      background: rgba(8, 10, 16, 0.45);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
     }
 
     .minigame-container {
-      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-      border-radius: 16px;
+      background: color-mix(in srgb, var(--slot-input-bg) 35%, transparent);
+      border-radius: 14px;
       padding: 20px;
-      max-width: 800px;
       width: 100%;
-      max-height: 90vh;
+      max-height: calc(100vh - 3rem);
       overflow-y: auto;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-      border: 2px solid var(--slot-border-color);
+      border: 1px solid color-mix(in srgb, var(--slot-border-color) 70%, transparent);
+      box-shadow: inset 0 0px 12px 1px rgba(0, 0, 0, 0.3);
     }
 
     .minigame-header {
       text-align: center;
       margin-bottom: 20px;
-      color: #fff;
+      color: var(--slot-text-primary);
     }
 
     .minigame-header h2 {
@@ -698,7 +921,7 @@ template.innerHTML = `
     .minigame-header p {
       margin: 5px 0;
       font-size: 0.9rem;
-      color: #aaa;
+      color: var(--slot-text-secondary);
     }
 
     .minigame-prize {
@@ -720,15 +943,16 @@ template.innerHTML = `
     }
 
     .minigame-numbers {
-      background: rgba(255,255,255,0.05);
+      background: color-mix(in srgb, var(--slot-card-bg) 40%, transparent);
       border-radius: 12px;
       padding: 15px;
       border: 2px solid var(--slot-border-color);
+      box-shadow: 0 4px rgba(0, 0, 0, 0.3);
     }
 
     .minigame-numbers h3 {
       margin: 0 0 15px 0;
-      color: #fff;
+      color: var(--slot-text-primary);
       font-size: 1rem;
       text-align: center;
     }
@@ -744,8 +968,8 @@ template.innerHTML = `
       aspect-ratio: 1;
       border-radius: 50%;
       border: 2px solid var(--slot-border-color);
-      background: linear-gradient(145deg, #2a2a4a, #1a1a3a);
-      color: #fff;
+      background: color-mix(in srgb, var(--slot-card-bg) 45%, transparent);
+      color: var(--slot-text-primary);
       font-weight: bold;
       font-size: 0.9rem;
       cursor: pointer;
@@ -756,14 +980,16 @@ template.innerHTML = `
     }
 
     .number-btn:hover:not(.selected):not(.disabled) {
-      background: linear-gradient(145deg, var(--primary-color), #3a3a6a);
+      background: color-mix(in srgb, var(--primary-color) 65%, transparent);
       transform: scale(1.1);
+      color: white;
     }
 
     .number-btn.selected {
-      background: linear-gradient(145deg, var(--success-color), #1a8a3a);
+      background: color-mix(in srgb, var(--success-color) 70%, transparent);
       border-color: var(--success-color);
       transform: scale(1.05);
+      color: white;
     }
 
     .number-btn.disabled {
@@ -795,15 +1021,16 @@ template.innerHTML = `
     }
 
     .minigame-tickets {
-      background: rgba(255,255,255,0.05);
+      background: color-mix(in srgb, var(--slot-card-bg) 40%, transparent);
       border-radius: 12px;
       padding: 15px;
       border: 2px solid var(--slot-border-color);
+      box-shadow: 0 4px rgba(0, 0, 0, 0.3);
     }
 
     .minigame-tickets h3 {
       margin: 0 0 15px 0;
-      color: #fff;
+      color: var(--slot-text-primary);
       font-size: 1rem;
       text-align: center;
     }
@@ -815,7 +1042,7 @@ template.innerHTML = `
     }
 
     .ticket {
-      background: rgba(255,255,255,0.05);
+      background: color-mix(in srgb, var(--slot-input-bg) 40%, transparent);
       border: 2px solid var(--slot-border-color);
       border-radius: 8px;
       padding: 10px;
@@ -828,12 +1055,12 @@ template.innerHTML = `
 
     .ticket.active {
       border-color: var(--primary-color);
-      background: rgba(var(--primary-color-rgb), 0.1);
+      background: color-mix(in srgb, var(--primary-color) 30%, transparent);
     }
 
     .ticket-label {
       font-size: 0.8rem;
-      color: #888;
+      color: var(--slot-text-muted);
       min-width: 60px;
     }
 
@@ -848,8 +1075,8 @@ template.innerHTML = `
       width: 32px;
       height: 32px;
       border-radius: 50%;
-      background: linear-gradient(145deg, var(--primary-color), #3a3a6a);
-      color: #fff;
+      background: color-mix(in srgb, var(--primary-color) 60%, transparent);
+      color: white;
       font-size: 0.8rem;
       font-weight: bold;
       display: flex;
@@ -870,7 +1097,7 @@ template.innerHTML = `
 
     .ticket-result {
       font-size: 0.75rem;
-      color: #aaa;
+      color: var(--slot-text-secondary);
       margin-left: auto;
       text-align: right;
     }
@@ -892,6 +1119,7 @@ template.innerHTML = `
       padding: 12px 30px;
       border-radius: 8px;
       border: 2px solid var(--slot-border-color);
+      box-shadow: 0 4px rgba(0, 0, 0, 0.3);
       font-size: 1rem;
       font-weight: bold;
       cursor: pointer;
@@ -899,8 +1127,8 @@ template.innerHTML = `
     }
 
     .minigame-btn-primary {
-      background: linear-gradient(145deg, var(--primary-color), #3a3a6a);
-      color: #fff;
+      background: color-mix(in srgb, var(--primary-color) 65%, transparent);
+      color: white;
     }
 
     .minigame-btn-primary:hover:not(:disabled) {
@@ -909,17 +1137,17 @@ template.innerHTML = `
     }
 
     .minigame-btn-secondary {
-      background: linear-gradient(145deg, #444, #333);
-      color: #fff;
+      background: color-mix(in srgb, var(--slot-card-bg) 55%, transparent);
+      color: var(--slot-text-primary);
     }
 
     .minigame-btn-secondary:hover:not(:disabled) {
-      background: linear-gradient(145deg, #555, #444);
+      background: color-mix(in srgb, var(--slot-card-bg) 70%, transparent);
     }
 
     .minigame-btn-success {
-      background: linear-gradient(145deg, var(--success-color), #1a8a3a);
-      color: #fff;
+      background: color-mix(in srgb, var(--success-color) 65%, transparent);
+      color: white;
     }
 
     .minigame-btn-success:hover:not(:disabled) {
@@ -938,7 +1166,7 @@ template.innerHTML = `
     }
 
     .minigame-drawn h3 {
-      color: #fff;
+      color: var(--slot-text-primary);
       margin: 0 0 15px 0;
     }
 
@@ -972,9 +1200,10 @@ template.innerHTML = `
       margin-top: 20px;
       text-align: center;
       padding: 20px;
-      background: rgba(255,255,255,0.05);
+      background: color-mix(in srgb, var(--slot-card-bg) 40%, transparent);
       border-radius: 12px;
       border: 2px solid var(--slot-border-color);
+      box-shadow: 0 4px rgba(0, 0, 0, 0.3);
     }
 
     .minigame-result h2 {
@@ -983,7 +1212,7 @@ template.innerHTML = `
     }
 
     .minigame-result p {
-      color: #fff;
+      color: var(--slot-text-primary);
       margin: 5px 0;
     }
 
@@ -996,19 +1225,21 @@ template.innerHTML = `
     .minigame-info {
       margin-top: 15px;
       padding: 10px;
-      background: rgba(255,255,255,0.03);
+      background: color-mix(in srgb, var(--slot-input-bg) 35%, transparent);
       border-radius: 8px;
       font-size: 0.8rem;
-      color: #888;
+      color: var(--slot-text-secondary);
       text-align: center;
+      border: 1px solid color-mix(in srgb, var(--slot-border-color) 70%, transparent);
     }
 
     /* Odds Table Section */
     .minigame-odds {
       margin-top: 20px;
       padding: 15px;
-      background: rgba(255,255,255,0.03);
+      background: color-mix(in srgb, var(--slot-input-bg) 35%, transparent);
       border-radius: 8px;
+      border: 1px solid color-mix(in srgb, var(--slot-border-color) 70%, transparent);
     }
 
     .minigame-odds h3 {
@@ -1032,7 +1263,7 @@ template.innerHTML = `
     .odds-table th, .odds-table td {
       padding: 6px 8px;
       text-align: center;
-      border-bottom: 1px solid rgba(255,255,255,0.1);
+      border-bottom: 1px solid color-mix(in srgb, var(--slot-border-color) 70%, transparent);
     }
 
     .odds-table th {
@@ -1042,7 +1273,7 @@ template.innerHTML = `
     }
 
     .odds-table td {
-      color: #ddd;
+      color: var(--slot-text-secondary);
     }
 
     .odds-table tr:hover {
@@ -1103,7 +1334,7 @@ template.innerHTML = `
 
     /* Toast Notification System */
     .minigame-toast-container {
-      position: fixed;
+      position: absolute;
       top: 1rem;
       right: 1rem;
       z-index: 100003;
@@ -1114,11 +1345,11 @@ template.innerHTML = `
     }
 
     .minigame-toast {
-      background: rgba(30, 30, 46, 0.95);
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: color-mix(in srgb, var(--slot-card-bg) 65%, rgba(18, 20, 24, 0.92));
+      border: 1px solid color-mix(in srgb, var(--slot-border-color) 70%, transparent);
       border-radius: 0.5rem;
       padding: 0.875rem 1rem;
-      color: #fff;
+      color: var(--slot-text-primary);
       font-size: 0.875rem;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
       animation: toastSlideIn 0.3s ease-out;
@@ -1176,9 +1407,9 @@ template.innerHTML = `
       gap: 10px;
       margin: 15px 0;
       padding: 15px;
-      background: rgba(255, 255, 255, 0.05);
+      background: color-mix(in srgb, var(--slot-input-bg) 40%, transparent);
       border-radius: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      border: 1px solid color-mix(in srgb, var(--slot-border-color) 70%, transparent);
     }
 
     .coin-selector-label {
@@ -1198,18 +1429,20 @@ template.innerHTML = `
     .coin-btn {
       padding: 8px 16px;
       border-radius: 20px;
-      border: 2px solid rgba(255, 255, 255, 0.2);
-      background: linear-gradient(145deg, #2a2a4a, #1a1a3a);
-      color: #fff;
+      border: 2px solid var(--slot-border-color);
+      background: color-mix(in srgb, var(--slot-card-bg) 55%, transparent);
+      color: var(--slot-text-primary);
       font-size: 0.85rem;
       font-weight: bold;
       cursor: pointer;
       transition: all 0.2s;
+      box-shadow: 0 4px rgba(0, 0, 0, 0.3);
     }
 
     .coin-btn:hover {
-      background: linear-gradient(145deg, #3a3a6a, #2a2a5a);
+      background: color-mix(in srgb, var(--primary-color) 55%, transparent);
       transform: scale(1.05);
+      color: white;
     }
 
     .coin-btn.selected {
@@ -1226,9 +1459,10 @@ template.innerHTML = `
       align-items: center;
       padding: 10px 15px;
       margin: 10px 0;
-      background: rgba(255, 255, 255, 0.05);
+      background: color-mix(in srgb, var(--slot-input-bg) 40%, transparent);
       border-radius: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      border: 1px solid color-mix(in srgb, var(--slot-border-color) 70%, transparent);
+      box-shadow: 0 4px rgba(0, 0, 0, 0.3);
     }
 
     .total-bet-label {
@@ -1264,82 +1498,156 @@ template.innerHTML = `
     .number-btn.globally-used {
       opacity: 0.3;
       cursor: not-allowed;
-      background: linear-gradient(145deg, #1a1a2a, #0a0a1a);
+      background: color-mix(in srgb, var(--slot-input-bg) 35%, transparent);
       border-color: #333;
     }
 
     .number-btn.globally-used:hover {
       transform: none;
-      background: linear-gradient(145deg, #1a1a2a, #0a0a1a);
+      background: color-mix(in srgb, var(--slot-input-bg) 35%, transparent);
     }
 
   </style>
 
-  <div class="slot-game">
-    <!-- Top Controls -->
-    <div class="slot-top-controls">
-      <div></div>
-      <div class="slot-top-controls-center">
-        <div class="slot-controls-wrapper">
-          <button class="btn-primary" id="startBtn">Start Game</button>
-          <div class="progress-container" id="progressContainer">
-            <span class="progress-label" id="progressLabel">5 sec</span>
-            <progress value="0" max="5" id="progressBar"></progress>
-          </div>
-          <button class="btn-secondary" id="stopBtn">Stop</button>
-        </div>
-      </div>
-      <div class="spins-counter">Spins played: <span id="spinsCount">0</span></div>
+  <div class="slot-game" data-inspiration="https://3dtransforms.desandro.com/carousel">
+    <div class="slot-menu" role="tablist" aria-label="Slot menu tabs">
+      <button class="slot-menu-tab active" id="slotMenuGame" type="button" role="tab" aria-selected="true" aria-controls="slotViewGame">Slot Machine</button>
+      <button class="slot-menu-tab" id="slotMenuRules" type="button" role="tab" aria-selected="false" aria-controls="slotViewRules">Game Rules</button>
+      <button class="slot-menu-tab" id="slotMenuHistory" type="button" role="tab" aria-selected="false" aria-controls="slotViewHistory">History</button>
     </div>
 
-    <!-- Main Layout -->
-    <div class="slot-layout">
-      <!-- Left Sidebar: Bet & Lines -->
-      <div class="slot-sidebar">
-        <div class="nav-div">
-          <button id="betBtn">Bet</button>
-          <div id="betOptions"></div>
-          <div class="joker-container" id="jokerContainer">
-            <input type="checkbox" id="jokerCheckbox" name="joker">
-            <label for="jokerCheckbox">Buy Joker</label>
-            <p class="joker-hint">Joker costs 5x bet.</p>
-            <button id="confirmJokerBtn" style="display: none; margin-top: 8px; width: 100%;">Confirm Joker</button>
-            <button id="removeJokerBtn" style="display: none; margin-top: 8px; width: 100%;">Remove Joker</button>
+    <section class="slot-view slot-view-game" id="slotViewGame">
+      <!-- Top Controls -->
+      <div class="slot-top-controls">
+        <div></div>
+        <div class="slot-top-controls-center">
+          <div class="slot-controls-wrapper">
+            <button class="btn-primary" id="startBtn">Start Game</button>
+            <div class="progress-container" id="progressContainer">
+              <div class="spins-counter">Spins played: <span id="spinsCount">0</span></div>
+              <span class="progress-label" id="progressLabel">5 sec</span>
+              <progress value="0" max="5" id="progressBar"></progress>
+            </div>
+            <button class="btn-secondary" id="stopBtn">Stop</button>
           </div>
-          <div class="lines-container" id="linesContainer"></div>
         </div>
+        <div></div>
       </div>
 
-      <!-- Center: Reels -->
-      <div class="slot-center">
-        <div class="spinners" id="spinners"></div>
-
-        <!-- Info Panel -->
-        <div class="info-panel">
-          <div>Bet: <span id="currentBet">2</span> $</div>
-          <div>Type: <span id="gameType">Numbers</span></div>
-          <div>Joker: <span id="jokerStatus">NO (0 $)</span></div>
-          <div>Lines: <span id="lineCount">1</span></div>
-          <div>Total: <span id="totalBet">2</span> $</div>
-          <div>Krediti: <span id="credits">0</span> $</div>
-        </div>
-
-        <!-- Odds Tables -->
-        <div class="odds-container" id="oddsContainer"></div>
-      </div>
-
-      <!-- Right Sidebar: Game Options -->
-      <div class="slot-right-column">
-        <div class="slot-options">
+      <!-- Main Layout -->
+      <div class="slot-layout">
+        <!-- Left Sidebar: Bet & Lines -->
+        <div class="slot-sidebar">
           <div class="nav-div">
-            <button id="gameTypeBtn">Game Type</button>
-            <div id="gameTypeOptions"></div>
-            <button id="rewardModeBtn">Reward Mode</button>
-            <div id="rewardModeOptions"></div>
+            <button id="betBtn">Bet</button>
+            <div id="betOptions"></div>
+            <div class="joker-container" id="jokerContainer">
+              <input type="checkbox" id="jokerCheckbox" name="joker">
+              <label for="jokerCheckbox">Buy Joker</label>
+              <p class="joker-hint">Joker costs 5x bet.</p>
+              <button id="confirmJokerBtn" style="display: none; margin-top: 8px;">Confirm Joker</button>
+              <button id="removeJokerBtn" style="display: none; margin-top: 8px;">Remove Joker</button>
+            </div>
+            <div class="lines-container" id="linesContainer"></div>
+          </div>
+        </div>
+
+        <!-- Center: Reels -->
+        <div class="slot-center">
+          <div class="spinners" id="spinners"></div>
+
+          <!-- Info Panel -->
+          <div class="info-panel">
+            <div>Bet: <span id="currentBet">2</span> $</div>
+            <div>Type: <span id="gameType">Numbers</span></div>
+            <div>Joker: <span id="jokerStatus">NO (0 $)</span></div>
+            <div>Lines: <span id="lineCount">1</span></div>
+            <div>Total: <span id="totalBet">2</span> $</div>
+            <div>Krediti: <span id="credits">0</span> $</div>
+          </div>
+
+          <!-- Odds Tables -->
+          <div class="odds-container" id="oddsContainer"></div>
+        </div>
+
+        <!-- Right Sidebar: Game Options -->
+        <div class="slot-right-column">
+          <div class="slot-options">
+            <div class="nav-div">
+              <button id="gameTypeBtn">Game Type</button>
+              <div id="gameTypeOptions"></div>
+              <button id="rewardModeBtn">Reward Mode</button>
+              <div id="rewardModeOptions"></div>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </section>
+
+    <section class="slot-view slot-view-rules" id="slotViewRules" hidden>
+      <div class="slot-rules-panel">
+        <div class="slot-rules-section">
+          <h2>Game Types</h2>
+          <ul>
+            <li>Choose one symbol set: Numbers, Roman, Fruits, Animals, or Emoji.</li>
+            <li>Selected game type defines available bet values and payout table.</li>
+            <li>You can change game type any time before spin.</li>
+          </ul>
+        </div>
+
+        <div class="slot-rules-section">
+          <h2>Reward Modes</h2>
+          <ul>
+            <li><strong>1x5 Middle:</strong> one middle line only.</li>
+            <li><strong>3x5 Multi-line:</strong> full 3x5 setup with multiple paylines.</li>
+            <li>If you switch from 3x5 to 1x5, Joker state is removed.</li>
+          </ul>
+        </div>
+
+        <div class="slot-rules-section">
+          <h2>Bets</h2>
+          <ul>
+            <li>Pick your bet from the Bet panel.</li>
+            <li>Total in 1x5 mode is current bet value.</li>
+            <li>Total in 3x5 mode is active lines × bet.</li>
+          </ul>
+        </div>
+
+        <div class="slot-rules-section">
+          <h2>Lines And Joker In 3x5</h2>
+          <ul>
+            <li>In 3x5 mode you can activate multiple paylines (minimum one line remains active).</li>
+            <li>More active lines increase chance to hit, but also increase total stake.</li>
+            <li>In 3x5 mode you can buy Joker and place it on valid positions.</li>
+            <li>Joker adds cost and modifies eligible win combinations.</li>
+          </ul>
+        </div>
+
+        <div class="slot-rules-section">
+          <h2>Mini Game</h2>
+          <ul>
+            <li>Mini game can appear after qualifying slot wins.</li>
+            <li>You select tickets and coin value, then numbers are drawn.</li>
+            <li>Final bonus payout is added back to slot balance.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="slot-view slot-view-history" id="slotViewHistory" hidden>
+      <div class="slot-history-panel">
+        <div class="slot-history-status" id="slotHistoryStatus">History is loading...</div>
+        <div class="slot-history-table-wrap" id="slotHistoryTableWrap"></div>
+        <div class="slot-history-controls">
+          <div class="slot-history-pagination" id="slotHistoryPagination"></div>
+          <div class="slot-history-jump">
+            <span>Page</span>
+            <input id="slotHistoryPageInput" type="number" min="1" step="1" value="1">
+            <button type="button" id="slotHistoryGoPage">Go</button>
+          </div>
+        </div>
+      </div>
+    </section>
   </div>
 `;
 
@@ -1448,7 +1756,7 @@ class BingoMiniGame {
   }
 
   render() {
-    const overlay = document.createElement('div');
+    const overlay = document.createElement('dialog');
     overlay.className = 'minigame-overlay';
     overlay.id = 'minigameOverlay';
 
@@ -1528,8 +1836,14 @@ class BingoMiniGame {
 
     this.shadowRoot.appendChild(overlay);
     this.overlay = overlay;
+    overlay.addEventListener('close', () => overlay.remove(), { once: true });
     this.bindEvents();
     this.updateUI();
+    if (typeof overlay.showModal === 'function') {
+      overlay.showModal();
+    } else {
+      overlay.setAttribute('open', '');
+    }
   }
 
   renderOddsTable() {
@@ -1971,14 +2285,22 @@ class BingoMiniGame {
   }
 
   collect() {
-    this.overlay.remove();
+    if (typeof this.overlay.close === 'function' && this.overlay.open) {
+      this.overlay.close();
+    } else {
+      this.overlay.remove();
+    }
     if (this.onComplete) {
       this.onComplete(this.totalWin || this.winAmount);
     }
   }
 
   skip() {
-    this.overlay.remove();
+    if (typeof this.overlay.close === 'function' && this.overlay.open) {
+      this.overlay.close();
+    } else {
+      this.overlay.remove();
+    }
     if (this.onComplete) {
       this.onComplete(this.winAmount);
     }
@@ -1997,7 +2319,13 @@ export class SlotMachine extends HTMLElement {
     // State
     this.credits = 0;
     this.bet = 2;
-    this.kvote = [100, 50, 30, 5, 50, 30, 20, 4, 30, 20, 10, 3];
+    this.kvote = [
+      200, 100, 60, 10,
+      150, 80, 50, 8,
+      100, 50, 30, 5,
+      50, 30, 20, 4,
+      30, 20, 10, 3
+    ];
     this.spinsCount = 0;
     this.stopArray = [];
     this.selectedPaylines = [1, 0, 0, 0, 0, 0, 0];
@@ -2008,6 +2336,12 @@ export class SlotMachine extends HTMLElement {
     this.gameTypeValue = 1;
     this.progressInterval = null;
     this.isSpinning = false;
+    this.activeMenuView = 'game';
+    this.historyPage = 1;
+    this.historyTotalPages = 1;
+    this.historyTotalItems = 0;
+    this.historyItems = [];
+    this.historyLoading = false;
 
     this.jwtToken = '';
     this.carousels = [];
@@ -2047,6 +2381,7 @@ export class SlotMachine extends HTMLElement {
     this.initializeUI();
     this.bindEvents();
     this.updateDisplay();
+    void this.loadSpinsCountFromHistory();
   }
 
   initializeUI() {
@@ -2088,7 +2423,7 @@ export class SlotMachine extends HTMLElement {
 
     // Reels
     const spinnersContainer = this.shadowRoot.getElementById('spinners');
-    const symbols = [1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6];
+    const symbols = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2];
     for (let i = 0; i < 5; i++) {
       const scene = document.createElement('div');
       scene.className = 'scene';
@@ -2174,8 +2509,8 @@ export class SlotMachine extends HTMLElement {
 
   createOddsTables() {
     // Use default symbols and odds for initial game type (1 = Numbers)
-    const symbols = [1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6];
-    const odds = [100, 50, 30, 5, 50, 30, 20, 4, 30, 20, 10, 3];
+    const symbols = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2];
+    const odds = [...this.kvote];
     this.updateOddsTables(symbols, odds);
   }
 
@@ -2188,6 +2523,250 @@ export class SlotMachine extends HTMLElement {
     this.shadowRoot.getElementById('gameTypeBtn').addEventListener('click', () => this.cycleGameType());
     this.shadowRoot.getElementById('rewardModeBtn').addEventListener('click', () => this.cycleRewardMode());
     this.shadowRoot.getElementById('betBtn').addEventListener('click', () => this.cycleBet());
+    this.shadowRoot.getElementById('slotMenuGame').addEventListener('click', () => this.setMenuView('game'));
+    this.shadowRoot.getElementById('slotMenuRules').addEventListener('click', () => this.setMenuView('rules'));
+    this.shadowRoot.getElementById('slotMenuHistory').addEventListener('click', () => {
+      this.setMenuView('history');
+      void this.loadHistoryPage(this.historyPage || 1);
+    });
+
+    const historyPagination = this.shadowRoot.getElementById('slotHistoryPagination');
+    if (historyPagination) {
+      historyPagination.addEventListener('click', (event) => {
+        const trigger = event.target.closest('button[data-page]');
+        if (!trigger) return;
+        const page = Number.parseInt(trigger.getAttribute('data-page') || '', 10);
+        if (!Number.isFinite(page)) return;
+        void this.loadHistoryPage(page);
+      });
+    }
+
+    const pageInput = this.shadowRoot.getElementById('slotHistoryPageInput');
+    this.shadowRoot.getElementById('slotHistoryGoPage').addEventListener('click', () => {
+      const page = Number.parseInt(pageInput.value || '', 10);
+      if (!Number.isFinite(page)) return;
+      void this.loadHistoryPage(page);
+    });
+    pageInput.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      const page = Number.parseInt(pageInput.value || '', 10);
+      if (!Number.isFinite(page)) return;
+      void this.loadHistoryPage(page);
+    });
+  }
+
+  setMenuView(view) {
+    this.activeMenuView = view;
+
+    const viewGame = this.shadowRoot.getElementById('slotViewGame');
+    const viewRules = this.shadowRoot.getElementById('slotViewRules');
+    const viewHistory = this.shadowRoot.getElementById('slotViewHistory');
+    if (viewGame) viewGame.hidden = view !== 'game';
+    if (viewRules) viewRules.hidden = view !== 'rules';
+    if (viewHistory) viewHistory.hidden = view !== 'history';
+
+    const btnGame = this.shadowRoot.getElementById('slotMenuGame');
+    const btnRules = this.shadowRoot.getElementById('slotMenuRules');
+    const btnHistory = this.shadowRoot.getElementById('slotMenuHistory');
+    const map = [
+      [btnGame, 'game'],
+      [btnRules, 'rules'],
+      [btnHistory, 'history'],
+    ];
+    for (let i = 0; i < map.length; i += 1) {
+      const [btn, key] = map[i];
+      if (!btn) continue;
+      const isActive = view === key;
+      btn.classList.toggle('active', isActive);
+      btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    }
+  }
+
+  escapeHistoryCell(value) {
+    return String(value ?? '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+  }
+
+  formatHistoryTimestamp(value) {
+    try {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return String(value || '-');
+      return date.toLocaleString();
+    } catch {
+      return String(value || '-');
+    }
+  }
+
+  getHistoryPageWindow() {
+    const total = Math.max(1, this.historyTotalPages);
+    const current = Math.min(total, Math.max(1, this.historyPage));
+    const maxButtons = 5;
+
+    let start = 1;
+    if (total > maxButtons) {
+      if (current <= 2) {
+        start = 1;
+      } else if (current >= total - 1) {
+        start = total - (maxButtons - 1);
+      } else {
+        start = current - 2;
+      }
+    }
+
+    const pages = [];
+    for (let i = 0; i < maxButtons; i += 1) {
+      const page = start + i;
+      if (page > total) break;
+      pages.push(page);
+    }
+    return pages;
+  }
+
+  renderHistoryView(errorMessage = '') {
+    const statusEl = this.shadowRoot.getElementById('slotHistoryStatus');
+    const tableWrap = this.shadowRoot.getElementById('slotHistoryTableWrap');
+    const paginationEl = this.shadowRoot.getElementById('slotHistoryPagination');
+    const pageInput = this.shadowRoot.getElementById('slotHistoryPageInput');
+    const goBtn = this.shadowRoot.getElementById('slotHistoryGoPage');
+
+    if (!statusEl || !tableWrap || !paginationEl || !pageInput || !goBtn) {
+      return;
+    }
+
+    if (errorMessage) {
+      statusEl.textContent = errorMessage;
+      tableWrap.innerHTML = '';
+      paginationEl.innerHTML = '';
+      goBtn.disabled = true;
+      return;
+    }
+
+    if (this.historyLoading) {
+      statusEl.textContent = 'Loading history...';
+      goBtn.disabled = true;
+      return;
+    }
+
+    if (!this.historyItems.length) {
+      statusEl.textContent = 'No spins found for this user yet.';
+      tableWrap.innerHTML = '';
+      paginationEl.innerHTML = '';
+      pageInput.value = '1';
+      pageInput.max = '1';
+      goBtn.disabled = true;
+      return;
+    }
+
+    const startIndex = (this.historyPage - 1) * HISTORY_PAGE_SIZE + 1;
+    const endIndex = Math.min(this.historyPage * HISTORY_PAGE_SIZE, this.historyTotalItems);
+    statusEl.textContent = `Showing ${startIndex}-${endIndex} of ${this.historyTotalItems} spins`;
+
+    const rows = this.historyItems.map((item) => {
+      const netClass = Number(item?.net_result || 0) >= 0
+        ? 'slot-history-net-positive'
+        : 'slot-history-net-negative';
+      return `
+        <tr>
+          <td>${this.escapeHistoryCell(item?.id || '-')}</td>
+          <td>${this.escapeHistoryCell(this.formatHistoryTimestamp(item?.timestamp))}</td>
+          <td>${this.escapeHistoryCell(item?.game_mode || '-')}</td>
+          <td>${this.escapeHistoryCell(item?.reward_mode || '-')}</td>
+          <td>${this.escapeHistoryCell(item?.active_lines ?? '-')}</td>
+          <td>${this.escapeHistoryCell(item?.bet_per_line ?? '-')}</td>
+          <td>${this.escapeHistoryCell(item?.total_bet ?? '-')}</td>
+          <td>${this.escapeHistoryCell(item?.total_payout ?? '-')}</td>
+          <td class="${netClass}">${this.escapeHistoryCell(item?.net_result ?? '-')}</td>
+          <td>${item?.joker_enabled ? 'YES' : 'NO'}</td>
+          <td>${item?.mini_game_triggered ? 'YES' : 'NO'}</td>
+        </tr>
+      `;
+    }).join('');
+
+    tableWrap.innerHTML = `
+      <table class="slot-history-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Time</th>
+            <th>Type</th>
+            <th>Mode</th>
+            <th>Lines</th>
+            <th>Bet/Line</th>
+            <th>Total Bet</th>
+            <th>Payout</th>
+            <th>Net</th>
+            <th>Joker</th>
+            <th>Mini</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+
+    const pages = this.getHistoryPageWindow();
+    const firstPage = 1;
+    const prevPage = Math.max(1, this.historyPage - 1);
+    const nextPage = Math.min(this.historyTotalPages, this.historyPage + 1);
+    const lastPage = this.historyTotalPages;
+
+    paginationEl.innerHTML = `
+      <button type="button" data-page="${firstPage}" ${this.historyPage === 1 ? 'disabled' : ''}>&laquo;</button>
+      <button type="button" data-page="${prevPage}" ${this.historyPage === 1 ? 'disabled' : ''}>&lsaquo;</button>
+      ${pages.map((page) => `<button type="button" data-page="${page}" class="${page === this.historyPage ? 'active' : ''}">${page}</button>`).join('')}
+      <button type="button" data-page="${nextPage}" ${this.historyPage === this.historyTotalPages ? 'disabled' : ''}>&rsaquo;</button>
+      <button type="button" data-page="${lastPage}" ${this.historyPage === this.historyTotalPages ? 'disabled' : ''}>&raquo;</button>
+    `;
+
+    pageInput.max = String(this.historyTotalPages);
+    pageInput.value = String(this.historyPage);
+    goBtn.disabled = this.historyTotalPages <= 1;
+  }
+
+  async loadHistoryPage(page) {
+    const requestedPage = Number.parseInt(String(page || 1), 10);
+    const normalizedPage = Number.isFinite(requestedPage) ? requestedPage : 1;
+    const targetPage = Math.min(
+      Math.max(1, normalizedPage),
+      Math.max(1, this.historyTotalPages || 1),
+    );
+
+    this.historyLoading = true;
+    this.renderHistoryView();
+
+    try {
+      const headers = {};
+      if (this.jwtToken) {
+        headers.Authorization = `Bearer ${this.jwtToken}`;
+      }
+
+      const response = await fetch(`/api/games/slot-machine/history?page=${targetPage}`, {
+        method: 'GET',
+        headers
+      });
+      const json = await response.json();
+
+      if (!response.ok || !json.success || !json.data) {
+        throw new Error(json.message || 'Failed to load history');
+      }
+
+      const totalPages = Number.parseInt(String(json.data.total_pages || 1), 10);
+      const currentPage = Number.parseInt(String(json.data.page || targetPage), 10);
+      const totalItems = Number.parseInt(String(json.data.total || 0), 10);
+
+      this.historyTotalPages = Number.isFinite(totalPages) && totalPages > 0 ? totalPages : 1;
+      this.historyPage = Number.isFinite(currentPage) && currentPage > 0 ? currentPage : 1;
+      this.historyTotalItems = Number.isFinite(totalItems) && totalItems > 0 ? totalItems : 0;
+      this.historyItems = Array.isArray(json.data.history) ? json.data.history : [];
+      this.historyLoading = false;
+      this.renderHistoryView();
+    } catch (error) {
+      this.historyLoading = false;
+      this.renderHistoryView(error.message || 'Failed to load history');
+    }
   }
 
   cycleGameType() {
@@ -2268,6 +2847,15 @@ export class SlotMachine extends HTMLElement {
   }
 
   selectRewardMode(value, element) {
+    // If user switches to single-line mode, force-clear any joker state first.
+    if (value === 2) {
+      const jokerCheckbox = this.shadowRoot.getElementById('jokerCheckbox');
+      const hasJokerState = this.jokerAdded || this.jokerPosition > 0 || (jokerCheckbox && jokerCheckbox.checked);
+      if (hasJokerState) {
+        this.removeJoker();
+      }
+    }
+
     this.rewardMode = value;
     element.parentElement.querySelectorAll('.control-group').forEach(el => el.classList.remove('active'));
     element.classList.add('active');
@@ -2642,7 +3230,11 @@ export class SlotMachine extends HTMLElement {
     this.jokerPosition = 0;
     this.jokerCost = 0;
     this.jokerAdded = false;
+    this.jokerAffectedLines = [];
+    this.jokerCanvasX = 0;
+    this.jokerCanvasY = 0;
     this.shadowRoot.getElementById('jokerStatus').textContent = 'NO (0 $)';
+    this.removeCanvasClickListener();
 
     this.clearCanvas();
     this.lineCheck();
@@ -2656,30 +3248,35 @@ export class SlotMachine extends HTMLElement {
     checkbox.disabled = false;
     checkbox.checked = false;
 
+    // If user was in joker-pick flow, ensure lines are visible again in multi-line mode
+    const linesContainer = this.shadowRoot.getElementById('linesContainer');
+    linesContainer.style.display = this.rewardMode === 1 ? 'flex' : 'none';
+
     this.updateDisplay();
   }
 
   updateSymbols() {
     // Symbol sets for each game type
     const symbolSets = {
-      1: [1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6],
-      2: ['I', 'II', 'III', 'IV', 'V', 'VI', 'I', 'II', 'III', 'IV', 'V', 'VI'],
-      3: ['🍏', '🍐', '🍊', '🍋', '🍌', '🍉', '🍏', '🍐', '🍊', '🍋', '🍌', '🍉'],
-      4: ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐶', '🐱', '🐭', '🐹', '🐰', '🦊'],
-      5: ['😀', '😁', '😂', '🤣', '😅', '😎', '😀', '😁', '😂', '🤣', '😅', '😎']
+      1: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2],
+      2: ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'I', 'II'],
+      3: ['🍏', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🥝', '🍒', '🍏', '🍐'],
+      4: ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐼', '🐨', '🦁', '🐯', '🐶', '🐱'],
+      5: ['😀', '😁', '😂', '🤣', '😅', '😎', '🤩', '😈', '🥳', '🤖', '😀', '😁']
     };
 
-    // Odds for each game type: [table0: 4 values, table1: 4 values, table2: 4 values]
+    // Odds for each game type (5 symbol-pairs × 4 matches = 20 values)
     const oddsSets = {
-      1: [100, 50, 30, 5, 50, 30, 20, 4, 30, 20, 10, 3],       // Numbers
-      2: [90, 40, 28, 4, 40, 28, 18, 3, 28, 18, 8, 2],         // Roman
-      3: [200, 100, 60, 8, 100, 60, 40, 7, 60, 40, 20, 6],     // Fruits
-      4: [150, 70, 40, 7, 70, 40, 30, 6, 40, 30, 15, 5],       // Animals
-      5: [120, 60, 35, 6, 60, 35, 25, 5, 35, 25, 12, 4]        // Emoji
+      1: [200, 100, 60, 10, 150, 80, 50, 8, 100, 50, 30, 5, 50, 30, 20, 4, 30, 20, 10, 3], // Numbers
+      2: [180, 90, 56, 8, 130, 70, 45, 7, 90, 40, 28, 4, 40, 28, 18, 3, 28, 18, 8, 2],      // Roman
+      3: [320, 180, 110, 14, 260, 140, 80, 12, 200, 100, 60, 8, 100, 60, 40, 7, 60, 40, 20, 6], // Fruits
+      4: [260, 140, 80, 12, 200, 110, 60, 10, 150, 70, 40, 7, 70, 40, 30, 6, 40, 30, 15, 5], // Animals
+      5: [220, 120, 70, 10, 170, 90, 50, 8, 120, 60, 35, 6, 60, 35, 25, 5, 35, 25, 12, 4]    // Emoji
     };
 
     const symbols = symbolSets[this.gameTypeValue] || symbolSets[1];
     const odds = oddsSets[this.gameTypeValue] || oddsSets[1];
+    this.kvote = [...odds];
 
     // Update carousel symbols and reset to position 0
     this.carousels.forEach((carousel, i) => {
@@ -2705,12 +3302,16 @@ export class SlotMachine extends HTMLElement {
     // Clear existing tables
     container.innerHTML = '';
 
-    // Table groups: symbols[4,5] for table 0, symbols[2,3] for table 1, symbols[0,1] for table 2
-    const groups = [
-      { symbols: [symbols[4], symbols[5]], odds: [odds[0], odds[1], odds[2], odds[3]] },
-      { symbols: [symbols[2], symbols[3]], odds: [odds[4], odds[5], odds[6], odds[7]] },
-      { symbols: [symbols[0], symbols[1]], odds: [odds[8], odds[9], odds[10], odds[11]] }
-    ];
+    // Groups are rendered from highest symbol pair to lowest (e.g. 10/9 ... 2/1).
+    const pairCount = Math.min(Math.floor(odds.length / 4), Math.floor(symbols.length / 2));
+    const groups = [];
+    for (let groupIdx = 0; groupIdx < pairCount; groupIdx++) {
+      const symbolStart = (pairCount - groupIdx - 1) * 2;
+      groups.push({
+        symbols: [symbols[symbolStart], symbols[symbolStart + 1]],
+        odds: odds.slice(groupIdx * 4, groupIdx * 4 + 4),
+      });
+    }
 
     groups.forEach(group => {
       const symLabel = `${group.symbols[0]} || ${group.symbols[1]}`;
@@ -2950,8 +3551,8 @@ export class SlotMachine extends HTMLElement {
 
     try {
       const response = await this.callSpinAPI();
-      this.spinsCount++;
       this.stopArray = response;
+      void this.loadSpinsCountFromHistory();
       this.rotateReels(response, true);
       this.startProgressTimer(response);
     } catch (error) {
@@ -2966,6 +3567,10 @@ export class SlotMachine extends HTMLElement {
 
   async callSpinAPI() {
     const activeLines = this.rewardMode === 2 ? [1, 0, 0, 0, 0, 0, 0] : this.selectedPaylines;
+    const headers = { 'Content-Type': 'application/json' };
+    if (this.jwtToken) {
+      headers.Authorization = `Bearer ${this.jwtToken}`;
+    }
     const body = {
       action: 'slot_spin',
       ulog: parseInt(this.bet),
@@ -2980,7 +3585,7 @@ export class SlotMachine extends HTMLElement {
 
     const response = await fetch('/api/games/slot-machine', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.jwtToken}` },
+      headers,
       body: JSON.stringify(body)
     });
     const json = await response.json();
@@ -2994,9 +3599,54 @@ export class SlotMachine extends HTMLElement {
     throw new Error(json.message || 'Spin failed');
   }
 
+  async loadSpinsCountFromHistory() {
+    try {
+      const authHeaders = { 'Content-Type': 'application/json' };
+      if (this.jwtToken) {
+        authHeaders.Authorization = `Bearer ${this.jwtToken}`;
+      }
+
+      const statsResponse = await fetch('/api/games/slot-machine', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ action: 'slot_stats' })
+      });
+      const statsJson = await statsResponse.json();
+
+      const statsTotal = Number.parseInt(String(statsJson?.data?.total_spins ?? ''), 10);
+      if (statsResponse.ok && statsJson.success && Number.isFinite(statsTotal) && statsTotal >= 0) {
+        this.spinsCount = statsTotal;
+        this.updateDisplay();
+        return;
+      }
+
+      const response = await fetch('/api/games/slot-machine', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ action: 'slot_history', page: 1 })
+      });
+      const json = await response.json();
+
+      if (!response.ok || !json.success || !json.data) {
+        throw new Error(json.message || 'Could not load spin history');
+      }
+
+      const totalSpins = Number.parseInt(String(json.data.total ?? ''), 10);
+      if (Number.isFinite(totalSpins) && totalSpins >= 0) {
+        this.spinsCount = totalSpins;
+      } else if (Array.isArray(json.data.history)) {
+        this.spinsCount = json.data.history.length;
+      }
+
+      this.updateDisplay();
+    } catch (error) {
+      console.error('Failed to load spins count from history:', error);
+    }
+  }
+
   /**
    * Rotate reels with slot machine animation
-   * @param {Array} values - Either [360,360,360,360,360] for initial spin or actual reel values [1-6]
+   * @param {Array} values - Either [360,360,360,360,360] for initial spin or actual reel values [1-10]
    * @param {boolean} isFinalSpin - True when spinning to final position
    */
   rotateReels(values, isFinalSpin = false) {
@@ -3032,7 +3682,7 @@ export class SlotMachine extends HTMLElement {
         const currentRotation = this.currentRotations[i];
 
         // Each symbol is 30° apart (12 cells × 30° = 360°)
-        // To show value N (1-6), rotate to -(N-1) * 30
+        // To show value N (1-10), rotate to -(N-1) * 30
         const targetAngle = -(values[i] - 1) * 30;
 
         // Calculate final rotation that lands exactly on targetAngle
@@ -3093,7 +3743,7 @@ export class SlotMachine extends HTMLElement {
   }
 
   showWin(data) {
-    const overlay = document.createElement('div');
+    const overlay = document.createElement('dialog');
     overlay.className = 'win-overlay';
 
     // Parse the request JSON from data[5] to check game mode
@@ -3122,14 +3772,27 @@ export class SlotMachine extends HTMLElement {
     }
 
     html += `<h2>Winnings: ${data[7]} $</h2>`;
-    if (data[9] === 1) html += '<button id="miniGameBtn">Mini Game</button>';
-    html += '<button id="continueBtn">Continue</button>';
+    html += '<div class="win-overlay-actions">';
+    if (data[9] === 1) html += '<button class="btn-secondary" id="miniGameBtn">Mini Game</button>';
+    html += '<button class="btn-primary" id="continueBtn">Continue</button>';
+    html += '</div>';
     overlay.innerHTML = html;
+    overlay.setAttribute('aria-label', 'Winning result');
     this.shadowRoot.appendChild(overlay);
 
-    overlay.querySelector('#continueBtn').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('close', () => overlay.remove(), { once: true });
+
+    const closeOverlay = () => {
+      if (typeof overlay.close === 'function' && overlay.open) {
+        overlay.close();
+      } else {
+        overlay.remove();
+      }
+    };
+
+    overlay.querySelector('#continueBtn').addEventListener('click', () => closeOverlay());
     overlay.querySelector('#miniGameBtn')?.addEventListener('click', () => {
-      overlay.remove();
+      closeOverlay();
       const winAmount = data[7];
       new BingoMiniGame(winAmount, this.shadowRoot, (finalWin) => {
         // Add any bonus winnings to credits
@@ -3140,6 +3803,12 @@ export class SlotMachine extends HTMLElement {
         }
       }, this.credits); // Pass user balance for mini-game validation
     });
+
+    if (typeof overlay.showModal === 'function') {
+      overlay.showModal();
+    } else {
+      overlay.setAttribute('open', '');
+    }
   }
 
   stopSpin() {

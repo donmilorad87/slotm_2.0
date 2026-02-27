@@ -1,4 +1,8 @@
-export function buildStripeCheckoutReturnUrls(origin, returnToPath, modeParam) {
+export function buildStripeCheckoutReturnUrls(
+  origin: string,
+  returnToPath: string,
+  modeParam: string,
+): { successUrl: string; cancelUrl: string } {
   const successUrlObj = new URL(returnToPath, origin);
   successUrlObj.searchParams.set(modeParam, "success");
 

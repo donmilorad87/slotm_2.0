@@ -8,7 +8,10 @@ export function randomId(bytes = 32) {
   return crypto.randomBytes(bytes).toString("hex");
 }
 
-export function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
+export function hashPassword(
+  password: string,
+  salt = crypto.randomBytes(16).toString("hex"),
+): { salt: string; hash: string } {
   const key = crypto
     .pbkdf2Sync(password, salt, HASH_ITERATIONS, HASH_KEY_LENGTH, HASH_DIGEST)
     .toString("hex");
@@ -18,7 +21,11 @@ export function hashPassword(password, salt = crypto.randomBytes(16).toString("h
   };
 }
 
-export function verifyPassword(password, salt, expectedHash) {
+export function verifyPassword(
+  password: string,
+  salt: string,
+  expectedHash: string,
+): boolean {
   const { hash } = hashPassword(password, salt);
   const a = Buffer.from(hash, "hex");
   const b = Buffer.from(expectedHash, "hex");

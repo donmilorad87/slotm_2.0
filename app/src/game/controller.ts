@@ -2,7 +2,10 @@ import { executeSpin } from "./slotMachine.js";
 import {
   executeMinigame,
   executeTicketMinigame,
+  type LegacyMiniGameRequest,
+  type TicketMiniGameRequest,
 } from "./miniGame.js";
+import type { SlotStore } from "./store.js";
 import {
   BALANCE_TO_COIN_RATIO,
   DEFAULT_KVOTE,
@@ -14,18 +17,65 @@ import {
   toPhpResponse,
   totalBet,
   validateJoker,
+  type PaylineState,
+  type PhpResponse,
+  type SpinRequest,
 } from "./types.js";
+import type { ApiError, ApiSuccess } from "../types/domain.js";
 
-function toInt(value, fallback = 0) {
+type RawObject = Record<string, unknown>;
+
+interface ActionResult<T = unknown> {
+  statusCode: number;
+  body: ApiSuccess<T> | ApiError;
+}
+
+type StoreUserStats = Awaited<ReturnType<SlotStore["getUserStats"]>>;
+
+interface LegacyMiniGamePayload {
+  bets?: Array<{ number?: unknown; bet?: unknown }>;
+}
+
+interface TicketMiniGamePayload {
+  tickets?: unknown;
+  coin_value?: unknown;
+}
+
+interface SpinPayload {
+  brojKredita?: unknown;
+  ulog?: unknown;
+  brojLinija?: unknown;
+  nacin?: unknown;
+  dzoker?: unknown;
+  vrednostDzokera?: unknown;
+  kvote?: unknown;
+  igra?: unknown;
+}
+
+function toErrorMessage(errorValue: unknown, fallback: string): string {
+  if (errorValue instanceof Error && errorValue.message) {
+    return errorValue.message;
+  }
+  return fallback;
+}
+
+function asObject(value: unknown): RawObject {
+  if (typeof value === "object" && value !== null) {
+    return value as RawObject;
+  }
+  return {};
+}
+
+function toInt(value: unknown, fallback = 0): number {
   const parsed = Number.parseInt(String(value ?? fallback), 10);
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function normalizeLines(rawLines) {
+function normalizeLines(rawLines: unknown): PaylineState[] {
   const lines = Array.isArray(rawLines) ? rawLines : [1, 0, 0, 0, 0, 0, 0];
   const normalized = lines
     .slice(0, PAYLINE_COUNT)
-    .map((value) => (Number(value) === 1 ? 1 : 0));
+    .map((value) => (Number(value) === 1 ? 1 : 0) as PaylineState);
 
   while (normalized.length < PAYLINE_COUNT) {
     normalized.push(0);
@@ -34,19 +84,20 @@ function normalizeLines(rawLines) {
   return normalized;
 }
 
-function normalizeKvote(rawKvote) {
+function normalizeKvote(rawKvote: unknown): number[] {
   if (!Array.isArray(rawKvote) || rawKvote.length === 0) {
     return [...DEFAULT_KVOTE];
   }
 
   const kvote = rawKvote.map((value) => toInt(value, 0));
   while (kvote.length < DEFAULT_KVOTE.length) {
-    kvote.push(DEFAULT_KVOTE[kvote.length]);
+    kvote.push(DEFAULT_KVOTE[kvote.length] ?? 0);
   }
   return kvote.slice(0, DEFAULT_KVOTE.length);
 }
 
-function normalizeSpinRequest(payload) {
+function normalizeSpinRequest(payloadRaw: unknown): SpinRequest {
+  const payload = asObject(payloadRaw) as SpinPayload;
   const nacin = Number(payload.nacin) === 1 ? 1 : 2;
   const dzoker = toInt(payload.dzoker, 0);
   const igraRaw = toInt(payload.igra, 1);
@@ -59,11 +110,15 @@ function normalizeSpinRequest(payload) {
     dzoker: dzoker > 0 ? dzoker : 0,
     vrednostDzokera: Math.max(0, toInt(payload.vrednostDzokera, 0)),
     kvote: normalizeKvote(payload.kvote),
-    igra: igraRaw >= 1 && igraRaw <= 5 ? igraRaw : 1,
+    igra: igraRaw >= 1 && igraRaw <= 5 ? (igraRaw as SpinRequest["igra"]) : 1,
   };
 }
 
-function normalizeOldMiniGameRequest(payload, userCoins) {
+function normalizeOldMiniGameRequest(
+  payloadRaw: unknown,
+  userCoins: number,
+): LegacyMiniGameRequest {
+  const payload = asObject(payloadRaw) as LegacyMiniGamePayload;
   const bets = Array.isArray(payload.bets)
     ? payload.bets.map((item) => ({
         number: toInt(item?.number, 0),
@@ -77,7 +132,11 @@ function normalizeOldMiniGameRequest(payload, userCoins) {
   };
 }
 
-function normalizeTicketRequest(payload, userCoins) {
+function normalizeTicketRequest(
+  payloadRaw: unknown,
+  userCoins: number,
+): TicketMiniGameRequest {
+  const payload = asObject(payloadRaw) as TicketMiniGamePayload;
   const tickets = Array.isArray(payload.tickets)
     ? payload.tickets.map((ticket) =>
         Array.isArray(ticket) ? ticket.map((value) => toInt(value, 0)) : [],
@@ -91,7 +150,7 @@ function normalizeTicketRequest(payload, userCoins) {
   };
 }
 
-function makeFraudResponse(request) {
+function makeFraudResponse(request: SpinRequest): PhpResponse {
   return [
     1,
     1,
@@ -107,7 +166,11 @@ function makeFraudResponse(request) {
   ];
 }
 
-async function handleSpin(payload, store, userId) {
+async function handleSpin(
+  payload: unknown,
+  store: SlotStore,
+  userId: number,
+): Promise<ActionResult<{ result: PhpResponse }>> {
   const request = normalizeSpinRequest(payload);
 
   if (!validateJoker(request)) {
@@ -147,7 +210,7 @@ async function handleSpin(payload, store, userId) {
   });
 
   const result = executeSpin(request);
-  let winTransactionId = null;
+  let winTransactionId: number | null = null;
 
   if (result.totalPayout > 0) {
     const payoutUnits = result.totalPayout * BALANCE_TO_COIN_RATIO;
@@ -194,7 +257,31 @@ async function handleSpin(payload, store, userId) {
   };
 }
 
-async function handleMiniGameOld(payload, store, userId) {
+async function handleMiniGameOld(
+  payload: unknown,
+  store: SlotStore,
+  userId: number,
+): Promise<
+  ActionResult<{
+    drawn_numbers: number[];
+    number_results: Array<{
+      number: number;
+      bet: number;
+      matched: boolean;
+      payout: number;
+    }>;
+    total_bet: number;
+    total_payout: number;
+    net_result: number;
+    matches_count: number;
+    new_balance: number;
+    odds_info: {
+      probability: number;
+      odds: number;
+      description: string;
+    };
+  }>
+> {
   const userCoins = await store.getBalanceCoins(userId);
   const request = normalizeOldMiniGameRequest(payload, userCoins);
 
@@ -204,7 +291,7 @@ async function handleMiniGameOld(payload, store, userId) {
   } catch (validationError) {
     return {
       statusCode: 400,
-      body: error(validationError.message || "Invalid mini-game request"),
+      body: error(toErrorMessage(validationError, "Invalid mini-game request")),
     };
   }
 
@@ -279,7 +366,25 @@ async function handleMiniGameOld(payload, store, userId) {
   };
 }
 
-async function handleMiniGameTickets(payload, store, userId) {
+async function handleMiniGameTickets(
+  payload: unknown,
+  store: SlotStore,
+  userId: number,
+): Promise<
+  ActionResult<{
+    drawn_numbers: number[];
+    ticket_results: Array<{
+      numbers_played: number;
+      matches: number;
+      bet: number;
+      payout: number;
+    }>;
+    total_bet: number;
+    total_payout: number;
+    net_result: number;
+    new_balance: number;
+  }>
+> {
   const userCoins = await store.getBalanceCoins(userId);
   const request = normalizeTicketRequest(payload, userCoins);
 
@@ -289,7 +394,7 @@ async function handleMiniGameTickets(payload, store, userId) {
   } catch (validationError) {
     return {
       statusCode: 400,
-      body: error(validationError.message || "Invalid mini-game request"),
+      body: error(toErrorMessage(validationError, "Invalid mini-game request")),
     };
   }
 
@@ -367,8 +472,21 @@ async function handleMiniGameTickets(payload, store, userId) {
   };
 }
 
-async function handleHistory(payload, store, userId) {
-  const page = Math.max(1, toInt(payload.page, 1));
+async function handleHistory(
+  payload: unknown,
+  store: SlotStore,
+  userId: number,
+): Promise<
+  ActionResult<{
+    total: number;
+    history: unknown[];
+    page: number;
+    total_pages: number;
+    has_more: boolean;
+  }>
+> {
+  const source = asObject(payload);
+  const page = Math.max(1, toInt(source.page, 1));
   const limit = 16;
   const skip = (page - 1) * limit;
 
@@ -378,6 +496,7 @@ async function handleHistory(payload, store, userId) {
   return {
     statusCode: 200,
     body: success({
+      total,
       history: items,
       page,
       total_pages: totalPages,
@@ -386,28 +505,36 @@ async function handleHistory(payload, store, userId) {
   };
 }
 
-async function handleStats(store, userId) {
+async function handleStats(
+  store: SlotStore,
+  userId: number,
+): Promise<ActionResult<StoreUserStats>> {
   return {
     statusCode: 200,
     body: success(await store.getUserStats(userId)),
   };
 }
 
-export async function handleSlotMachineAction(payload, store, userId) {
-  const action = typeof payload?.action === "string" ? payload.action : "";
+export async function handleSlotMachineAction(
+  payload: unknown,
+  store: SlotStore,
+  userId: number,
+): Promise<ActionResult> {
+  const source = asObject(payload);
+  const action = typeof source.action === "string" ? source.action : "";
 
   switch (action) {
     case "slot_spin":
-      return await handleSpin(payload, store, userId);
+      return handleSpin(source, store, userId);
     case "slot_minigame":
-      if (payload && Object.prototype.hasOwnProperty.call(payload, "tickets")) {
-        return await handleMiniGameTickets(payload, store, userId);
+      if (Object.prototype.hasOwnProperty.call(source, "tickets")) {
+        return handleMiniGameTickets(source, store, userId);
       }
-      return await handleMiniGameOld(payload, store, userId);
+      return handleMiniGameOld(source, store, userId);
     case "slot_history":
-      return await handleHistory(payload, store, userId);
+      return handleHistory(source, store, userId);
     case "slot_stats":
-      return await handleStats(store, userId);
+      return handleStats(store, userId);
     default:
       return {
         statusCode: 400,

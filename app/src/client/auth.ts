@@ -34,12 +34,12 @@ function bindLoginForm() {
     const payload = {
       email: String(formData.get("email") || ""),
       password: String(formData.get("password") || ""),
-      next: String(formData.get("next") || "/games/slot-machine"),
+      next: String(formData.get("next") || "/"),
     };
 
     try {
       const result = await postJson("/api/auth/login", payload);
-      window.location.href = result.data?.redirect || "/games/slot-machine";
+      window.location.href = result.data?.redirect || "/";
     } catch (error) {
       setError(error.message || "Login failed");
     }
@@ -60,12 +60,12 @@ function bindRegisterForm() {
     const payload = {
       email: String(formData.get("email") || ""),
       password: String(formData.get("password") || ""),
-      next: String(formData.get("next") || "/games/slot-machine"),
+      next: String(formData.get("next") || "/"),
     };
 
     try {
       const result = await postJson("/api/auth/register", payload);
-      window.location.href = result.data?.redirect || "/games/slot-machine";
+      window.location.href = result.data?.redirect || "/";
     } catch (error) {
       setError(error.message || "Register failed");
     }

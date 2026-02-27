@@ -1,6 +1,13 @@
 import crypto from "node:crypto";
 
-function parseSignatureHeader(signatureHeader) {
+interface StripeSignatureHeader {
+  timestamp: number;
+  v1: string[];
+}
+
+function parseSignatureHeader(
+  signatureHeader: string | undefined | null,
+): StripeSignatureHeader | null {
   if (!signatureHeader || typeof signatureHeader !== "string") {
     return null;
   }
@@ -37,7 +44,7 @@ function parseSignatureHeader(signatureHeader) {
   return { timestamp, v1 };
 }
 
-function timingSafeHexEqual(aHex, bHex) {
+function timingSafeHexEqual(aHex: string, bHex: string): boolean {
   if (!aHex || !bHex || aHex.length !== bHex.length) {
     return false;
   }
@@ -60,7 +67,13 @@ export function verifyStripeWebhookSignature({
   webhookSecret,
   toleranceSeconds = 300,
   nowUnixSeconds = Math.floor(Date.now() / 1000),
-}) {
+}: {
+  payloadBuffer: Buffer;
+  signatureHeader?: string;
+  webhookSecret: string;
+  toleranceSeconds?: number;
+  nowUnixSeconds?: number;
+}): boolean {
   const parsed = parseSignatureHeader(signatureHeader);
   if (!parsed || !webhookSecret) {
     return false;

@@ -2,6 +2,44 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { promises as fs } from "node:fs";
 
+type SQLitePrimitive = string | number | boolean | null;
+type SQLiteParams = SQLitePrimitive[];
+type SQLiteRow = Record<string, SQLitePrimitive>;
+
+export interface SQLiteRunOperation {
+  kind: "run";
+  sql: string;
+  params?: SQLiteParams;
+}
+
+export interface SQLiteGetOperation {
+  kind: "get";
+  sql: string;
+  params?: SQLiteParams;
+}
+
+export interface SQLiteAllOperation {
+  kind: "all";
+  sql: string;
+  params?: SQLiteParams;
+}
+
+export interface SQLiteScriptOperation {
+  kind: "script";
+  sql: string;
+}
+
+export type SQLiteOperation =
+  | SQLiteRunOperation
+  | SQLiteGetOperation
+  | SQLiteAllOperation
+  | SQLiteScriptOperation;
+
+interface SQLiteRunResult {
+  changes: number;
+  lastInsertRowId: number;
+}
+
 const BRIDGE_SCRIPT = `
 import base64
 import json
@@ -60,20 +98,22 @@ if __name__ == "__main__":
     main()
 `;
 
-function normalizeDbPath(dbPath) {
+function normalizeDbPath(dbPath: string): string {
   return path.resolve(dbPath);
 }
 
 export class SQLiteClient {
-  constructor(dbPath) {
+  private readonly dbPath: string;
+
+  constructor(dbPath: string) {
     this.dbPath = normalizeDbPath(dbPath);
   }
 
-  async init() {
+  async init(): Promise<void> {
     await fs.mkdir(path.dirname(this.dbPath), { recursive: true });
   }
 
-  execute(ops) {
+  execute(ops: SQLiteOperation[]): unknown[] {
     const payload = {
       db_path: this.dbPath,
       ops,
@@ -106,26 +146,36 @@ export class SQLiteClient {
     return parsed.results || [];
   }
 
-  run(sql, params = []) {
+  run(sql: string, params: SQLiteParams = []): SQLiteRunResult {
     const [result] = this.execute([{ kind: "run", sql, params }]);
-    return result || { changes: 0, lastInsertRowId: 0 };
+    if (result && typeof result === "object") {
+      const parsed = result as Partial<SQLiteRunResult>;
+      return {
+        changes: Number(parsed.changes ?? 0),
+        lastInsertRowId: Number(parsed.lastInsertRowId ?? 0),
+      };
+    }
+    return { changes: 0, lastInsertRowId: 0 };
   }
 
-  get(sql, params = []) {
+  get(sql: string, params: SQLiteParams = []): SQLiteRow | null {
     const [row] = this.execute([{ kind: "get", sql, params }]);
-    return row || null;
+    if (row && typeof row === "object") {
+      return row as SQLiteRow;
+    }
+    return null;
   }
 
-  all(sql, params = []) {
+  all(sql: string, params: SQLiteParams = []): SQLiteRow[] {
     const [rows] = this.execute([{ kind: "all", sql, params }]);
     return Array.isArray(rows) ? rows : [];
   }
 
-  script(sql) {
+  script(sql: string): void {
     this.execute([{ kind: "script", sql }]);
   }
 
-  batch(ops) {
+  batch(ops: SQLiteOperation[]): unknown[] {
     return this.execute(ops);
   }
 }

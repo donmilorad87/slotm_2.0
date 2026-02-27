@@ -28,7 +28,8 @@ docker compose ps
 |-----------|---------------------------|----------------------|
 | App       | https://localhost/        | Slot machine (via Nginx) |
 | App direct| http://localhost:4300/    | Direct Node access   |
-| pgAdmin   | http://localhost:5050/    | PostgreSQL admin     |
+| pgAdmin   | https://localhost/pgadmin/ | PostgreSQL admin (via Nginx) |
+| pgAdmin direct | http://localhost:5050/ | PostgreSQL admin (direct) |
 | PostgreSQL| localhost:5432            | Database             |
 
 ## Network
@@ -105,6 +106,7 @@ cd /home/appuser/app && npm run test:parity
 - Register: https://localhost/register
 - Game: https://localhost/games/slot-machine
 - Wallet: https://localhost/wallet
+- pgAdmin: https://localhost/pgadmin/
 
 ## Admin Credentials
 

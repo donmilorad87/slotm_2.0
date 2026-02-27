@@ -1,4 +1,5 @@
 import { promises as fs } from "node:fs";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
 
 const MIME_TYPES = new Map([
@@ -13,22 +14,39 @@ const MIME_TYPES = new Map([
   [".ico", "image/x-icon"],
 ]);
 
-export function sendJson(response, statusCode, payload) {
+type HeaderValue = string | number | string[];
+
+function getErrorCode(error: unknown): string {
+  if (typeof error === "object" && error && "code" in error) {
+    return String((error as { code?: unknown }).code ?? "");
+  }
+  return "";
+}
+
+export function sendJson(
+  response: ServerResponse,
+  statusCode: number,
+  payload: unknown,
+): void {
   response.writeHead(statusCode, { "Content-Type": "application/json; charset=utf-8" });
   response.end(JSON.stringify(payload));
 }
 
-export function sendHtml(response, statusCode, html) {
+export function sendHtml(response: ServerResponse, statusCode: number, html: string): void {
   response.writeHead(statusCode, { "Content-Type": "text/html; charset=utf-8" });
   response.end(html);
 }
 
-export function redirect(response, location, statusCode = 302) {
+export function redirect(
+  response: ServerResponse,
+  location: string,
+  statusCode = 302,
+): void {
   response.writeHead(statusCode, { Location: location });
   response.end();
 }
 
-export function safeJoin(baseDir, relativePath) {
+export function safeJoin(baseDir: string, relativePath: string): string | null {
   const base = path.resolve(baseDir);
   const target = path.resolve(base, relativePath);
   const baseWithSep = `${base}${path.sep}`;
@@ -40,7 +58,7 @@ export function safeJoin(baseDir, relativePath) {
   return target;
 }
 
-export async function serveFile(response, filePath) {
+export async function serveFile(response: ServerResponse, filePath: string): Promise<void> {
   try {
     const content = await fs.readFile(filePath);
     const ext = path.extname(filePath).toLowerCase();
@@ -48,7 +66,7 @@ export async function serveFile(response, filePath) {
     response.writeHead(200, { "Content-Type": contentType });
     response.end(content);
   } catch (error) {
-    if (error && error.code === "ENOENT") {
+    if (getErrorCode(error) === "ENOENT") {
       sendJson(response, 404, { success: false, message: "Not found" });
       return;
     }
@@ -56,7 +74,10 @@ export async function serveFile(response, filePath) {
   }
 }
 
-export async function readJsonBody(request, limitBytes = 1024 * 1024) {
+export async function readJsonBody(
+  request: IncomingMessage,
+  limitBytes = 1024 * 1024,
+): Promise<Record<string, unknown>> {
   const raw = await readRawBody(request, limitBytes);
   if (raw.length === 0) {
     return {};
@@ -69,9 +90,12 @@ export async function readJsonBody(request, limitBytes = 1024 * 1024) {
   }
 }
 
-export async function readRawBody(request, limitBytes = 1024 * 1024) {
+export async function readRawBody(
+  request: IncomingMessage,
+  limitBytes = 1024 * 1024,
+): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const chunks = [];
+    const chunks: Buffer[] = [];
     let total = 0;
 
     request.on("data", (chunk) => {
@@ -92,8 +116,24 @@ export async function readRawBody(request, limitBytes = 1024 * 1024) {
   });
 }
 
-export function requestOrigin(request) {
-  const proto = request.headers["x-forwarded-proto"] || "http";
-  const host = request.headers.host || "localhost:4300";
+function headerToString(header: HeaderValue | undefined, fallback: string): string {
+  if (Array.isArray(header)) {
+    return header[0] ?? fallback;
+  }
+  if (typeof header === "string") {
+    return header;
+  }
+  if (typeof header === "number") {
+    return String(header);
+  }
+  return fallback;
+}
+
+export function requestOrigin(request: IncomingMessage): string {
+  const proto = headerToString(
+    request.headers["x-forwarded-proto"] as HeaderValue | undefined,
+    "http",
+  );
+  const host = headerToString(request.headers.host as HeaderValue | undefined, "localhost:4300");
   return `${proto}://${host}`;
 }

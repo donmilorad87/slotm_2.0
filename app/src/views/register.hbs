@@ -4,9 +4,24 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{title}}</title>
+    <link rel="icon" type="image/gif" href="/assets/images/blazingSun.gif">
     <link rel="stylesheet" href="/assets/css/main.css">
   </head>
-  <body>
+  <body class="theme-blazing-sun">
+    <canvas id="canvasss" aria-hidden="true"></canvas>
+    <header class="topbar">
+      <div class="topbar__left">
+        <a class="svemir-logo" href="/" aria-label="Blazing Sun home">
+          <img style="height: 4em" src="/assets/images/blazingSun.gif" alt="Blazing Sun logo">
+        </a>
+        <span class="topbar__muted">Create account</span>
+      </div>
+      <nav class="topbar__right">
+        <a href="/login?next={{next_path}}">Login</a>
+        <a href="/register?next={{next_path}}">Register</a>
+      </nav>
+    </header>
+
     <main class="auth-page">
       <section class="auth-card">
         <h1>Create Account</h1>
@@ -27,6 +42,7 @@
         <p class="auth-switch">Already have an account? <a href="/login?next={{next_path}}">Sign in</a></p>
       </section>
     </main>
+    <script type="module" src="/assets/js/blazing-background.js"></script>
     <script type="module" src="/assets/js/auth.js"></script>
   </body>
 </html>

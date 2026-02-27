@@ -2,80 +2,109 @@ import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import compression from "compression";
+import cors from "cors";
+import express from "express";
+import type { Request, Response } from "express";
+import helmet from "helmet";
+import jwt from "jsonwebtoken";
+import morgan from "morgan";
+import type { ParsedQs } from "qs";
+import rateLimit from "express-rate-limit";
+
 import { handleSlotMachineAction } from "./game/controller.js";
 import { SlotStore } from "./game/store.js";
-import { parseCookies, serializeCookie } from "./lib/cookies.js";
 import { loadAppEnv } from "./lib/env.js";
+import { hashPassword, verifyPassword } from "./lib/security.js";
 import {
-  readJsonBody,
-  readRawBody,
-  redirect,
-  requestOrigin,
-  safeJoin,
-  sendHtml,
-  sendJson,
-  serveFile,
-} from "./lib/http.js";
-import { randomId, hashPassword, verifyPassword } from "./lib/security.js";
-import { StripeClient } from "./lib/stripe.js";
+  StripeClient,
+  type StripeCheckoutSession,
+  type StripePaymentMethod,
+} from "./lib/stripe.js";
 import { buildStripeCheckoutReturnUrls } from "./lib/stripeRedirect.js";
 import { verifyStripeWebhookSignature } from "./lib/stripeWebhook.js";
 import { renderTemplate } from "./lib/template.js";
+import { createJwtAuthMiddlewares } from "./middlewares/auth.middleware.js";
+import { attachRequestContext } from "./middlewares/request-context.middleware.js";
+import { registerRoutes } from "./routes/index.js";
+import type {
+  RequestAuthWithUser,
+  SlotUser,
+  WalletTransaction,
+} from "./types/domain.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const DIST_DIR = path.dirname(__filename);
 const TEMPLATE_DIR = path.join(DIST_DIR, "views");
 const CLIENT_DIR = path.join(DIST_DIR, "client");
 const CLIENT_STYLES_DIR = path.join(CLIENT_DIR, "styles");
+const CLIENT_IMAGES_DIR = path.join(CLIENT_DIR, "images");
 
 const PORT = Number(process.env.PORT || 4300);
 const HOST = process.env.HOST || "0.0.0.0";
-const SESSION_COOKIE = "slotm_session";
-const SESSION_TTL_SECONDS = 60 * 60 * 24 * 14;
+const JWT_COOKIE = "slotm_jwt";
+const DEFAULT_JWT_TTL_SECONDS = 60 * 60 * 24 * 14;
+const JWT_ISSUER = "slotm";
+const JWT_AUDIENCE = "slotm-web";
+const HISTORY_PAGE_SIZE = 20;
+const WALLET_TX_PAGE_SIZE = 20;
 
 const env = loadAppEnv();
+const jwtSecret = env.JWT_SECRET || "dev-jwt-secret-change-me";
+const jwtCookieMaxAgeSeconds = Number.parseInt(
+  String(env.JWT_COOKIE_MAX_AGE_SECONDS || DEFAULT_JWT_TTL_SECONDS),
+  10,
+);
+
+if (!env.JWT_SECRET) {
+  console.warn("[slotm] JWT_SECRET is not set; using development fallback secret");
+}
+
 const stripe = new StripeClient(env.STRIPE_SECRET || "");
 const store = new SlotStore();
+const {
+  optionalJwt,
+  requireJwt,
+  setJwtCookie,
+  clearJwtCookie,
+} = createJwtAuthMiddlewares({
+  store,
+  jwtSecret,
+  jwtIssuer: JWT_ISSUER,
+  jwtAudience: JWT_AUDIENCE,
+  jwtCookie: JWT_COOKIE,
+  jwtCookieMaxAgeSeconds,
+  defaultJwtTtlSeconds: DEFAULT_JWT_TTL_SECONDS,
+  nodeEnv: env.NODE_ENV,
+});
 
-function defaultHeaders() {
-  return {
-    "Cache-Control": "no-store",
-  };
+interface StripeCheckoutQuery {
+  [key: string]: unknown;
+  session_id?: string;
+  topup?: string;
+  setup?: string;
 }
 
-function setSessionCookie(response, sessionId) {
-  response.setHeader(
-    "Set-Cookie",
-    serializeCookie(SESSION_COOKIE, sessionId, {
-      path: "/",
-      httpOnly: true,
-      sameSite: "Lax",
-      maxAge: SESSION_TTL_SECONDS,
-    }),
-  );
+interface StripeFinalizeResult {
+  flash: string;
 }
 
-function clearSessionCookie(response) {
-  response.setHeader(
-    "Set-Cookie",
-    serializeCookie(SESSION_COOKIE, "", {
-      path: "/",
-      httpOnly: true,
-      sameSite: "Lax",
-      maxAge: 0,
-    }),
-  );
-}
-
-function getClientIp(request) {
-  const forwarded = request.headers["x-forwarded-for"];
-  if (typeof forwarded === "string" && forwarded.length > 0) {
-    return forwarded.split(",")[0].trim();
+function toErrorMessage(errorValue: unknown, fallback: string): string {
+  if (errorValue instanceof Error && errorValue.message) {
+    return errorValue.message;
   }
-  return request.socket?.remoteAddress || "";
+  return fallback;
 }
 
-function sanitizeRedirectTarget(value, fallback = "/games/slot-machine") {
+function requireAuthUser(req: Request): RequestAuthWithUser {
+  const auth = req.auth;
+  if (!auth?.user) {
+    throw new Error("Unauthorized");
+  }
+  return auth as RequestAuthWithUser;
+}
+
+function sanitizeRedirectTarget(value: unknown, fallback = "/"): string {
   if (!value || typeof value !== "string") {
     return fallback;
   }
@@ -88,7 +117,47 @@ function sanitizeRedirectTarget(value, fallback = "/games/slot-machine") {
   return value;
 }
 
-function formatDate(ts) {
+function toInt(value: unknown, fallback = 0): number {
+  const parsed = Number.parseInt(String(value ?? fallback), 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function queryString(
+  query: ParsedQs | Record<string, unknown> | undefined,
+  key: string,
+): string {
+  const value = query?.[key];
+  if (Array.isArray(value)) {
+    return String(value[0] || "");
+  }
+  return String(value || "");
+}
+
+function issueJwtToken(user: SlotUser): string {
+  return jwt.sign(
+    {
+      sub: String(user.id),
+      email: user.email,
+    },
+    jwtSecret,
+    {
+      issuer: JWT_ISSUER,
+      audience: JWT_AUDIENCE,
+      expiresIn: (env.JWT_EXPIRES_IN || "14d") as jwt.SignOptions["expiresIn"],
+    },
+  );
+}
+
+function requestOriginExpress(req: Request): string {
+  const forwardedProto = req.headers["x-forwarded-proto"];
+  const proto = Array.isArray(forwardedProto)
+    ? String(forwardedProto[0] || "")
+    : String(forwardedProto || req.protocol || "http");
+  const normalizedProto = proto.split(",")[0]?.trim() || "http";
+  return `${normalizedProto}://${req.get("host") || `localhost:${PORT}`}`;
+}
+
+function formatDate(ts: string): string {
   try {
     return new Date(ts).toLocaleString();
   } catch {
@@ -96,7 +165,7 @@ function formatDate(ts) {
   }
 }
 
-function txRowsHtml(transactions) {
+function txRowsHtml(transactions: WalletTransaction[]): string {
   if (!transactions.length) {
     return '<tr><td colspan="5">No transactions yet.</td></tr>';
   }
@@ -118,9 +187,9 @@ function txRowsHtml(transactions) {
     .join("");
 }
 
-function cardRowsHtml(cards, defaultPaymentMethodId) {
+function cardRowsHtml(cards: StripePaymentMethod[], defaultPaymentMethodId: string): string {
   if (!cards.length) {
-    return '<tr><td colspan="4">No saved cards yet.</td></tr>';
+    return '<tr><td colspan="5">No saved cards yet.</td></tr>';
   }
 
   return cards
@@ -133,47 +202,29 @@ function cardRowsHtml(cards, defaultPaymentMethodId) {
           <td>**** **** **** ${card.last4 || "----"}</td>
           <td>${card.exp_month || "--"}/${card.exp_year || "--"}</td>
           <td>${isDefault ? "Default" : ""}</td>
+          <td>
+            <button type="button" class="btn btn--ghost wallet-remove-card" data-payment-method-id="${cardObj.id}">
+              Remove
+            </button>
+          </td>
         </tr>
       `;
     })
     .join("");
 }
 
-function ensureAuthenticatedOrRedirect(request, response, user, nextPath) {
-  if (user) {
-    return true;
+function paymentMethodFromSession(session: StripeCheckoutSession): string | null {
+  const paymentIntent = session.payment_intent;
+  if (!paymentIntent) {
+    return null;
   }
-  const next = encodeURIComponent(nextPath || "/games/slot-machine");
-  redirect(response, `/login?next=${next}`);
-  return false;
+  if (typeof paymentIntent === "string") {
+    return null;
+  }
+  return paymentIntent.payment_method || null;
 }
 
-async function getAuthContext(request) {
-  await store.cleanupExpiredSessions();
-  const cookies = parseCookies(request.headers.cookie);
-  const sessionId = cookies[SESSION_COOKIE];
-  if (!sessionId) {
-    return { user: null, session: null, sessionId: null };
-  }
-
-  const record = await store.getSessionWithUser(sessionId);
-  if (!record) {
-    return { user: null, session: null, sessionId: null };
-  }
-
-  if (new Date(record.session.expiresAt).getTime() <= Date.now()) {
-    await store.deleteSession(sessionId);
-    return { user: null, session: null, sessionId: null };
-  }
-
-  return {
-    user: record.user,
-    session: record.session,
-    sessionId,
-  };
-}
-
-async function ensureStripeCustomer(user) {
+async function ensureStripeCustomer(user: SlotUser): Promise<SlotUser> {
   if (!stripe.isConfigured()) {
     throw new Error("Stripe is not configured. Check STRIPE_SECRET.");
   }
@@ -184,13 +235,20 @@ async function ensureStripeCustomer(user) {
 
   const customer = await stripe.createCustomer({ email: user.email });
   await store.updateUserStripeCustomer(user.id, customer.id);
-  return await store.getUserById(user.id);
+  const updatedUser = await store.getUserById(user.id);
+  if (!updatedUser) {
+    throw new Error("User not found after Stripe customer creation");
+  }
+  return updatedUser;
 }
 
-async function finalizeStripeFromQuery(user, url) {
-  const sessionId = url.searchParams.get("session_id");
-  const topup = url.searchParams.get("topup");
-  const setup = url.searchParams.get("setup");
+async function finalizeStripeFromQuery(
+  user: SlotUser,
+  query: ParsedQs | StripeCheckoutQuery,
+): Promise<StripeFinalizeResult> {
+  const sessionId = queryString(query, "session_id");
+  const topup = queryString(query, "topup");
+  const setup = queryString(query, "setup");
 
   if (!sessionId || (topup !== "success" && setup !== "success")) {
     return { flash: "" };
@@ -239,11 +297,11 @@ async function finalizeStripeFromQuery(user, url) {
         providerRef: checkoutSession.id,
         metadata: {
           stripe_session_id: checkoutSession.id,
-          amount_total: checkoutSession.amount_total,
+          amount_total: checkoutSession.amount_total ?? null,
         },
       });
 
-      const paymentMethodId = checkoutSession?.payment_intent?.payment_method || null;
+      const paymentMethodId = paymentMethodFromSession(checkoutSession);
       if (paymentMethodId) {
         const latestUser = await store.getUserById(user.id);
         if (latestUser?.stripeCustomerId) {
@@ -275,14 +333,35 @@ async function finalizeStripeFromQuery(user, url) {
       return { flash: "Card added successfully." };
     }
   } catch (error) {
-    return { flash: `Stripe finalize failed: ${error.message}` };
+    return { flash: `Stripe finalize failed: ${toErrorMessage(error, "unknown error")}` };
   }
 
   return { flash: "" };
 }
 
-async function handleGamePage(request, response, url, user) {
-  const finalize = await finalizeStripeFromQuery(user, url);
+interface AuthRequestBody {
+  email?: unknown;
+  password?: unknown;
+  next?: unknown;
+}
+
+interface WalletTopupBody {
+  amountCoins?: unknown;
+  returnTo?: unknown;
+}
+
+interface WalletSetupBody {
+  returnTo?: unknown;
+}
+
+interface WalletRemoveCardBody {
+  paymentMethodId?: unknown;
+}
+
+async function handleGamePage(req: Request, res: Response): Promise<void> {
+  const auth = requireAuthUser(req);
+  const user = auth.user;
+  const finalize = await finalizeStripeFromQuery(user, req.query || {});
   const freshUser = await store.getUserById(user.id);
   const userBalanceCoins = await store.getBalanceCoins(user.id);
 
@@ -291,34 +370,44 @@ async function handleGamePage(request, response, url, user) {
     user_id: String(user.id),
     user_email: freshUser?.email || user.email,
     user_balance_coins: String(userBalanceCoins),
-    jwt_token: "",
+    jwt_token: auth.token || "",
     stripe_public_key: env.STRIPE_KEY || "",
     flash_message: finalize.flash || "",
   });
 
-  response.writeHead(200, {
-    "Content-Type": "text/html; charset=utf-8",
-    ...defaultHeaders(),
-  });
-  response.end(html);
+  res.status(200).set("Content-Type", "text/html; charset=utf-8").send(html);
 }
 
-async function handleWalletPage(request, response, url, user) {
-  const finalize = await finalizeStripeFromQuery(user, url);
+async function handleGamesPage(req: Request, res: Response): Promise<void> {
+  const auth = requireAuthUser(req);
+  const user = auth.user;
+
+  const html = await renderTemplate(path.join(TEMPLATE_DIR, "games.hbs"), {
+    title: "Games - slotm",
+    user_email: user.email,
+  });
+
+  res.status(200).set("Content-Type", "text/html; charset=utf-8").send(html);
+}
+
+async function handleWalletPage(req: Request, res: Response): Promise<void> {
+  const auth = requireAuthUser(req);
+  const user = auth.user;
+  const finalize = await finalizeStripeFromQuery(user, req.query || {});
   const freshUser = await store.getUserById(user.id);
   const userBalanceCoins = await store.getBalanceCoins(user.id);
 
-  let cards = [];
+  let cards: StripePaymentMethod[] = [];
   if (stripe.isConfigured() && freshUser?.stripeCustomerId) {
     try {
       const paymentMethods = await stripe.listPaymentMethods(freshUser.stripeCustomerId);
       cards = Array.isArray(paymentMethods?.data) ? paymentMethods.data : [];
-    } catch (error) {
+    } catch {
       cards = [];
     }
   }
 
-  const txRows = txRowsHtml(await store.listTransactions(user.id, 200));
+  const txRows = txRowsHtml(await store.listTransactions(user.id, WALLET_TX_PAGE_SIZE));
   const cardRows = cardRowsHtml(cards, freshUser?.defaultPaymentMethodId || "");
 
   const html = await renderTemplate(path.join(TEMPLATE_DIR, "wallet.hbs"), {
@@ -331,124 +420,150 @@ async function handleWalletPage(request, response, url, user) {
     stripe_configured: stripe.isConfigured() ? "yes" : "no",
   });
 
-  sendHtml(response, 200, html);
+  res.status(200).set("Content-Type", "text/html; charset=utf-8").send(html);
 }
 
-async function handleLoginPage(request, response, url, auth) {
-  if (auth.user) {
-    redirect(response, "/games/slot-machine");
+async function handleRootPage(req: Request, res: Response): Promise<void> {
+  const auth = requireAuthUser(req);
+  const user = auth.user;
+
+  try {
+    const html = await renderTemplate(path.join(TEMPLATE_DIR, "home.hbs"), {
+      title: "Blazing Sun - Home",
+      user_email: user.email,
+    });
+    res.status(200).set("Content-Type", "text/html; charset=utf-8").send(html);
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: toErrorMessage(error, "Failed to render homepage"),
+    });
+  }
+}
+
+async function handleLoginPage(req: Request, res: Response): Promise<void> {
+  if (req.auth?.user) {
+    res.redirect("/");
     return;
   }
-  const next = sanitizeRedirectTarget(url.searchParams.get("next"), "/games/slot-machine");
+
+  const next = sanitizeRedirectTarget(queryString(req.query, "next"), "/");
   const html = await renderTemplate(path.join(TEMPLATE_DIR, "login.hbs"), {
     title: "Login - slotm",
     next_path: next,
   });
-  sendHtml(response, 200, html);
+
+  res.status(200).set("Content-Type", "text/html; charset=utf-8").send(html);
 }
 
-async function handleRegisterPage(request, response, url, auth) {
-  if (auth.user) {
-    redirect(response, "/games/slot-machine");
+async function handleRegisterPage(req: Request, res: Response): Promise<void> {
+  if (req.auth?.user) {
+    res.redirect("/");
     return;
   }
-  const next = sanitizeRedirectTarget(url.searchParams.get("next"), "/games/slot-machine");
+
+  const next = sanitizeRedirectTarget(queryString(req.query, "next"), "/");
   const html = await renderTemplate(path.join(TEMPLATE_DIR, "register.hbs"), {
     title: "Register - slotm",
     next_path: next,
   });
-  sendHtml(response, 200, html);
+
+  res.status(200).set("Content-Type", "text/html; charset=utf-8").send(html);
 }
 
-async function handleAuthRegister(request, response) {
+async function handleAuthRegister(
+  req: Request,
+  res: Response,
+): Promise<void> {
   try {
-    const payload = await readJsonBody(request);
+    const payload = (req.body || {}) as AuthRequestBody;
     const email = String(payload.email || "").trim().toLowerCase();
     const password = String(payload.password || "");
-    const next = sanitizeRedirectTarget(payload.next, "/games/slot-machine");
+    const next = sanitizeRedirectTarget(payload.next, "/");
 
     if (!email || !email.includes("@")) {
-      sendJson(response, 400, { success: false, message: "Valid email is required" });
+      res.status(400).json({ success: false, message: "Valid email is required" });
       return;
     }
     if (password.length < 6) {
-      sendJson(response, 400, { success: false, message: "Password must be at least 6 chars" });
+      res.status(400).json({ success: false, message: "Password must be at least 6 chars" });
       return;
     }
     if (await store.getUserByEmail(email)) {
-      sendJson(response, 400, { success: false, message: "Email already registered" });
+      res.status(400).json({ success: false, message: "Email already registered" });
       return;
     }
 
     const pw = hashPassword(password);
     const userId = await store.createUser(email, pw.hash, pw.salt);
-    const sessionId = randomId(32);
-    const expiresAt = new Date(Date.now() + SESSION_TTL_SECONDS * 1000).toISOString();
+    const user = await store.getUserById(userId);
+    if (!user) {
+      throw new Error("Failed to load created user");
+    }
+    const token = issueJwtToken(user);
 
-    await store.createSession(sessionId, userId, {
-      userAgent: request.headers["user-agent"] || "",
-      ipAddress: getClientIp(request),
-      expiresAt,
-    });
-
-    setSessionCookie(response, sessionId);
-    sendJson(response, 200, { success: true, data: { redirect: next } });
+    setJwtCookie(req, res, token);
+    res.status(200).json({ success: true, data: { redirect: next, token } });
   } catch (error) {
-    sendJson(response, 400, { success: false, message: error.message || "Register failed" });
+    res.status(400).json({ success: false, message: toErrorMessage(error, "Register failed") });
   }
 }
 
-async function handleAuthLogin(request, response) {
+async function handleAuthLogin(
+  req: Request,
+  res: Response,
+): Promise<void> {
   try {
-    const payload = await readJsonBody(request);
+    const payload = (req.body || {}) as AuthRequestBody;
     const email = String(payload.email || "").trim().toLowerCase();
     const password = String(payload.password || "");
-    const next = sanitizeRedirectTarget(payload.next, "/games/slot-machine");
+    const next = sanitizeRedirectTarget(payload.next, "/");
 
     const user = await store.getUserByEmail(email);
     if (!user || !verifyPassword(password, user.passwordSalt, user.passwordHash)) {
-      sendJson(response, 401, { success: false, message: "Invalid credentials" });
+      res.status(401).json({ success: false, message: "Invalid credentials" });
       return;
     }
 
-    const sessionId = randomId(32);
-    const expiresAt = new Date(Date.now() + SESSION_TTL_SECONDS * 1000).toISOString();
-    await store.createSession(sessionId, user.id, {
-      userAgent: request.headers["user-agent"] || "",
-      ipAddress: getClientIp(request),
-      expiresAt,
-    });
-
-    setSessionCookie(response, sessionId);
-    sendJson(response, 200, { success: true, data: { redirect: next } });
+    const token = issueJwtToken(user);
+    setJwtCookie(req, res, token);
+    res.status(200).json({ success: true, data: { redirect: next, token } });
   } catch (error) {
-    sendJson(response, 400, { success: false, message: error.message || "Login failed" });
+    res.status(400).json({ success: false, message: toErrorMessage(error, "Login failed") });
   }
 }
 
-async function handleAuthLogout(request, response, auth) {
-  if (auth.sessionId) {
-    await store.deleteSession(auth.sessionId);
-  }
-  clearSessionCookie(response);
-  sendJson(response, 200, { success: true, data: { redirect: "/login" } });
+function handleAuthLogout(req: Request, res: Response): void {
+  clearJwtCookie(req, res);
+  res.status(200).json({ success: true, data: { redirect: "/login" } });
 }
 
-async function handleWalletCreateTopup(request, response, auth) {
+function handleLogoutPage(req: Request, res: Response): void {
+  clearJwtCookie(req, res);
+  res.redirect("/login");
+}
+
+async function handleWalletCreateTopup(
+  req: Request,
+  res: Response,
+): Promise<void> {
   try {
-    const payload = await readJsonBody(request);
+    const payload = (req.body || {}) as WalletTopupBody;
     const amountCoins = Number.parseInt(String(payload.amountCoins || 0), 10);
     const returnTo = sanitizeRedirectTarget(payload.returnTo, "/wallet");
 
     if (!Number.isFinite(amountCoins) || amountCoins <= 0 || amountCoins > 100000) {
-      sendJson(response, 400, { success: false, message: "Invalid top-up amount" });
+      res.status(400).json({ success: false, message: "Invalid top-up amount" });
       return;
     }
 
-    let user = auth.user;
+    let user = requireAuthUser(req).user;
     user = await ensureStripeCustomer(user);
+    if (!user.stripeCustomerId) {
+      throw new Error("Stripe customer is missing");
+    }
 
-    const origin = requestOrigin(request);
+    const origin = requestOriginExpress(req);
     const { successUrl, cancelUrl } = buildStripeCheckoutReturnUrls(
       origin,
       returnTo,
@@ -463,28 +578,32 @@ async function handleWalletCreateTopup(request, response, auth) {
       amountCoins,
     });
 
-    sendJson(response, 200, {
+    res.status(200).json({
       success: true,
-      data: {
-        url: session.url,
-      },
+      data: { url: session.url },
     });
   } catch (error) {
-    sendJson(response, 400, {
+    res.status(400).json({
       success: false,
-      message: error.message || "Failed to create Stripe top-up session",
+      message: toErrorMessage(error, "Failed to create Stripe top-up session"),
     });
   }
 }
 
-async function handleWalletCreateSetup(request, response, auth) {
+async function handleWalletCreateSetup(
+  req: Request,
+  res: Response,
+): Promise<void> {
   try {
-    const payload = await readJsonBody(request);
+    const payload = (req.body || {}) as WalletSetupBody;
     const returnTo = sanitizeRedirectTarget(payload.returnTo, "/wallet");
-    let user = auth.user;
+    let user = requireAuthUser(req).user;
     user = await ensureStripeCustomer(user);
+    if (!user.stripeCustomerId) {
+      throw new Error("Stripe customer is missing");
+    }
 
-    const origin = requestOrigin(request);
+    const origin = requestOriginExpress(req);
     const { successUrl, cancelUrl } = buildStripeCheckoutReturnUrls(
       origin,
       returnTo,
@@ -498,41 +617,109 @@ async function handleWalletCreateSetup(request, response, auth) {
       userId: user.id,
     });
 
-    sendJson(response, 200, {
+    res.status(200).json({
       success: true,
-      data: {
-        url: session.url,
-      },
+      data: { url: session.url },
     });
   } catch (error) {
-    sendJson(response, 400, {
+    res.status(400).json({
       success: false,
-      message: error.message || "Failed to create Stripe card setup session",
+      message: toErrorMessage(error, "Failed to create Stripe card setup session"),
     });
   }
 }
 
-async function handleStripeWebhook(request, response) {
+async function handleWalletRemoveCard(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  try {
+    if (!stripe.isConfigured()) {
+      res.status(503).json({
+        success: false,
+        message: "Stripe is not configured. Check STRIPE_SECRET.",
+      });
+      return;
+    }
+
+    const payload = (req.body || {}) as WalletRemoveCardBody;
+    const paymentMethodId = String(payload.paymentMethodId || "").trim();
+    if (!paymentMethodId) {
+      res.status(400).json({
+        success: false,
+        message: "paymentMethodId is required",
+      });
+      return;
+    }
+
+    const auth = requireAuthUser(req);
+    const user = await store.getUserById(auth.user.id);
+    if (!user?.stripeCustomerId) {
+      res.status(400).json({
+        success: false,
+        message: "No Stripe customer linked to this account",
+      });
+      return;
+    }
+
+    const paymentMethods = await stripe.listPaymentMethods(user.stripeCustomerId);
+    const cards = Array.isArray(paymentMethods?.data) ? paymentMethods.data : [];
+    const ownsCard = cards.some((pm) => String(pm?.id || "") === paymentMethodId);
+    if (!ownsCard) {
+      res.status(404).json({
+        success: false,
+        message: "Card not found for this user",
+      });
+      return;
+    }
+
+    if (user.defaultPaymentMethodId && user.defaultPaymentMethodId === paymentMethodId) {
+      await stripe.clearDefaultPaymentMethod(user.stripeCustomerId);
+      await store.updateUserDefaultPaymentMethod(user.id, null);
+    }
+
+    await stripe.detachPaymentMethod(paymentMethodId);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        removed: true,
+      },
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: toErrorMessage(error, "Failed to remove card"),
+    });
+  }
+}
+
+interface StripeWebhookEvent {
+  id?: string;
+  type?: string;
+  data?: {
+    object?: StripeCheckoutSession;
+  };
+}
+
+async function handleStripeWebhook(req: Request, res: Response): Promise<void> {
   if (!env.STRIPE_WEBHOOK_SECRET) {
-    sendJson(response, 503, {
+    res.status(503).json({
       success: false,
       message: "STRIPE_WEBHOOK_SECRET is not configured",
     });
     return;
   }
 
-  let rawBody;
-  try {
-    rawBody = await readRawBody(request, 1024 * 1024 * 5);
-  } catch (error) {
-    sendJson(response, 400, { success: false, message: error.message || "Invalid body" });
-    return;
-  }
+  const rawBody = Buffer.isBuffer(req.body)
+    ? req.body
+    : Buffer.from(req.body || "", "utf8");
 
-  const signatureHeaderRaw = request.headers["stripe-signature"];
+  const signatureHeaderRaw = req.headers["stripe-signature"];
   const signatureHeader = Array.isArray(signatureHeaderRaw)
     ? signatureHeaderRaw[0]
     : signatureHeaderRaw;
+
   const valid = verifyStripeWebhookSignature({
     payloadBuffer: rawBody,
     signatureHeader,
@@ -540,21 +727,21 @@ async function handleStripeWebhook(request, response) {
   });
 
   if (!valid) {
-    sendJson(response, 400, { success: false, message: "Invalid Stripe signature" });
+    res.status(400).json({ success: false, message: "Invalid Stripe signature" });
     return;
   }
 
-  let event;
+  let event: StripeWebhookEvent;
   try {
-    event = JSON.parse(rawBody.toString("utf8"));
+    event = JSON.parse(rawBody.toString("utf8")) as StripeWebhookEvent;
   } catch {
-    sendJson(response, 400, { success: false, message: "Invalid webhook JSON" });
+    res.status(400).json({ success: false, message: "Invalid webhook JSON" });
     return;
   }
 
   try {
     if (event?.type === "checkout.session.completed") {
-      const session = event?.data?.object || {};
+      const session = event?.data?.object || ({} as StripeCheckoutSession);
       const mode = session.mode;
       const userId = Number.parseInt(String(session?.metadata?.user_id || "0"), 10);
       const user = await store.getUserById(userId);
@@ -564,9 +751,16 @@ async function handleStripeWebhook(request, response) {
           const paymentStatus = session.payment_status;
           const sessionId = session.id;
 
-          if (sessionId && paymentStatus === "paid" && !(await store.hasTransactionByProviderRef("stripe", sessionId))) {
+          if (
+            sessionId &&
+            paymentStatus === "paid" &&
+            !(await store.hasTransactionByProviderRef("stripe", sessionId))
+          ) {
             const amountCoins = Number.parseInt(
-              String(session?.metadata?.amount_coins || Math.round(Number(session.amount_total || 0) / 100)),
+              String(
+                session?.metadata?.amount_coins ||
+                  Math.round(Number(session.amount_total || 0) / 100),
+              ),
               10,
             );
 
@@ -584,7 +778,7 @@ async function handleStripeWebhook(request, response) {
                 metadata: {
                   webhook_event_id: event.id || "",
                   stripe_session_id: sessionId,
-                  amount_total: session.amount_total,
+                  amount_total: session.amount_total ?? null,
                 },
               });
             }
@@ -609,38 +803,68 @@ async function handleStripeWebhook(request, response) {
                 await store.updateUserDefaultPaymentMethod(user.id, paymentMethodId);
               }
             } catch {
-              // swallow to keep webhook idempotent response
+              // Keep webhook response idempotent.
             }
           }
         }
       }
     }
   } catch (error) {
-    sendJson(response, 500, {
+    res.status(500).json({
       success: false,
-      message: error.message || "Webhook processing failed",
+      message: toErrorMessage(error, "Webhook processing failed"),
     });
     return;
   }
 
-  sendJson(response, 200, { success: true, received: true });
+  res.status(200).json({ success: true, received: true });
 }
 
-async function handleApiGames(request, response, auth) {
+async function handleApiGames(req: Request, res: Response): Promise<void> {
   try {
-    const payload = await readJsonBody(request);
+    const payload = req.body || {};
+    const auth = requireAuthUser(req);
     const result = await handleSlotMachineAction(payload, store, auth.user.id);
-    sendJson(response, result.statusCode, result.body);
+    res.status(result.statusCode).json(result.body);
   } catch (error) {
-    sendJson(response, 400, {
+    res.status(400).json({
       success: false,
-      message: error.message || "Invalid request",
+      message: toErrorMessage(error, "Invalid request"),
     });
   }
 }
 
-async function handleWalletBalance(response, auth) {
-  sendJson(response, 200, {
+async function handleHistoryApi(req: Request, res: Response): Promise<void> {
+  try {
+    const auth = requireAuthUser(req);
+    const requestedPage = Math.max(1, toInt(queryString(req.query, "page"), 1));
+    const { total } = await store.getUserHistory(auth.user.id, 1, 0);
+    const totalPages = Math.max(1, Math.ceil(total / HISTORY_PAGE_SIZE));
+    const page = Math.min(requestedPage, totalPages);
+    const skip = (page - 1) * HISTORY_PAGE_SIZE;
+    const full = await store.getUserHistory(auth.user.id, HISTORY_PAGE_SIZE, skip);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        total: full.total,
+        history: full.items,
+        page,
+        total_pages: totalPages,
+        has_more: page < totalPages,
+      },
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: toErrorMessage(error, "Could not load history"),
+    });
+  }
+}
+
+async function handleWalletBalance(req: Request, res: Response): Promise<void> {
+  const auth = requireAuthUser(req);
+  res.status(200).json({
     success: true,
     data: {
       balance_coins: await store.getBalanceCoins(auth.user.id),
@@ -649,169 +873,144 @@ async function handleWalletBalance(response, auth) {
   });
 }
 
-async function handleWalletTransactions(response, auth) {
-  sendJson(response, 200, {
-    success: true,
-    data: {
-      transactions: await store.listTransactions(auth.user.id, 200),
-    },
-  });
+async function handleWalletTransactions(req: Request, res: Response): Promise<void> {
+  try {
+    const auth = requireAuthUser(req);
+    const requestedPage = Math.max(1, toInt(queryString(req.query, "page"), 1));
+
+    let page = requestedPage;
+    let skip = (page - 1) * WALLET_TX_PAGE_SIZE;
+    let result = await store.listTransactionsPage(
+      auth.user.id,
+      WALLET_TX_PAGE_SIZE,
+      skip,
+    );
+
+    const totalPages = Math.max(1, Math.ceil(result.total / WALLET_TX_PAGE_SIZE));
+
+    if (page > totalPages) {
+      page = totalPages;
+      skip = (page - 1) * WALLET_TX_PAGE_SIZE;
+      result = await store.listTransactionsPage(
+        auth.user.id,
+        WALLET_TX_PAGE_SIZE,
+        skip,
+      );
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        total: result.total,
+        transactions: result.items,
+        page,
+        total_pages: totalPages,
+        has_more: page < totalPages,
+      },
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: toErrorMessage(error, "Could not load wallet transactions"),
+    });
+  }
 }
 
-async function handleStaticAssets(response, pathname) {
-  if (pathname.startsWith("/assets/js/")) {
-    const rel = pathname.slice("/assets/js/".length);
-    const filePath = safeJoin(CLIENT_DIR, rel);
-    if (!filePath) {
-      sendJson(response, 403, { success: false, message: "Forbidden" });
-      return;
-    }
-    await serveFile(response, filePath);
-    return;
-  }
-
-  if (pathname.startsWith("/assets/css/")) {
-    const rel = pathname.slice("/assets/css/".length);
-    const filePath = safeJoin(CLIENT_STYLES_DIR, rel);
-    if (!filePath) {
-      sendJson(response, 403, { success: false, message: "Forbidden" });
-      return;
-    }
-    await serveFile(response, filePath);
-    return;
-  }
-
-  sendJson(response, 404, { success: false, message: "Not found" });
-}
-
-async function start() {
+async function start(): Promise<void> {
   await store.init();
   console.log("[slotm] PostgreSQL migrations applied");
 
-  const server = createServer(async (request, response) => {
-    const url = new URL(request.url || "/", requestOrigin(request));
-    const pathname = url.pathname;
-    const auth = await getAuthContext(request);
+  const app = express();
+  app.set("trust proxy", 1);
+  app.disable("x-powered-by");
 
-    if (request.method === "GET" && pathname.startsWith("/assets/")) {
-      await handleStaticAssets(response, pathname);
-      return;
-    }
+  app.use(attachRequestContext);
 
-    if (request.method === "GET" && pathname === "/register") {
-      await handleRegisterPage(request, response, url, auth);
-      return;
-    }
+  app.use(
+    helmet({
+      contentSecurityPolicy: false,
+      crossOriginEmbedderPolicy: false,
+    }),
+  );
+  app.use(compression());
+  app.use(
+    cors({
+      origin: true,
+      credentials: true,
+      methods: ["GET", "POST", "OPTIONS"],
+    }),
+  );
 
-    if (request.method === "GET" && pathname === "/login") {
-      await handleLoginPage(request, response, url, auth);
-      return;
-    }
+  morgan.token("rid", (req) => (req as Request).requestId || "-");
+  morgan.token("uid", (req) => {
+    const request = req as Request;
+    return request.auth?.user ? String(request.auth.user.id) : "-";
+  });
+  app.use(
+    morgan(
+      ":date[iso] rid=:rid uid=:uid :method :url :status :response-time ms :res[content-length]",
+    ),
+  );
 
-    if (request.method === "GET" && pathname === "/logout") {
-      if (auth.sessionId) {
-        await store.deleteSession(auth.sessionId);
-      }
-      clearSessionCookie(response);
-      redirect(response, "/login");
-      return;
-    }
-
-    if (request.method === "POST" && pathname === "/api/auth/register") {
-      await handleAuthRegister(request, response);
-      return;
-    }
-
-    if (request.method === "POST" && pathname === "/api/auth/login") {
-      await handleAuthLogin(request, response);
-      return;
-    }
-
-    if (request.method === "POST" && pathname === "/api/auth/logout") {
-      await handleAuthLogout(request, response, auth);
-      return;
-    }
-
-    if (request.method === "POST" && pathname === "/api/wallet/stripe/webhook") {
-      await handleStripeWebhook(request, response);
-      return;
-    }
-
-    if (request.method === "GET" && pathname === "/") {
-      if (auth.user) {
-        redirect(response, "/games/slot-machine");
-      } else {
-        redirect(response, "/login");
-      }
-      return;
-    }
-
-    if (request.method === "GET" && pathname === "/games/slot-machine") {
-      if (!ensureAuthenticatedOrRedirect(request, response, auth.user, pathname)) {
-        return;
-      }
-      await handleGamePage(request, response, url, auth.user);
-      return;
-    }
-
-    if (request.method === "GET" && pathname === "/wallet") {
-      if (!ensureAuthenticatedOrRedirect(request, response, auth.user, pathname)) {
-        return;
-      }
-      await handleWalletPage(request, response, url, auth.user);
-      return;
-    }
-
-    if (request.method === "POST" && pathname === "/api/games/slot-machine") {
-      if (!auth.user) {
-        sendJson(response, 401, { success: false, message: "Unauthorized" });
-        return;
-      }
-      await handleApiGames(request, response, auth);
-      return;
-    }
-
-    if (request.method === "POST" && pathname === "/api/wallet/create-checkout-session") {
-      if (!auth.user) {
-        sendJson(response, 401, { success: false, message: "Unauthorized" });
-        return;
-      }
-      await handleWalletCreateTopup(request, response, auth);
-      return;
-    }
-
-    if (request.method === "POST" && pathname === "/api/wallet/create-setup-session") {
-      if (!auth.user) {
-        sendJson(response, 401, { success: false, message: "Unauthorized" });
-        return;
-      }
-      await handleWalletCreateSetup(request, response, auth);
-      return;
-    }
-
-    if (request.method === "GET" && pathname === "/api/wallet/balance") {
-      if (!auth.user) {
-        sendJson(response, 401, { success: false, message: "Unauthorized" });
-        return;
-      }
-      await handleWalletBalance(response, auth);
-      return;
-    }
-
-    if (request.method === "GET" && pathname === "/api/wallet/transactions") {
-      if (!auth.user) {
-        sendJson(response, 401, { success: false, message: "Unauthorized" });
-        return;
-      }
-      await handleWalletTransactions(response, auth);
-      return;
-    }
-
-    sendJson(response, 404, { success: false, message: "Not found" });
+  const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 600,
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+  const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 40,
+    standardHeaders: true,
+    legacyHeaders: false,
   });
 
+  app.use("/assets/images", express.static(CLIENT_IMAGES_DIR, { index: false, fallthrough: false }));
+  app.use("/assets/js", express.static(CLIENT_DIR, { index: false, fallthrough: false }));
+  app.use("/assets/css", express.static(CLIENT_STYLES_DIR, { index: false, fallthrough: false }));
+
+  app.post("/api/wallet/stripe/webhook", express.raw({ type: "application/json", limit: "5mb" }), handleStripeWebhook);
+
+  app.use(express.json({ limit: "1mb" }));
+  app.use(express.urlencoded({ extended: false, limit: "1mb" }));
+
+  app.use("/api", apiLimiter);
+
+  registerRoutes(app, {
+    optionalJwt,
+    requireJwt,
+    authLimiter,
+    handleRootPage,
+    handleGamesPage,
+    handleLoginPage,
+    handleRegisterPage,
+    handleLogoutPage,
+    handleAuthRegister,
+    handleAuthLogin,
+    handleAuthLogout,
+    handleGamePage,
+    handleWalletPage,
+    handleApiGames,
+    handleHistoryApi,
+    handleWalletCreateTopup,
+    handleWalletCreateSetup,
+    handleWalletRemoveCard,
+    handleWalletBalance,
+    handleWalletTransactions,
+  });
+
+  app.use((req: Request, res: Response) => {
+    if (req.path.startsWith("/api/")) {
+      res.status(404).json({ success: false, message: "Not found" });
+      return;
+    }
+
+    res.status(404).type("text/plain").send("Not found");
+  });
+
+  const server = createServer(app);
   server.listen(PORT, HOST, () => {
-    console.log(`slotm running at http://${HOST}:${PORT}`);
+    console.log(`[slotm] Express server running at http://${HOST}:${PORT}`);
   });
 }
 

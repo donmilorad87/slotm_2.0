@@ -4,16 +4,21 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{title}}</title>
+    <link rel="icon" type="image/gif" href="/assets/images/blazingSun.gif">
     <link rel="stylesheet" href="/assets/css/main.css">
   </head>
-  <body>
+  <body class="theme-blazing-sun">
+    <canvas id="canvasss" aria-hidden="true"></canvas>
     <header class="topbar">
       <div class="topbar__left">
-        <strong>slotm wallet</strong>
+        <a class="svemir-logo" href="/" aria-label="Blazing Sun home">
+          <img style="height: 4em" src="/assets/images/blazingSun.gif" alt="Blazing Sun logo">
+        </a>
         <span class="topbar__muted">{{user_email}}</span>
       </div>
       <nav class="topbar__right">
-        <a href="/games/slot-machine">Game</a>
+        <a href="/">Home</a>
+        <a href="/games">Games</a>
         <a href="/logout">Logout</a>
       </nav>
     </header>
@@ -45,7 +50,7 @@
 
         <div class="wallet-card-actions">
           <button id="addCardBtn" class="btn btn--ghost" type="button">Add / Update Card</button>
-          <a class="btn btn--ghost" href="/games/slot-machine">Back to Game</a>
+          <a class="btn btn--ghost" href="/games/slot-machine">Play Slot Machine</a>
         </div>
       </section>
 
@@ -58,6 +63,7 @@
               <th>Card</th>
               <th>Expiry</th>
               <th>Status</th>
+              <th>Action</th>
             </tr>
           </thead>
           <tbody>
@@ -78,13 +84,23 @@
               <th>Provider</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody id="walletTransactionsBody">
             {{{transactions_rows_html}}}
           </tbody>
         </table>
+        <div class="wallet-history-status" id="walletHistoryStatus"></div>
+        <div class="wallet-history-controls">
+          <div class="wallet-history-pagination" id="walletHistoryPagination"></div>
+          <div class="wallet-history-jump">
+            <span>Page</span>
+            <input id="walletHistoryPageInput" type="number" min="1" step="1" value="1">
+            <button class="btn btn--ghost" id="walletHistoryGoPage" type="button">Go</button>
+          </div>
+        </div>
       </section>
     </main>
 
+    <script type="module" src="/assets/js/blazing-background.js"></script>
     <script type="module" src="/assets/js/wallet.js"></script>
   </body>
 </html>

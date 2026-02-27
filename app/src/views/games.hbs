@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{title}}</title>
+    <link rel="icon" type="image/gif" href="/assets/images/blazingSun.gif">
+    <link rel="stylesheet" href="/assets/css/main.css">
+  </head>
+  <body class="theme-blazing-sun">
+    <canvas id="canvasss" aria-hidden="true"></canvas>
+    <header class="topbar">
+      <div class="topbar__left">
+        <a class="svemir-logo" href="/" aria-label="Blazing Sun home">
+          <img style="height: 4em" src="/assets/images/blazingSun.gif" alt="Blazing Sun logo">
+        </a>
+        <span class="topbar__muted">{{user_email}}</span>
+      </div>
+      <nav class="topbar__right">
+        <a href="/">Home</a>
+        <a href="/wallet">Wallet</a>
+        <a href="/logout">Logout</a>
+      </nav>
+    </header>
+
+    <main class="game-page">
+      <header class="game-page__header">
+        <h1>Games</h1>
+      </header>
+
+      <section class="games-grid">
+        <article class="game-card">
+          <h2>Slot Machine</h2>
+          <p>Classic 3x5 and reward modes with lines, joker, and mini game.</p>
+          <a class="btn btn--primary" href="/games/slot-machine">Open Slot Machine</a>
+        </article>
+      </section>
+
+      <div class="footer" id="footer"><p>Blazing Sun 2015 - <span id="footerYear"></span>. Sva prava zadržana.</p></div>
+    </main>
+
+    <script>
+      var footerYear = document.getElementById("footerYear");
+      if (footerYear) {
+        footerYear.textContent = String(new Date().getFullYear());
+      }
+    </script>
+    <script type="module" src="/assets/js/blazing-background.js"></script>
+  </body>
+</html>

@@ -1,32 +1,92 @@
 export const NUMBER_POOL_SIZE = 30;
 export const DRAWN_NUMBERS_COUNT = 12;
 export const MAX_BETS = 30;
-export const BET_AMOUNTS = [10, 50, 100, 200, 300, 500, 1000];
-export const COIN_VALUES = [10, 20, 50, 100, 200, 500, 1000];
+export const BET_AMOUNTS: readonly number[] = [10, 50, 100, 200, 300, 500, 1000];
+export const COIN_VALUES: readonly number[] = [10, 20, 50, 100, 200, 500, 1000];
 export const MAX_TICKETS = 5;
 export const MAX_NUMBERS_PER_TICKET = 5;
 export const PAYOUT_ODDS = 2.5;
 export const MATCH_PROBABILITY = 40.0;
 
-function shuffle(array) {
+export interface LegacyMiniGameBet {
+  number: number;
+  bet: number;
+}
+
+export interface LegacyMiniGameRequest {
+  bets: LegacyMiniGameBet[];
+  user_coins: number;
+}
+
+export interface LegacyMiniGameNumberResult {
+  number: number;
+  bet: number;
+  matched: boolean;
+  payout: number;
+}
+
+export interface LegacyMiniGameOddsInfo {
+  probability: number;
+  odds: number;
+  description: string;
+}
+
+export interface LegacyMiniGameResult {
+  drawnNumbers: number[];
+  numberResults: LegacyMiniGameNumberResult[];
+  totalBet: number;
+  totalPayout: number;
+  netResult: number;
+  matchesCount: number;
+  oddsInfo: LegacyMiniGameOddsInfo;
+}
+
+export interface TicketMiniGameRequest {
+  tickets: number[][];
+  coin_value: number;
+  user_coins: number;
+}
+
+export interface TicketMiniGameTicketResult {
+  numbers_played: number;
+  matches: number;
+  bet: number;
+  payout: number;
+}
+
+export interface TicketMiniGameResult {
+  drawnNumbers: number[];
+  ticketResults: TicketMiniGameTicketResult[];
+  totalBet: number;
+  totalPayout: number;
+  netResult: number;
+}
+
+function shuffle<T>(array: readonly T[]): T[] {
   const copy = [...array];
   for (let i = copy.length - 1; i > 0; i -= 1) {
     const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
+    const left = copy[i];
+    const right = copy[j];
+    if (left === undefined || right === undefined) {
+      continue;
+    }
+    copy[i] = right;
+    copy[j] = left;
   }
   return copy;
 }
 
-export function drawNumbers() {
+export function drawNumbers(): number[] {
   const pool = Array.from({ length: NUMBER_POOL_SIZE }, (_, index) => index + 1);
   return shuffle(pool).slice(0, DRAWN_NUMBERS_COUNT);
 }
 
-function calculatePayout(bet) {
+function calculatePayout(bet: number): number {
   return Math.round(bet * PAYOUT_ODDS);
 }
 
-function buildOddsInfo() {
+function buildOddsInfo(): LegacyMiniGameOddsInfo {
   return {
     probability: MATCH_PROBABILITY,
     odds: PAYOUT_ODDS,
@@ -34,7 +94,7 @@ function buildOddsInfo() {
   };
 }
 
-export function validateRequest(request) {
+export function validateRequest(request: LegacyMiniGameRequest): void {
   if (!request || !Array.isArray(request.bets) || request.bets.length === 0) {
     throw new Error("Must place at least one bet");
   }
@@ -73,11 +133,11 @@ export function validateRequest(request) {
   }
 }
 
-export function executeMinigame(request) {
+export function executeMinigame(request: LegacyMiniGameRequest): LegacyMiniGameResult {
   validateRequest(request);
 
   const drawnNumbers = drawNumbers();
-  const numberResults = [];
+  const numberResults: LegacyMiniGameNumberResult[] = [];
   let totalBet = 0;
   let totalPayout = 0;
   let matchesCount = 0;
@@ -114,16 +174,16 @@ export function executeMinigame(request) {
   };
 }
 
-export function betMultiplier(numbersCount) {
+export function betMultiplier(numbersCount: number): number {
   if (numbersCount >= 1 && numbersCount <= 5) {
     return numbersCount;
   }
   return 0;
 }
 
-export function findOdds(played, matches) {
+export function findOdds(played: number, matches: number): number {
   const key = `${played}-${matches}`;
-  const table = {
+  const table: Record<string, number> = {
     "1-1": 2.5,
     "2-1": 0.62,
     "2-2": 6.59,
@@ -144,13 +204,16 @@ export function findOdds(played, matches) {
   return table[key] || 0;
 }
 
-export function calculateTicketTotalBet(tickets, coinValue) {
+export function calculateTicketTotalBet(
+  tickets: readonly number[][],
+  coinValue: number,
+): number {
   return tickets
     .filter((ticket) => ticket.length > 0)
     .reduce((sum, ticket) => sum + betMultiplier(ticket.length) * coinValue, 0);
 }
 
-export function validateTicketRequest(request) {
+export function validateTicketRequest(request: TicketMiniGameRequest): void {
   const coinValue = Number(request.coin_value);
   if (!COIN_VALUES.includes(coinValue)) {
     throw new Error(`Invalid coin value ${coinValue}. Valid values: ${COIN_VALUES.join(", ")}`);
@@ -172,7 +235,8 @@ export function validateTicketRequest(request) {
   const allUsed = new Set();
 
   for (let i = 0; i < request.tickets.length; i += 1) {
-    const ticket = Array.isArray(request.tickets[i]) ? request.tickets[i] : [];
+    const ticketRaw = request.tickets[i];
+    const ticket = Array.isArray(ticketRaw) ? ticketRaw : [];
 
     if (ticket.length > MAX_NUMBERS_PER_TICKET) {
       throw new Error(`Ticket ${i + 1} exceeds maximum of ${MAX_NUMBERS_PER_TICKET} numbers`);
@@ -203,12 +267,12 @@ export function validateTicketRequest(request) {
   }
 }
 
-export function executeTicketMinigame(request) {
+export function executeTicketMinigame(request: TicketMiniGameRequest): TicketMiniGameResult {
   validateTicketRequest(request);
 
   const coinValue = Number(request.coin_value);
   const drawnNumbers = drawNumbers();
-  const ticketResults = [];
+  const ticketResults: TicketMiniGameTicketResult[] = [];
   let totalPayout = 0;
 
   for (const ticketRaw of request.tickets) {

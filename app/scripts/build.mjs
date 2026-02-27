@@ -19,6 +19,15 @@ function toOutputPath(sourcePath) {
   return path.join(DIST_DIR, outRelPath);
 }
 
+function isClientTypeScript(sourcePath) {
+  if (!sourcePath.endsWith(".ts")) {
+    return false;
+  }
+
+  const relPath = path.relative(SRC_DIR, sourcePath);
+  return relPath.startsWith(`client${path.sep}`);
+}
+
 async function copyTree(currentPath) {
   const stats = await fs.stat(currentPath);
 
@@ -32,6 +41,10 @@ async function copyTree(currentPath) {
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
 
   if (currentPath.endsWith(".ts")) {
+    if (!isClientTypeScript(currentPath)) {
+      // Non-client TypeScript is compiled by `tsc`.
+      return;
+    }
     const source = await fs.readFile(currentPath, "utf8");
     await fs.writeFile(outputPath, source, "utf8");
     return;

@@ -4,10 +4,13 @@ import {
   PAYLINES,
   REEL_COUNT,
   SYMBOL_COUNT,
+  type SpinRequest,
+  type SpinResult,
+  type WinLine,
 } from "./types.js";
 
-export function generateSymbols(randomFn = Math.random) {
-  const symbols = [];
+export function generateSymbols(randomFn: () => number = Math.random): number[] {
+  const symbols: number[] = [];
   for (let i = 0; i < REEL_COUNT; i += 1) {
     const value = Math.floor(randomFn() * SYMBOL_COUNT) + 1;
     symbols.push(Math.min(SYMBOL_COUNT, Math.max(1, value)));
@@ -15,7 +18,7 @@ export function generateSymbols(randomFn = Math.random) {
   return symbols;
 }
 
-export function buildGrid(symbols, jokerPosition) {
+export function buildGrid(symbols: readonly number[], jokerPosition: number): string[] {
   if (!Array.isArray(symbols) || symbols.length < REEL_COUNT) {
     throw new Error("Need at least 5 symbols");
   }
@@ -40,12 +43,12 @@ export function buildGrid(symbols, jokerPosition) {
   return grid;
 }
 
-function countConsecutiveMatches(lineSymbols) {
+function countConsecutiveMatches(lineSymbols: readonly string[]): [number, number] {
   if (!Array.isArray(lineSymbols) || lineSymbols.length < REEL_COUNT) {
     throw new Error("Payline must have 5 symbols");
   }
 
-  const resolved = [];
+  const resolved: number[] = [];
   for (let i = 0; i < lineSymbols.length; i += 1) {
     const symbol = lineSymbols[i];
     if (symbol === JOKER_SYMBOL) {
@@ -74,23 +77,26 @@ function countConsecutiveMatches(lineSymbols) {
   return [firstSymbol, matchCount];
 }
 
-function getMultiplier(symbol, matchCount, kvote) {
-  if (!Array.isArray(kvote) || kvote.length < 12 || matchCount < 2 || matchCount > 5) {
+function getMultiplier(
+  symbol: number,
+  matchCount: number,
+  kvote: readonly number[],
+): number {
+  const groupsCount = Math.ceil(SYMBOL_COUNT / 2);
+  const multipliersPerGroup = 4;
+  const requiredLength = groupsCount * multipliersPerGroup;
+
+  if (!Array.isArray(kvote) || kvote.length < requiredLength || matchCount < 2 || matchCount > 5) {
     return 0;
   }
 
-  let groupOffset = -1;
-  if (symbol === 5 || symbol === 6) {
-    groupOffset = 0;
-  } else if (symbol === 3 || symbol === 4) {
-    groupOffset = 4;
-  } else if (symbol === 1 || symbol === 2) {
-    groupOffset = 8;
-  }
-
-  if (groupOffset < 0) {
+  const symbolValue = Number.parseInt(String(symbol), 10);
+  if (!Number.isFinite(symbolValue) || symbolValue < 1 || symbolValue > SYMBOL_COUNT) {
     return 0;
   }
+
+  const groupIndex = Math.floor((SYMBOL_COUNT - symbolValue) / 2);
+  const groupOffset = groupIndex * multipliersPerGroup;
 
   const offsets = new Map([
     [5, 0],
@@ -106,8 +112,14 @@ function getMultiplier(symbol, matchCount, kvote) {
   return Number(kvote[groupOffset + matchOffset]) || 0;
 }
 
-function evaluatePayline(grid, payline, lineIndex, kvote, bet) {
-  const lineSymbols = payline.map((gridIndex) => grid[gridIndex]);
+function evaluatePayline(
+  grid: readonly string[],
+  payline: readonly number[],
+  lineIndex: number,
+  kvote: readonly number[],
+  bet: number,
+): WinLine | null {
+  const lineSymbols = payline.map((gridIndex) => grid[gridIndex] ?? "1");
   const [symbol, matchCount] = countConsecutiveMatches(lineSymbols);
 
   if (matchCount < 2) {
@@ -130,17 +142,21 @@ function evaluatePayline(grid, payline, lineIndex, kvote, bet) {
   };
 }
 
-function shouldTriggerMiniGame(totalPayout, randomFn) {
+function shouldTriggerMiniGame(totalPayout: number, randomFn: () => number): boolean {
   if (totalPayout <= 0) {
     return false;
   }
   return randomFn() < 0.5;
 }
 
-function executeSingleLineSpin(request, reels, randomFn) {
+function executeSingleLineSpin(
+  request: SpinRequest,
+  reels: number[],
+  randomFn: () => number,
+): SpinResult {
   const lineSymbols = reels.map((symbol) => String(symbol));
   const [symbol, matchCount] = countConsecutiveMatches(lineSymbols);
-  const winningLines = [];
+  const winningLines: WinLine[] = [];
   let totalPayout = 0;
 
   if (matchCount >= 2) {
@@ -169,9 +185,13 @@ function executeSingleLineSpin(request, reels, randomFn) {
   };
 }
 
-function executeMultiLineSpin(request, reels, randomFn) {
+function executeMultiLineSpin(
+  request: SpinRequest,
+  reels: number[],
+  randomFn: () => number,
+): SpinResult {
   const grid = buildGrid(reels, request.dzoker);
-  const winningLines = [];
+  const winningLines: WinLine[] = [];
   let totalPayout = 0;
 
   for (let i = 0; i < PAYLINES.length; i += 1) {
@@ -179,7 +199,12 @@ function executeMultiLineSpin(request, reels, randomFn) {
       continue;
     }
 
-    const win = evaluatePayline(grid, PAYLINES[i], i, request.kvote, request.ulog);
+    const payline = PAYLINES[i];
+    if (!payline) {
+      continue;
+    }
+
+    const win = evaluatePayline(grid, payline, i, request.kvote, request.ulog);
     if (!win) {
       continue;
     }
@@ -198,12 +223,16 @@ function executeMultiLineSpin(request, reels, randomFn) {
   };
 }
 
-export function executeSpin(request) {
+export function executeSpin(request: SpinRequest): SpinResult {
   const reels = generateSymbols(Math.random);
   return executeSpinWithReels(request, reels, Math.random);
 }
 
-export function executeSpinWithReels(request, reels, randomFn = Math.random) {
+export function executeSpinWithReels(
+  request: SpinRequest,
+  reels: number[],
+  randomFn: () => number = Math.random,
+): SpinResult {
   if (request.nacin === 2) {
     return executeSingleLineSpin(request, reels, randomFn);
   }

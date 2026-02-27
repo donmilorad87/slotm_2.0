@@ -4,38 +4,120 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{title}}</title>
+    <link rel="icon" type="image/gif" href="/assets/images/blazingSun.gif">
     <link rel="stylesheet" href="/assets/css/main.css">
   </head>
-  <body>
+  <body class="theme-blazing-sun">
+    <canvas id="canvasss" aria-hidden="true"></canvas>
     <header class="topbar">
       <div class="topbar__left">
-        <strong>slotm</strong>
+        <a class="svemir-logo" href="/" aria-label="Blazing Sun home">
+          <img style="height: 4em" src="/assets/images/blazingSun.gif" alt="Blazing Sun logo">
+        </a>
         <span class="topbar__muted">{{user_email}}</span>
       </div>
       <nav class="topbar__right">
+        <a href="/">Home</a>
+        <a href="/games">Games</a>
         <a href="/wallet">Wallet</a>
         <a href="/logout">Logout</a>
       </nav>
     </header>
 
+    <aside class="svemir-control" aria-label="Space controls">
+      <button
+        id="svemirControll"
+        type="button"
+        class="svemir-toggle"
+        aria-haspopup="true"
+        aria-expanded="false"
+        aria-controls="svemirDropdown"
+      >
+        Svemir Controls
+      </button>
+      <div id="svemirDropdown" class="svemir-dropdown" hidden>
+        <h2>Star Commands</h2>
+
+        <label class="svemir-row" for="sv-control-movingStars">
+          <span>Moving stars</span>
+          <input id="sv-control-movingStars" type="range" min="0" max="500000" step="100" value="1400" data-output="sv-output-movingStars">
+          <strong id="sv-output-movingStars" class="svemir-value">1400</strong>
+        </label>
+
+        <label class="svemir-row" for="sv-control-staticStars">
+          <span>Static stars</span>
+          <input id="sv-control-staticStars" type="range" min="0" max="500000" step="50" value="700" data-output="sv-output-staticStars">
+          <strong id="sv-output-staticStars" class="svemir-value">700</strong>
+        </label>
+
+        <label class="svemir-row" for="sv-control-staticRadius">
+          <span>Background radius</span>
+          <input id="sv-control-staticRadius" type="range" min="0" max="4" step="0.05" value="1" data-output="sv-output-staticRadius">
+          <strong id="sv-output-staticRadius" class="svemir-value">1.00</strong>
+        </label>
+
+        <label class="svemir-row svemir-row--toggle" for="sv-control-staticGlow">
+          <span>Static illumination</span>
+          <input id="sv-control-staticGlow" type="checkbox" checked data-output="sv-output-staticGlow">
+          <strong id="sv-output-staticGlow" class="svemir-value">ON</strong>
+        </label>
+
+        <label class="svemir-row" for="sv-control-starRadius">
+          <span>Star radius</span>
+          <input id="sv-control-starRadius" type="range" min="0" max="3.6" step="0.05" value="1.25" data-output="sv-output-starRadius">
+          <strong id="sv-output-starRadius" class="svemir-value">1.25</strong>
+        </label>
+
+        <label class="svemir-row" for="sv-control-farness">
+          <span>Farness</span>
+          <input id="sv-control-farness" type="range" min="0" max="3.5" step="0.1" value="1" data-output="sv-output-farness">
+          <strong id="sv-output-farness" class="svemir-value">1.0</strong>
+        </label>
+
+        <label class="svemir-row" for="sv-control-brightness">
+          <span>Brightness</span>
+          <input id="sv-control-brightness" type="range" min="0" max="2.4" step="0.05" value="1" data-output="sv-output-brightness">
+          <strong id="sv-output-brightness" class="svemir-value">1.0</strong>
+        </label>
+
+        <label class="svemir-row" for="sv-control-speed">
+          <span>Movement speed</span>
+          <input id="sv-control-speed" type="range" min="0" max="4" step="0.05" value="0.05" data-output="sv-output-speed">
+          <strong id="sv-output-speed" class="svemir-value">0.05</strong>
+        </label>
+
+        <label class="svemir-row" for="sv-control-focalLength">
+          <span>Perspective</span>
+          <input id="sv-control-focalLength" type="range" min="0" max="260" step="2" value="120" data-output="sv-output-focalLength">
+          <strong id="sv-output-focalLength" class="svemir-value">120</strong>
+        </label>
+
+        <label class="svemir-row" for="sv-control-gravity">
+          <span>Gravity pull</span>
+          <input id="sv-control-gravity" type="range" min="0" max="2.5" step="0.05" value="0.6" data-output="sv-output-gravity">
+          <strong id="sv-output-gravity" class="svemir-value">0.6</strong>
+        </label>
+
+        <label class="svemir-row" for="sv-control-drift">
+          <span>Drift</span>
+          <input id="sv-control-drift" type="range" min="0" max="3.5" step="0.05" value="0.8" data-output="sv-output-drift">
+          <strong id="sv-output-drift" class="svemir-value">0.8</strong>
+        </label>
+
+        <label class="svemir-row" for="sv-control-turbulence">
+          <span>Turbulence</span>
+          <input id="sv-control-turbulence" type="range" min="0" max="3.5" step="0.05" value="0.15" data-output="sv-output-turbulence">
+          <strong id="sv-output-turbulence" class="svemir-value">0.15</strong>
+        </label>
+
+        <button type="button" class="svemir-reset" data-action="reset-stars">Restore default stars</button>
+      </div>
+    </aside>
+
     <main class="game-page">
       <header class="game-page__header">
         <h1>Slot Machine</h1>
       </header>
-
-      <section class="quick-credits-card">
-        <div>
-          <h2>Quick Credits</h2>
-          <p>Add credits without leaving the game.</p>
-          <p class="balance-chip">Balance: <strong id="hostBalanceLabel">{{user_balance_coins}}</strong> credits</p>
-        </div>
-        <div class="quick-credits-actions">
-          <button class="btn btn--primary quick-topup-btn" data-amount="500">+500</button>
-          <button class="btn btn--primary quick-topup-btn" data-amount="1000">+1000</button>
-          <button class="btn btn--primary quick-topup-btn" data-amount="2000">+2000</button>
-          <a class="btn btn--ghost" href="/wallet">Open Wallet</a>
-        </div>
-      </section>
 
       <p class="flash-msg">{{flash_message}}</p>
 
@@ -47,6 +129,8 @@
           data-games-url="/games"
         ></slot-machine>
       </section>
+
+      <div class="footer" id="footer"><p>Blazing Sun 2015 - <span id="footerYear"></span>. Sva prava zadržana.</p></div>
     </main>
 
     <script>
@@ -54,6 +138,10 @@
       window.JWT_TOKEN = "{{jwt_token}}";
       window.USER_ID = Number("{{user_id}}");
       window.STRIPE_PUBLISHABLE_KEY = "{{stripe_public_key}}";
+      var footerYear = document.getElementById("footerYear");
+      if (footerYear) {
+        footerYear.textContent = String(new Date().getFullYear());
+      }
 
       window.showToast = function showToast(message, type) {
         const toast = document.createElement("div");
@@ -65,6 +153,7 @@
         }, 3200);
       };
     </script>
+    <script type="module" src="/assets/js/blazing-background.js"></script>
     <script type="module" src="/assets/js/main.js"></script>
     <script type="module" src="/assets/js/slot-page.js"></script>
   </body>
