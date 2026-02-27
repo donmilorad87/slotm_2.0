@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import compression from "compression";
 import cors from "cors";
 import express from "express";
-import type { Request, Response } from "express";
+import type { NextFunction, Request, Response } from "express";
 import helmet from "helmet";
 import jwt from "jsonwebtoken";
 import morgan from "morgan";
@@ -25,6 +25,7 @@ import { buildStripeCheckoutReturnUrls } from "./lib/stripeRedirect.js";
 import { verifyStripeWebhookSignature } from "./lib/stripeWebhook.js";
 import { renderTemplate } from "./lib/template.js";
 import { createJwtAuthMiddlewares } from "./middlewares/auth.middleware.js";
+import { createSessionCsrfMiddlewares } from "./middlewares/csrf-session.middleware.js";
 import { attachRequestContext } from "./middlewares/request-context.middleware.js";
 import { registerRoutes } from "./routes/index.js";
 import type {
@@ -43,7 +44,16 @@ const CLIENT_IMAGES_DIR = path.join(CLIENT_DIR, "images");
 const PORT = Number(process.env.PORT || 4300);
 const HOST = process.env.HOST || "0.0.0.0";
 const JWT_COOKIE = "slotm_jwt";
+const SESSION_COOKIE = "slotm_sid";
+const CSRF_COOKIE = "slotm_csrf";
 const DEFAULT_JWT_TTL_SECONDS = 60 * 60 * 24 * 14;
+const DEFAULT_SESSION_TTL_SECONDS = 60 * 60 * 12;
+const DEFAULT_ALLOWED_CORS_ORIGINS = [
+  "https://blazingsun.local",
+  "http://blazingsun.local",
+  "https://blazingsun.local:443",
+  "http://blazingsun.local:80",
+];
 const JWT_ISSUER = "slotm";
 const JWT_AUDIENCE = "slotm-web";
 const HISTORY_PAGE_SIZE = 20;
@@ -55,10 +65,37 @@ const jwtCookieMaxAgeSeconds = Number.parseInt(
   String(env.JWT_COOKIE_MAX_AGE_SECONDS || DEFAULT_JWT_TTL_SECONDS),
   10,
 );
+const sessionTtlSeconds = Number.parseInt(
+  String(env.SESSION_TTL_SECONDS || DEFAULT_SESSION_TTL_SECONDS),
+  10,
+);
 
 if (!env.JWT_SECRET) {
   console.warn("[slotm] JWT_SECRET is not set; using development fallback secret");
 }
+
+function normalizeOrigin(origin: string): string {
+  return origin.trim().replace(/\/+$/, "");
+}
+
+function parseAllowedOrigins(raw: string): Set<string> {
+  if (!raw.trim()) {
+    return new Set(DEFAULT_ALLOWED_CORS_ORIGINS.map((origin) => normalizeOrigin(origin)));
+  }
+
+  const values = raw
+    .split(",")
+    .map((part) => normalizeOrigin(part))
+    .filter((part) => part.length > 0);
+
+  if (!values.length) {
+    return new Set(DEFAULT_ALLOWED_CORS_ORIGINS.map((origin) => normalizeOrigin(origin)));
+  }
+
+  return new Set(values);
+}
+
+const allowedCorsOrigins = parseAllowedOrigins(env.CORS_ALLOWED_ORIGINS || "");
 
 const stripe = new StripeClient(env.STRIPE_SECRET || "");
 const store = new SlotStore();
@@ -76,6 +113,16 @@ const {
   jwtCookieMaxAgeSeconds,
   defaultJwtTtlSeconds: DEFAULT_JWT_TTL_SECONDS,
   nodeEnv: env.NODE_ENV,
+});
+const {
+  ensureSession,
+  requireCsrf,
+  clearSessionCookies,
+} = createSessionCsrfMiddlewares({
+  nodeEnv: env.NODE_ENV,
+  sessionCookieName: SESSION_COOKIE,
+  csrfCookieName: CSRF_COOKIE,
+  sessionTtlSeconds,
 });
 
 interface StripeCheckoutQuery {
@@ -134,17 +181,23 @@ function queryString(
 }
 
 function issueJwtToken(user: SlotUser): string {
+  const signOptions: jwt.SignOptions = {
+    issuer: JWT_ISSUER,
+    audience: JWT_AUDIENCE,
+  };
+  if (env.JWT_EXPIRES_IN) {
+    signOptions.expiresIn = env.JWT_EXPIRES_IN as NonNullable<
+      jwt.SignOptions["expiresIn"]
+    >;
+  }
+
   return jwt.sign(
     {
       sub: String(user.id),
       email: user.email,
     },
     jwtSecret,
-    {
-      issuer: JWT_ISSUER,
-      audience: JWT_AUDIENCE,
-      expiresIn: (env.JWT_EXPIRES_IN || "14d") as jwt.SignOptions["expiresIn"],
-    },
+    signOptions,
   );
 }
 
@@ -155,6 +208,14 @@ function requestOriginExpress(req: Request): string {
     : String(forwardedProto || req.protocol || "http");
   const normalizedProto = proto.split(",")[0]?.trim() || "http";
   return `${normalizedProto}://${req.get("host") || `localhost:${PORT}`}`;
+}
+
+function requestOriginHeader(req: Request): string {
+  const originRaw = req.headers.origin;
+  if (Array.isArray(originRaw)) {
+    return normalizeOrigin(String(originRaw[0] || ""));
+  }
+  return normalizeOrigin(String(originRaw || ""));
 }
 
 function formatDate(ts: string): string {
@@ -535,11 +596,13 @@ async function handleAuthLogin(
 
 function handleAuthLogout(req: Request, res: Response): void {
   clearJwtCookie(req, res);
+  clearSessionCookies(req, res);
   res.status(200).json({ success: true, data: { redirect: "/login" } });
 }
 
 function handleLogoutPage(req: Request, res: Response): void {
   clearJwtCookie(req, res);
+  clearSessionCookies(req, res);
   res.redirect("/login");
 }
 
@@ -722,8 +785,8 @@ async function handleStripeWebhook(req: Request, res: Response): Promise<void> {
 
   const valid = verifyStripeWebhookSignature({
     payloadBuffer: rawBody,
-    signatureHeader,
     webhookSecret: env.STRIPE_WEBHOOK_SECRET,
+    ...(signatureHeader ? { signatureHeader } : {}),
   });
 
   if (!valid) {
@@ -925,6 +988,7 @@ async function start(): Promise<void> {
   app.disable("x-powered-by");
 
   app.use(attachRequestContext);
+  app.use(ensureSession);
 
   app.use(
     helmet({
@@ -935,9 +999,28 @@ async function start(): Promise<void> {
   app.use(compression());
   app.use(
     cors({
-      origin: true,
+      origin: (origin, callback) => {
+        if (!origin) {
+          callback(null, true);
+          return;
+        }
+        const normalized = normalizeOrigin(origin);
+        if (allowedCorsOrigins.has(normalized)) {
+          callback(null, true);
+          return;
+        }
+        callback(new Error(`CORS origin not allowed: ${normalized}`));
+      },
       credentials: true,
       methods: ["GET", "POST", "OPTIONS"],
+      allowedHeaders: [
+        "Content-Type",
+        "Authorization",
+        "X-CSRF-Token",
+        "X-Requested-With",
+      ],
+      exposedHeaders: ["X-Request-Id"],
+      optionsSuccessStatus: 204,
     }),
   );
 
@@ -975,6 +1058,25 @@ async function start(): Promise<void> {
   app.use(express.urlencoded({ extended: false, limit: "1mb" }));
 
   app.use("/api", apiLimiter);
+  app.use("/api", (req: Request, res: Response, next: NextFunction) => {
+    const origin = requestOriginHeader(req);
+    if (!origin) {
+      res.status(403).json({
+        success: false,
+        message: "Origin header is required",
+      });
+      return;
+    }
+    if (!allowedCorsOrigins.has(origin)) {
+      res.status(403).json({
+        success: false,
+        message: `Origin is not allowed: ${origin}`,
+      });
+      return;
+    }
+    next();
+  });
+  app.use("/api", requireCsrf);
 
   registerRoutes(app, {
     optionalJwt,
@@ -997,6 +1099,23 @@ async function start(): Promise<void> {
     handleWalletRemoveCard,
     handleWalletBalance,
     handleWalletTransactions,
+  });
+
+  app.use((error: unknown, req: Request, res: Response, next: NextFunction) => {
+    if (!(error instanceof Error) || !error.message.startsWith("CORS")) {
+      next(error);
+      return;
+    }
+
+    if (req.path.startsWith("/api/")) {
+      res.status(403).json({
+        success: false,
+        message: error.message,
+      });
+      return;
+    }
+
+    res.status(403).type("text/plain").send(error.message);
   });
 
   app.use((req: Request, res: Response) => {

@@ -1,6 +1,8 @@
+import { fetchWithCsrf } from "./http.js";
+
 async function refreshBalance() {
   try {
-    const response = await fetch("/api/wallet/balance", {
+    const response = await fetchWithCsrf("/api/wallet/balance", {
       method: "GET",
       headers: { "Cache-Control": "no-cache" },
     });

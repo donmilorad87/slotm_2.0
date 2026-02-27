@@ -33,6 +33,19 @@ function normalizeJwtPayload(payloadRaw: string | jwt.JwtPayload): jwt.JwtPayloa
   return payloadRaw;
 }
 
+function appendSetCookieHeader(res: Response, value: string): void {
+  const prev = res.getHeader("Set-Cookie");
+  if (!prev) {
+    res.setHeader("Set-Cookie", value);
+    return;
+  }
+  if (Array.isArray(prev)) {
+    res.setHeader("Set-Cookie", [...prev, value]);
+    return;
+  }
+  res.setHeader("Set-Cookie", [String(prev), value]);
+}
+
 export function createJwtAuthMiddlewares({
   store,
   jwtSecret,
@@ -57,8 +70,8 @@ export function createJwtAuthMiddlewares({
   }
 
   function setJwtCookie(req: Request, res: Response, token: string): void {
-    res.setHeader(
-      "Set-Cookie",
+    appendSetCookieHeader(
+      res,
       serializeCookie(jwtCookie, token, {
         path: "/",
         httpOnly: true,
@@ -72,8 +85,8 @@ export function createJwtAuthMiddlewares({
   }
 
   function clearJwtCookie(req: Request, res: Response): void {
-    res.setHeader(
-      "Set-Cookie",
+    appendSetCookieHeader(
+      res,
       serializeCookie(jwtCookie, "", {
         path: "/",
         httpOnly: true,

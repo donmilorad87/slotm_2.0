@@ -1,17 +1,4 @@
-async function postJson(url, payload) {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-  const json = await response.json();
-  if (!response.ok || !json.success) {
-    throw new Error(json.message || `Request failed (${response.status})`);
-  }
-  return json;
-}
+import { postJson } from "./http.js";
 
 function setError(message) {
   const el = document.getElementById("authError");

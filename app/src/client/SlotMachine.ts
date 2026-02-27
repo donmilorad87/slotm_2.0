@@ -1,4 +1,6 @@
 // @ts-nocheck
+import { fetchWithCsrf } from "./http.js";
+
 /**
  * SlotMachine Web Component
  *
@@ -69,6 +71,7 @@ template.innerHTML = `
     .slot-menu {
       display: flex;
       align-items: center;
+      justify-content: center;
       gap: 0.5rem;
       margin-bottom: 1rem;
       flex-wrap: wrap;
@@ -97,6 +100,15 @@ template.innerHTML = `
     .slot-menu-tab.active {
       background: color-mix(in srgb, var(--success-color) 60%, transparent);
       color: white;
+    }
+
+    .slot-menu-tab h1 {
+      margin: 0;
+      font-size: inherit;
+      font-weight: inherit;
+      line-height: 1;
+      letter-spacing: inherit;
+      text-transform: inherit;
     }
 
     .slot-view[hidden] {
@@ -244,7 +256,7 @@ template.innerHTML = `
       display: grid;
       grid-template-columns: 180px 1fr 180px;
       gap: 1rem;
-      margin-bottom: 3rem;
+      margin-bottom: 1rem;
       align-items: center;
     }
 
@@ -444,6 +456,7 @@ template.innerHTML = `
       display: flex;
       flex-direction: column;
       gap: 0.75rem;
+      transform: translateY(0);
     }
 
     /* Sidebars */
@@ -632,90 +645,22 @@ template.innerHTML = `
 
     /* Reels/Spinners */
     .spinners {
-      display: flex;
-      overflow: visible;
-      padding: 10px;
+      display: block;
+      width: 100%;
+      height: clamp(220px, 30vw, 320px);
+      overflow: hidden;
+      --spinner-inner-padding: 10px;
+      padding: 0;
       position: relative;
-      border-radius: 8px;
-      transform: translateY(20px);
+      border-radius: 6px;
+      transform: translateY(0);
+      border: 2px solid var(--slot-border-color);
+      background: color-mix(in srgb, var(--slot-card-bg) 60%, transparent);
+      box-shadow: 0 4px rgba(0,0,0,0.3);
     }
 
-    .scene {
-      transition: 0.3s;
-      margin: 100px 0;
-      position: relative;
-      width: 100%;
-      height: 120px;
-    }
-
-    .carousel {
-      transform: translateZ(-220px);
-      height: 100%;
-      transform-style: preserve-3d;
-      transition-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    }
-
-    .carousel__cell {
-      position: absolute;
-      width: 100%;
-      height: 120px;
-    }
-
-    .carousel__cell p {
-      color: var(--slot-symbol-text);
-      text-shadow: 0 2px 2px rgba(0, 0, 0, 0.85), 0 0 8px var(--slot-symbol-glow), 0 0 22px rgba(200, 255, 255, 0.55), 0 0 38px rgba(200, 255, 255, 0.35);
-      will-change: auto;
-      height: 100%;
-      font-size: 4rem;
-      font-weight: bold;
-      height: -webkit-fill-available;
-      width: 100%;
-      width: -webkit-fill-available;
-      margin: 0;
-      box-shadow: 0px -1px 2px var(--slot-cell-shadow-gray) inset, 0px 0px 0px 3px var(--slot-cell-inset-border) inset, 0px 1px 55px 2px var(--slot-cell-shadow-dark) inset, 0px 15px 0px 3px var(--slot-cell-shadow-light) inset, 0px -8px 44px 0px var(--slot-cell-shadow-dark) inset;
-      border: 5px solid rgb(245 218 118 / 55%);
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      border-radius: 1rem;
-      margin: 0.2rem;
-    }
-
-    .carousel__cell:nth-child(1) p { background: hsla(0, 100%, 50%, 0.42); }
-    .carousel__cell:nth-child(2) p { background: hsla(40, 100%, 50%, 0.42); }
-    .carousel__cell:nth-child(3) p { background: hsla(80, 100%, 50%, 0.42); }
-    .carousel__cell:nth-child(4) p { background: hsla(120, 100%, 50%, 0.42); }
-    .carousel__cell:nth-child(5) p { background: hsla(160, 100%, 50%, 0.42); }
-    .carousel__cell:nth-child(6) p { background: hsla(200, 100%, 50%, 0.42); }
-    .carousel__cell:nth-child(7) p { background: hsla(0, 100%, 50%, 0.42); }
-    .carousel__cell:nth-child(8) p { background: hsla(40, 100%, 50%, 0.42); }
-    .carousel__cell:nth-child(9) p { background: hsla(80, 100%, 50%, 0.42); }
-    .carousel__cell:nth-child(10) p { background: hsla(120, 100%, 50%, 0.42); }
-    .carousel__cell:nth-child(11) p { background: hsla(160, 100%, 50%, 0.42); }
-    .carousel__cell:nth-child(12) p { background: hsla(200, 100%, 50%, 0.42); }
-
-    .canvas-overlay {
-      border: solid var(--primary-color);
-      width: 100%;
-      position: absolute;
-      top: 0;
-      height: 100%;
-      border-width: 8px;
-      left: 0;
-      z-index: 9;
-      border-radius: 8px;
-      pointer-events: none;
-    }
-
-    .canvas-overlay.joker-active {
-      pointer-events: auto;
+    .spinners.joker-active {
       cursor: pointer;
-    }
-
-    .canvas-overlay.single-line-mode {
-      border-color: #5B2D8F;
-      top: 33.33%;
-      height: 33.33%;
     }
 
     /* Info Panel */
@@ -731,7 +676,7 @@ template.innerHTML = `
       background: color-mix(in srgb, var(--slot-card-bg) 60%, transparent);
       box-shadow: 0 4px rgba(0,0,0,0.3);
       color: var(--slot-text-primary);
-      margin-top: 3rem;
+      margin-top: 0;
     }
 
     .info-panel > div {
@@ -1511,7 +1456,7 @@ template.innerHTML = `
 
   <div class="slot-game" data-inspiration="https://3dtransforms.desandro.com/carousel">
     <div class="slot-menu" role="tablist" aria-label="Slot menu tabs">
-      <button class="slot-menu-tab active" id="slotMenuGame" type="button" role="tab" aria-selected="true" aria-controls="slotViewGame">Slot Machine</button>
+      <button class="slot-menu-tab active" id="slotMenuGame" type="button" role="tab" aria-selected="true" aria-controls="slotViewGame"><h1>Slot Machine</h1></button>
       <button class="slot-menu-tab" id="slotMenuRules" type="button" role="tab" aria-selected="false" aria-controls="slotViewRules">Game Rules</button>
       <button class="slot-menu-tab" id="slotMenuHistory" type="button" role="tab" aria-selected="false" aria-controls="slotViewHistory">History</button>
     </div>
@@ -1554,7 +1499,7 @@ template.innerHTML = `
 
         <!-- Center: Reels -->
         <div class="slot-center">
-          <div class="spinners" id="spinners"></div>
+          <canvas class="spinners single-line-mode" id="spinners"></canvas>
 
           <!-- Info Panel -->
           <div class="info-panel">
@@ -2117,7 +2062,7 @@ class BingoMiniGame {
 
     try {
       // Call backend API with new ticket-based format
-      const response = await fetch('/api/games/slot-machine', {
+      const response = await fetchWithCsrf('/api/games/slot-machine', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -2344,13 +2289,30 @@ export class SlotMachine extends HTMLElement {
     this.historyLoading = false;
 
     this.jwtToken = '';
-    this.carousels = [];
-    this.scenes = [];
     this.spinDirections = [-1, -1, -1, -1, -1];
     this.currentRotations = [0, 0, 0, 0, 0];
+    this.renderRotations = [0, 0, 0, 0, 0];
+    this.symbolStrip = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    this.reelAnimationFrame = null;
+    this.jokerSelectionActive = false;
     this.canvas = null;
     this.ctx = null;
+    this.webgl = null;
+    this.webglProgram = null;
+    this.webglVertexBuffer = null;
+    this.webglTexture = null;
+    this.webglPositionLocation = -1;
+    this.webglUvLocation = -1;
+    this.webglTextureLocation = null;
+    this.webglEnabled = false;
+    this.webglBackbufferCanvas = null;
+    this.webglTextureWidth = 0;
+    this.webglTextureHeight = 0;
+    this.maxSpinnerRenderDpr = 1.25;
     this.canvasWidth = 0;
+    this.canvasHeight = 0;
+    this.reelBorderColor = 'rgba(245, 218, 118, 0.8)';
+    this.reelPanelBaseColor = 'rgb(255, 255, 255)';
     this.cellHalfHeight = 0;
     this.middleRowCenterY = 0;
     this.bottomRowCenterY = 0;
@@ -2421,95 +2383,829 @@ export class SlotMachine extends HTMLElement {
       rewardModeOptions.appendChild(div);
     });
 
-    // Reels
-    const spinnersContainer = this.shadowRoot.getElementById('spinners');
-    const symbols = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2];
-    for (let i = 0; i < 5; i++) {
-      const scene = document.createElement('div');
-      scene.className = 'scene';
-      scene.style.perspective = '1000px';
-
-      const carousel = document.createElement('div');
-      carousel.className = 'carousel';
-
-      symbols.forEach((sym, idx) => {
-        const cell = document.createElement('div');
-        cell.className = 'carousel__cell';
-        cell.style.transform = `rotateX(${idx * 30}deg) translateZ(220px)`;
-        cell.innerHTML = `<p>${sym}</p>`;
-        carousel.appendChild(cell);
-      });
-
-      scene.appendChild(carousel);
-      spinnersContainer.appendChild(scene);
-      this.scenes.push(scene);
-      this.carousels.push(carousel);
-    }
-
-    // Canvas - default to single-line mode since rewardMode defaults to 2
-    this.canvas = document.createElement('canvas');
-    this.canvas.className = 'canvas-overlay single-line-mode';
-    spinnersContainer.appendChild(this.canvas);
+    // Canvas reels
+    this.canvas = this.shadowRoot.getElementById('spinners');
 
     setTimeout(() => {
       this.initCanvas();
       this.createOddsTables();
-      // Set initial canvas state based on default rewardMode (2 = single line)
       if (this.rewardMode === 2) {
         this.setCanvasMiddleRow();
+      } else {
+        this.setCanvasFullHeight();
       }
+      this.drawLines();
     }, 100);
   }
 
   initCanvas() {
-    this.ctx = this.canvas.getContext('2d');
-    const spinners = this.shadowRoot.getElementById('spinners');
+    if (!this.canvas) return;
 
-    // Get computed padding (spinners has padding: 10px)
-    const computedStyle = getComputedStyle(spinners);
-    this.spinnerPaddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
-    this.spinnerPaddingTop = parseFloat(computedStyle.paddingTop) || 0;
+    const computedStyle = getComputedStyle(this.canvas);
+    const innerPadding = parseFloat(computedStyle.getPropertyValue('--spinner-inner-padding'))
+      || parseFloat(computedStyle.paddingLeft)
+      || 10;
+    const themedBorderColor = computedStyle.getPropertyValue('--slot-border-color').trim();
+    const themedPanelColor = computedStyle.getPropertyValue('--slot-card-bg').trim();
+    this.reelBorderColor = themedBorderColor || 'rgba(245, 218, 118, 0.8)';
+    this.reelPanelBaseColor = this.parseCssColorToRgb(themedPanelColor, 'rgb(255, 255, 255)');
 
-    // Canvas dimensions (full size including padding area)
-    this.canvasWidth = spinners.offsetWidth;
-    this.canvas.width = this.canvasWidth;
-    this.canvas.height = spinners.offsetHeight;
+    const rect = this.canvas.getBoundingClientRect();
+    const cssWidth = Math.max(1, Math.floor(rect.width));
+    const cssHeight = Math.max(1, Math.floor(rect.height));
+    const deviceDpr = window.devicePixelRatio || 1;
+    const dpr = Math.min(deviceDpr, this.maxSpinnerRenderDpr || 1.25);
+    const pixelWidth = Math.max(1, Math.floor(cssWidth * dpr));
+    const pixelHeight = Math.max(1, Math.floor(cssHeight * dpr));
 
-    // Content area dimensions (where the reels actually are)
-    const contentWidth = spinners.clientWidth - this.spinnerPaddingLeft * 2;
-    const contentHeight = spinners.clientHeight - this.spinnerPaddingTop * 2;
+    this.canvas.width = pixelWidth;
+    this.canvas.height = pixelHeight;
 
-    // Calculate cell sizes based on content area, not full canvas
+    this.webglEnabled = this.ensureWebGLContext(pixelWidth, pixelHeight);
+    if (this.webglEnabled) {
+      this.ensureWebGLBackbuffer(pixelWidth, pixelHeight);
+      this.ctx = this.webglBackbufferCanvas?.getContext('2d');
+    } else {
+      this.ctx = this.canvas.getContext('2d');
+    }
+    if (!this.ctx) return;
+
+    this.spinnerPaddingLeft = innerPadding;
+    this.spinnerPaddingTop = innerPadding;
+
+    this.canvasWidth = cssWidth;
+    this.canvasHeight = cssHeight;
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const contentWidth = Math.max(1, cssWidth - this.spinnerPaddingLeft * 2);
+    const contentHeight = Math.max(1, cssHeight - this.spinnerPaddingTop * 2);
+
     this.cellHalfHeight = (contentHeight / 3) / 2;
     this.cellHalfWidth = (contentWidth / 5) / 2;
     this.middleRowCenterY = this.spinnerPaddingTop + 3 * this.cellHalfHeight;
     this.bottomRowCenterY = this.spinnerPaddingTop + 5 * this.cellHalfHeight;
+
     this.ctx.lineWidth = 10;
-    this.ctx.font = '20px Arial';
+    this.ctx.font = '20px "Lucida Sans Unicode", "Lucida Grande", sans-serif';
     this.ctx.strokeStyle = this.lineColor;
 
-    console.log('[SLOT_MACHINE] initCanvas:', {
-      offsetWidth: spinners.offsetWidth,
-      offsetHeight: spinners.offsetHeight,
-      clientWidth: spinners.clientWidth,
-      clientHeight: spinners.clientHeight,
-      paddingLeft: this.spinnerPaddingLeft,
-      paddingTop: this.spinnerPaddingTop,
-      contentWidth,
-      contentHeight,
-      cellHalfHeight: this.cellHalfHeight,
-      cellHalfWidth: this.cellHalfWidth,
-      middleRowCenterY: this.middleRowCenterY,
-      bottomRowCenterY: this.bottomRowCenterY
-    });
+    this.renderFrame();
+  }
 
-    // Draw initial lines
-    this.lineCheck();
+  createWebGLShader(gl, type, source) {
+    const shader = gl.createShader(type);
+    if (!shader) return null;
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+      console.warn('[SlotMachine] WebGL shader compile failed:', gl.getShaderInfoLog(shader) || '');
+      gl.deleteShader(shader);
+      return null;
+    }
+    return shader;
+  }
+
+  ensureWebGLContext(pixelWidth, pixelHeight) {
+    if (!this.canvas) return false;
+    if (!window.WebGLRenderingContext) return false;
+
+    let gl = this.webgl;
+    if (!gl) {
+      const contextAttributes = {
+        alpha: true,
+        antialias: false,
+        premultipliedAlpha: true,
+        preserveDrawingBuffer: false,
+      };
+
+      gl = this.canvas.getContext('webgl2', contextAttributes)
+        || this.canvas.getContext('webgl', contextAttributes)
+        || this.canvas.getContext('experimental-webgl', contextAttributes);
+      if (!gl) {
+        return false;
+      }
+
+      const vertexShaderSource = `
+        attribute vec2 a_position;
+        attribute vec2 a_uv;
+        varying vec2 v_uv;
+
+        void main() {
+          v_uv = a_uv;
+          gl_Position = vec4(a_position, 0.0, 1.0);
+        }
+      `;
+
+      const fragmentShaderSource = `
+        precision mediump float;
+        varying vec2 v_uv;
+        uniform sampler2D u_texture;
+
+        void main() {
+          gl_FragColor = texture2D(u_texture, v_uv);
+        }
+      `;
+
+      const vertexShader = this.createWebGLShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
+      const fragmentShader = this.createWebGLShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
+      if (!vertexShader || !fragmentShader) {
+        return false;
+      }
+
+      const program = gl.createProgram();
+      if (!program) return false;
+
+      gl.attachShader(program, vertexShader);
+      gl.attachShader(program, fragmentShader);
+      gl.linkProgram(program);
+
+      gl.deleteShader(vertexShader);
+      gl.deleteShader(fragmentShader);
+
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        console.warn('[SlotMachine] WebGL program link failed:', gl.getProgramInfoLog(program) || '');
+        gl.deleteProgram(program);
+        return false;
+      }
+
+      const vertexBuffer = gl.createBuffer();
+      const texture = gl.createTexture();
+      if (!vertexBuffer || !texture) {
+        if (vertexBuffer) gl.deleteBuffer(vertexBuffer);
+        if (texture) gl.deleteTexture(texture);
+        gl.deleteProgram(program);
+        return false;
+      }
+
+      // Fullscreen quad with UVs, rendering the 2D backbuffer as a texture.
+      const quadData = new Float32Array([
+        -1, -1, 0, 1,
+        1, -1, 1, 1,
+        -1, 1, 0, 0,
+        -1, 1, 0, 0,
+        1, -1, 1, 1,
+        1, 1, 1, 0,
+      ]);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, quadData, gl.STATIC_DRAW);
+
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+      this.webgl = gl;
+      this.webglProgram = program;
+      this.webglVertexBuffer = vertexBuffer;
+      this.webglTexture = texture;
+      this.webglPositionLocation = gl.getAttribLocation(program, 'a_position');
+      this.webglUvLocation = gl.getAttribLocation(program, 'a_uv');
+      this.webglTextureLocation = gl.getUniformLocation(program, 'u_texture');
+
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    }
+
+    if (!this.webgl || !this.webglProgram || !this.webglVertexBuffer || !this.webglTexture) {
+      return false;
+    }
+
+    if (this.webglTextureWidth !== pixelWidth || this.webglTextureHeight !== pixelHeight) {
+      this.webgl.bindTexture(this.webgl.TEXTURE_2D, this.webglTexture);
+      this.webgl.texImage2D(
+        this.webgl.TEXTURE_2D,
+        0,
+        this.webgl.RGBA,
+        pixelWidth,
+        pixelHeight,
+        0,
+        this.webgl.RGBA,
+        this.webgl.UNSIGNED_BYTE,
+        null,
+      );
+      this.webglTextureWidth = pixelWidth;
+      this.webglTextureHeight = pixelHeight;
+    }
+
+    this.webgl.viewport(0, 0, pixelWidth, pixelHeight);
+    return true;
+  }
+
+  ensureWebGLBackbuffer(pixelWidth, pixelHeight) {
+    if (!this.webglEnabled) return;
+    if (!this.webglBackbufferCanvas) {
+      this.webglBackbufferCanvas = document.createElement('canvas');
+    }
+    if (this.webglBackbufferCanvas.width !== pixelWidth) {
+      this.webglBackbufferCanvas.width = pixelWidth;
+    }
+    if (this.webglBackbufferCanvas.height !== pixelHeight) {
+      this.webglBackbufferCanvas.height = pixelHeight;
+    }
+  }
+
+  presentWebGLFrame() {
+    if (!this.webglEnabled || !this.webgl || !this.webglProgram || !this.webglVertexBuffer || !this.webglTexture) {
+      return;
+    }
+    if (!this.webglBackbufferCanvas) return;
+
+    const gl = this.webgl;
+    gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    gl.useProgram(this.webglProgram);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.webglVertexBuffer);
+
+    if (this.webglPositionLocation >= 0) {
+      gl.enableVertexAttribArray(this.webglPositionLocation);
+      gl.vertexAttribPointer(this.webglPositionLocation, 2, gl.FLOAT, false, 16, 0);
+    }
+
+    if (this.webglUvLocation >= 0) {
+      gl.enableVertexAttribArray(this.webglUvLocation);
+      gl.vertexAttribPointer(this.webglUvLocation, 2, gl.FLOAT, false, 16, 8);
+    }
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.webglTexture);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0);
+    if (this.webglTextureWidth !== this.canvas.width || this.webglTextureHeight !== this.canvas.height) {
+      gl.texImage2D(
+        gl.TEXTURE_2D,
+        0,
+        gl.RGBA,
+        this.canvas.width,
+        this.canvas.height,
+        0,
+        gl.RGBA,
+        gl.UNSIGNED_BYTE,
+        null,
+      );
+      this.webglTextureWidth = this.canvas.width;
+      this.webglTextureHeight = this.canvas.height;
+    }
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, this.webglBackbufferCanvas);
+
+    if (this.webglTextureLocation) {
+      gl.uniform1i(this.webglTextureLocation, 0);
+    }
+
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+  }
+
+  cancelReelAnimation() {
+    if (!this.reelAnimationFrame) return;
+    cancelAnimationFrame(this.reelAnimationFrame);
+    this.reelAnimationFrame = null;
+  }
+
+  easeOutSpin(progress) {
+    return 1 - Math.pow(1 - progress, 3.4);
+  }
+
+  getReelStepAngle() {
+    const stripLength = Array.isArray(this.symbolStrip) ? this.symbolStrip.length : 0;
+    if (!Number.isFinite(stripLength) || stripLength < 2) {
+      return 36;
+    }
+    return 360 / stripLength;
+  }
+
+  animateReels(transitions) {
+    this.cancelReelAnimation();
+
+    const startedAt = performance.now();
+    const nextFrame = (now) => {
+      let allComplete = true;
+
+      for (let reel = 0; reel < transitions.length; reel++) {
+        const transition = transitions[reel];
+        if (!transition) continue;
+
+        const effectiveStart = startedAt + transition.delay;
+        if (now < effectiveStart) {
+          allComplete = false;
+          continue;
+        }
+
+        const elapsed = now - effectiveStart;
+        const rawProgress = transition.duration <= 0 ? 1 : elapsed / transition.duration;
+        const progress = Math.max(0, Math.min(1, rawProgress));
+        const eased = transition.easing(progress);
+
+        this.renderRotations[reel] = transition.from + ((transition.to - transition.from) * eased);
+        if (progress < 1) {
+          allComplete = false;
+        } else {
+          this.renderRotations[reel] = transition.to;
+        }
+      }
+
+      this.renderFrame();
+
+      if (!allComplete) {
+        this.reelAnimationFrame = requestAnimationFrame(nextFrame);
+        return;
+      }
+
+      this.reelAnimationFrame = null;
+    };
+
+    this.reelAnimationFrame = requestAnimationFrame(nextFrame);
+  }
+
+  getSymbolHue(symbol, fallbackIndex = 0) {
+    const symbolText = String(symbol ?? '');
+    const numberValue = Number(symbolText);
+    if (Number.isFinite(numberValue) && symbolText !== '') {
+      return ((Math.max(1, numberValue) - 1) * 36) % 360;
+    }
+
+    const hueWheel = [0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352];
+    const idx = ((fallbackIndex % hueWheel.length) + hueWheel.length) % hueWheel.length;
+    return hueWheel[idx];
+  }
+
+  parseCssColorToRgb(input, fallback = 'rgb(255, 255, 255)') {
+    const value = String(input || '').trim();
+    if (!value) return fallback;
+
+    const hexMatch = value.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+    if (hexMatch) {
+      const hex = hexMatch[1];
+      if (hex.length === 3) {
+        const r = parseInt(hex[0] + hex[0], 16);
+        const g = parseInt(hex[1] + hex[1], 16);
+        const b = parseInt(hex[2] + hex[2], 16);
+        return `rgb(${r}, ${g}, ${b})`;
+      }
+      const r = parseInt(hex.slice(0, 2), 16);
+      const g = parseInt(hex.slice(2, 4), 16);
+      const b = parseInt(hex.slice(4, 6), 16);
+      return `rgb(${r}, ${g}, ${b})`;
+    }
+
+    const rgbMatch = value.match(/^rgba?\(([^)]+)\)$/i);
+    if (rgbMatch) {
+      const parts = rgbMatch[1].split(',').map((part) => Number.parseFloat(part.trim()));
+      if (parts.length >= 3 && parts.every((part, idx) => idx > 2 || Number.isFinite(part))) {
+        const r = Math.max(0, Math.min(255, Math.round(parts[0])));
+        const g = Math.max(0, Math.min(255, Math.round(parts[1])));
+        const b = Math.max(0, Math.min(255, Math.round(parts[2])));
+        return `rgb(${r}, ${g}, ${b})`;
+      }
+    }
+
+    return fallback;
+  }
+
+  colorWithAlpha(rgbColor, alphaValue) {
+    const safeAlpha = Math.max(0, Math.min(1, Number(alphaValue) || 0));
+    const normalized = this.parseCssColorToRgb(rgbColor, 'rgb(255, 255, 255)');
+    const rgbMatch = normalized.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/i);
+    if (!rgbMatch) {
+      return `rgba(255, 255, 255, ${safeAlpha})`;
+    }
+    return `rgba(${rgbMatch[1]}, ${rgbMatch[2]}, ${rgbMatch[3]}, ${safeAlpha})`;
+  }
+
+  projectPoint3D(x, y, z, centerX, centerY, perspective) {
+    const safeZ = Math.max(-perspective + 1, z);
+    const scale = perspective / (perspective - safeZ);
+    return {
+      x: centerX + (x * scale),
+      y: centerY + (y * scale),
+      scale,
+    };
+  }
+
+  drawRoundedQuadPath(points, radiusPx) {
+    const ctx = this.ctx;
+    if (!ctx || !points || points.length !== 4) return;
+
+    const clampDot = (value) => Math.max(-1, Math.min(1, value));
+    const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+    const normalize = (vector) => {
+      const length = Math.hypot(vector.x, vector.y);
+      if (length <= 0.0001) return { x: 0, y: 0 };
+      return { x: vector.x / length, y: vector.y / length };
+    };
+
+    const roundedSegments = [];
+    for (let i = 0; i < 4; i++) {
+      const prev = points[(i + 3) % 4];
+      const current = points[i];
+      const next = points[(i + 1) % 4];
+
+      const toPrev = normalize({ x: prev.x - current.x, y: prev.y - current.y });
+      const toNext = normalize({ x: next.x - current.x, y: next.y - current.y });
+
+      const lenPrev = distance(prev, current);
+      const lenNext = distance(next, current);
+      const cornerAngle = Math.acos(clampDot((toPrev.x * toNext.x) + (toPrev.y * toNext.y)));
+      const maxOffset = Math.min(lenPrev, lenNext) * 0.5;
+
+      let offset = radiusPx / Math.max(0.0001, Math.tan(cornerAngle * 0.5));
+      if (!Number.isFinite(offset)) {
+        offset = maxOffset;
+      }
+      offset = Math.max(0, Math.min(maxOffset, offset));
+
+      const start = {
+        x: current.x + (toPrev.x * offset),
+        y: current.y + (toPrev.y * offset),
+      };
+      const end = {
+        x: current.x + (toNext.x * offset),
+        y: current.y + (toNext.y * offset),
+      };
+
+      roundedSegments.push({ corner: current, start, end });
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(roundedSegments[0].start.x, roundedSegments[0].start.y);
+    for (let i = 0; i < roundedSegments.length; i++) {
+      const segment = roundedSegments[i];
+      ctx.quadraticCurveTo(
+        segment.corner.x,
+        segment.corner.y,
+        segment.end.x,
+        segment.end.y,
+      );
+      const nextSegment = roundedSegments[(i + 1) % roundedSegments.length];
+      ctx.lineTo(nextSegment.start.x, nextSegment.start.y);
+    }
+    ctx.closePath();
+  }
+
+  drawReelCell(cell) {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const { points, symbol, depthWeight, baseCellWidth, baseCellHeight } = cell;
+    const [topLeft, topRight, bottomRight, bottomLeft] = points;
+
+    const centerX = (topLeft.x + topRight.x + bottomRight.x + bottomLeft.x) / 4;
+    const centerY = (topLeft.y + topRight.y + bottomRight.y + bottomLeft.y) / 4;
+    const topMidX = (topLeft.x + topRight.x) / 2;
+    const topMidY = (topLeft.y + topRight.y) / 2;
+    const bottomMidX = (bottomLeft.x + bottomRight.x) / 2;
+    const bottomMidY = (bottomLeft.y + bottomRight.y) / 2;
+    const leftMidX = (topLeft.x + bottomLeft.x) / 2;
+    const leftMidY = (topLeft.y + bottomLeft.y) / 2;
+    const rightMidX = (topRight.x + bottomRight.x) / 2;
+    const rightMidY = (topRight.y + bottomRight.y) / 2;
+
+    const projectedHeight = Math.hypot(bottomMidX - topMidX, bottomMidY - topMidY);
+    const projectedWidth = Math.hypot(rightMidX - leftMidX, rightMidY - leftMidY);
+    if (projectedHeight < 6 || projectedWidth < 8) return;
+    const cornerRadius = Math.min(16, projectedHeight * 0.42, projectedWidth * 0.42);
+
+    const fillAlpha = 0.34 + (depthWeight * 0.22);
+    const borderAlpha = 0.12 + (depthWeight * 0.1);
+    const topColor = this.colorWithAlpha(this.reelPanelBaseColor, Math.min(1, fillAlpha + 0.08));
+    const middleColor = this.colorWithAlpha(this.reelPanelBaseColor, fillAlpha);
+    const bottomColor = this.colorWithAlpha(this.reelPanelBaseColor, Math.max(0.16, fillAlpha - 0.1));
+    const minY = Math.min(topLeft.y, topRight.y, bottomRight.y, bottomLeft.y);
+    const maxY = Math.max(topLeft.y, topRight.y, bottomRight.y, bottomLeft.y);
+
+    ctx.save();
+    this.drawRoundedQuadPath(points, cornerRadius);
+
+    const fillGradient = ctx.createLinearGradient(0, minY, 0, maxY);
+    fillGradient.addColorStop(0, topColor);
+    fillGradient.addColorStop(0.5, middleColor);
+    fillGradient.addColorStop(1, bottomColor);
+
+    // Outer black shadow (10px spread)
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+    ctx.fillStyle = fillGradient;
+    ctx.fill();
+    ctx.restore();
+
+    // Inset black shadow (10px spread) clipped inside panel shape
+    ctx.save();
+    this.drawRoundedQuadPath(points, cornerRadius);
+    ctx.clip();
+    this.drawRoundedQuadPath(points, cornerRadius);
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)';
+    ctx.lineWidth = 14;
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.92)';
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.save();
+    this.drawRoundedQuadPath(points, cornerRadius);
+    ctx.strokeStyle = this.reelBorderColor || 'rgba(245, 218, 118, 0.8)';
+    ctx.globalAlpha = borderAlpha;
+    ctx.lineWidth = Math.max(10, projectedHeight * 0.06);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.translate(centerX, centerY);
+    ctx.scale(projectedWidth / baseCellWidth, projectedHeight / baseCellHeight);
+    ctx.font = `700 ${Math.max(24, baseCellHeight * 0.44)}px "Lucida Sans Unicode", "Lucida Grande", sans-serif`;
+    ctx.fillStyle = 'rgba(245, 218, 118, 0.86)';
+    ctx.strokeStyle = 'rgba(245, 218, 118, 0.2)';
+    ctx.lineWidth = Math.max(1, baseCellHeight * 0.04);
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+    const symbolText = String(symbol ?? '');
+    ctx.strokeText(symbolText, 0, 0);
+    ctx.fillText(symbolText, 0, 0);
+    ctx.restore();
+  }
+
+  drawReelsCanvas() {
+    const ctx = this.ctx;
+    if (!ctx || !this.canvasWidth || !this.canvasHeight) return;
+
+    const padX = this.spinnerPaddingLeft || 0;
+    const padY = this.spinnerPaddingTop || 0;
+    const contentWidth = Math.max(1, this.canvasWidth - (padX * 2));
+    const contentHeight = Math.max(1, this.canvasHeight - (padY * 2));
+    const reelWidth = contentWidth / 5;
+    const rowHeight = contentHeight / 3;
+    const reelCenterY = padY + (contentHeight / 2);
+    const strip = Array.isArray(this.symbolStrip) && this.symbolStrip.length
+      ? this.symbolStrip
+      : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+    const cellGapPx = this.rewardMode === 2 ? 4 : 8;
+    const stepAngle = 360 / strip.length;
+    const baseCellWidth = reelWidth * 0.88;
+    const baseCellPitch = rowHeight;
+    const baseCellHeight = Math.max(18, baseCellPitch - cellGapPx);
+
+    if (this.rewardMode === 1) {
+      for (let reelIndex = 0; reelIndex < 5; reelIndex++) {
+        const reelLeft = padX + (reelIndex * reelWidth);
+        const reelCenterX = reelLeft + (reelWidth / 2);
+        const rotation = this.renderRotations[reelIndex] || 0;
+        const symbolOffset = -rotation / stepAngle;
+        const baseIndex = Math.floor(symbolOffset);
+        const fraction = symbolOffset - baseIndex;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(reelLeft, padY, reelWidth, contentHeight);
+        ctx.clip();
+
+        for (let row = -5; row <= 5; row++) {
+          const virtualIndex = baseIndex + row;
+          const normalizedIndex = ((virtualIndex % strip.length) + strip.length) % strip.length;
+          const symbol = strip[normalizedIndex];
+          const centerY = (padY + (contentHeight / 2)) + ((row - fraction) * baseCellPitch);
+
+          if (centerY < (padY - baseCellHeight) || centerY > (padY + contentHeight + baseCellHeight)) {
+            continue;
+          }
+
+          const halfW = baseCellWidth / 2;
+          const halfH = baseCellHeight / 2;
+          const points = [
+            { x: reelCenterX - halfW, y: centerY - halfH },
+            { x: reelCenterX + halfW, y: centerY - halfH },
+            { x: reelCenterX + halfW, y: centerY + halfH },
+            { x: reelCenterX - halfW, y: centerY + halfH },
+          ];
+
+          const distanceFromCenter = Math.abs(centerY - (padY + (contentHeight / 2)));
+          const depthWeight = Math.max(0.18, 1 - (distanceFromCenter / (baseCellPitch * 4)));
+
+          this.drawReelCell({
+            points,
+            symbol,
+            hue: this.getSymbolHue(symbol, normalizedIndex),
+            depthWeight,
+            baseCellWidth,
+            baseCellHeight,
+          });
+        }
+
+        const flatOverlay = ctx.createLinearGradient(0, padY, 0, padY + contentHeight);
+        flatOverlay.addColorStop(0, 'rgba(0, 0, 0, 0.22)');
+        flatOverlay.addColorStop(0.22, 'rgba(0, 0, 0, 0.04)');
+        flatOverlay.addColorStop(0.5, 'rgba(255, 255, 255, 0.02)');
+        flatOverlay.addColorStop(0.78, 'rgba(0, 0, 0, 0.04)');
+        flatOverlay.addColorStop(1, 'rgba(0, 0, 0, 0.22)');
+        ctx.fillStyle = flatOverlay;
+        ctx.fillRect(reelLeft, padY, reelWidth, contentHeight);
+        ctx.restore();
+      }
+
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.14)';
+      ctx.lineWidth = 1;
+      for (let i = 1; i < 5; i++) {
+        const x = padX + ((contentWidth / 5) * i);
+        ctx.beginPath();
+        ctx.moveTo(x, padY);
+        ctx.lineTo(x, padY + contentHeight);
+        ctx.stroke();
+      }
+      ctx.restore();
+      return;
+    }
+
+    // Desandro carousel radius formula: (cellSize / 2) / tan(PI / numberOfCells)
+    const radiusBase = (baseCellPitch / 2) / Math.tan(Math.PI / strip.length);
+    const radius = this.rewardMode === 2
+      ? Math.max(12, (radiusBase * 1.22) - 25)
+      : radiusBase;
+    const perspective = 1000;
+    const wheelVerticalClipPadding = this.rewardMode === 2 ? Math.max(8, baseCellHeight * 0.42) : 0;
+    const visibleMinY = padY - rowHeight - wheelVerticalClipPadding;
+    const visibleMaxY = padY + contentHeight + rowHeight + wheelVerticalClipPadding;
+
+    for (let reelIndex = 0; reelIndex < 5; reelIndex++) {
+      const reelLeft = padX + (reelIndex * reelWidth);
+      const reelCenterX = reelLeft + (reelWidth / 2);
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(
+        reelLeft,
+        padY - wheelVerticalClipPadding,
+        reelWidth,
+        contentHeight + (wheelVerticalClipPadding * 2),
+      );
+      ctx.clip();
+
+      const cells = [];
+      for (let idx = 0; idx < strip.length; idx++) {
+        const angleDeg = (this.renderRotations[reelIndex] || 0) + (idx * stepAngle);
+        const angleRad = angleDeg * (Math.PI / 180);
+        const cosAngle = Math.cos(angleRad);
+        const sinAngle = Math.sin(angleRad);
+        const halfW = baseCellWidth / 2;
+        const halfH = baseCellHeight / 2;
+        const corners2d = [];
+        const cornerDepths = [];
+        const localCorners = [
+          { x: -halfW, y: -halfH },
+          { x: halfW, y: -halfH },
+          { x: halfW, y: halfH },
+          { x: -halfW, y: halfH },
+        ];
+
+        for (let cornerIndex = 0; cornerIndex < localCorners.length; cornerIndex++) {
+          const localCorner = localCorners[cornerIndex];
+          const y3d = (localCorner.y * cosAngle) - (radius * sinAngle);
+          const z3d = (localCorner.y * sinAngle) + (radius * cosAngle) - radius;
+          cornerDepths.push(z3d);
+          corners2d.push(this.projectPoint3D(
+            localCorner.x,
+            y3d,
+            z3d,
+            reelCenterX,
+            reelCenterY,
+            perspective,
+          ));
+        }
+
+        const minY = Math.min(corners2d[0].y, corners2d[1].y, corners2d[2].y, corners2d[3].y);
+        const maxY = Math.max(corners2d[0].y, corners2d[1].y, corners2d[2].y, corners2d[3].y);
+        if (maxY < visibleMinY || minY > visibleMaxY) {
+          continue;
+        }
+
+        const averageDepth = (cornerDepths[0] + cornerDepths[1] + cornerDepths[2] + cornerDepths[3]) / 4;
+        cells.push({
+          z: averageDepth,
+          points: corners2d,
+          baseCellWidth,
+          baseCellHeight,
+          symbol: strip[idx],
+          hue: this.getSymbolHue(strip[idx], idx),
+          depthWeight: Math.max(0, Math.min(1, 1 - (Math.abs(averageDepth) / (radius * 2.2)))),
+        });
+      }
+
+      cells.sort((left, right) => left.z - right.z);
+      for (let i = 0; i < cells.length; i++) {
+        this.drawReelCell(cells[i]);
+      }
+
+      const vignette = ctx.createLinearGradient(0, padY, 0, padY + contentHeight);
+      vignette.addColorStop(0, 'rgba(0, 0, 0, 0.24)');
+      vignette.addColorStop(0.2, 'rgba(0, 0, 0, 0.06)');
+      vignette.addColorStop(0.5, 'rgba(255, 255, 255, 0.03)');
+      vignette.addColorStop(0.8, 'rgba(0, 0, 0, 0.06)');
+      vignette.addColorStop(1, 'rgba(0, 0, 0, 0.24)');
+      ctx.fillStyle = vignette;
+      ctx.fillRect(reelLeft, padY, reelWidth, contentHeight);
+      ctx.restore();
+    }
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.14)';
+    ctx.lineWidth = 1;
+    for (let i = 1; i < 5; i++) {
+      const x = padX + ((contentWidth / 5) * i);
+      ctx.beginPath();
+      ctx.moveTo(x, padY);
+      ctx.lineTo(x, padY + contentHeight);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  drawJokerSprite(x, y) {
+    if (!this.ctx || !this.img || !this.jokerImageLoaded) return;
+    if (!this.cellHalfWidth || !this.cellHalfHeight) return;
+
+    const imageWidth = this.img.width;
+    const imageHeight = this.img.height;
+    if (!imageWidth || !imageHeight) return;
+
+    const scale = Math.min(
+      (2 * this.cellHalfWidth) / imageWidth,
+      (2 * this.cellHalfHeight) / imageHeight,
+    );
+
+    const drawX = x + ((2 * this.cellHalfWidth - (imageWidth * scale)) / 2);
+    const drawY = y + ((2 * this.cellHalfHeight - (imageHeight * scale)) / 2);
+    this.ctx.drawImage(this.img, drawX, drawY, imageWidth * scale, imageHeight * scale);
+  }
+
+  drawJokerSelectionBoxes() {
+    if (!this.ctx) return;
+    const padX = this.spinnerPaddingLeft || 0;
+    const padY = this.spinnerPaddingTop || 0;
+
+    this.ctx.save();
+    this.ctx.strokeStyle = '#3c0081';
+    this.ctx.shadowColor = 'black';
+    this.ctx.shadowBlur = 18;
+    this.ctx.shadowOffsetX = 0;
+    this.ctx.shadowOffsetY = 0;
+
+    for (let i = 0; i < 15; i++) {
+      if (this.validJokerPositions[i] !== 1) continue;
+      let x;
+      let y;
+
+      if (i < 5) {
+        x = padX + this.cellHalfWidth * 2 * i;
+        y = padY;
+      } else if (i < 10) {
+        x = padX + this.cellHalfWidth * 2 * (i - 5);
+        y = padY + this.cellHalfHeight * 2;
+      } else {
+        x = padX + this.cellHalfWidth * 2 * (i - 10);
+        y = padY + this.cellHalfHeight * 4;
+      }
+
+      this.ctx.beginPath();
+      this.ctx.rect(x, y, this.cellHalfWidth * 2, this.cellHalfHeight * 2);
+      this.ctx.stroke();
+    }
+
+    this.ctx.restore();
+  }
+
+  renderFrame() {
+    if (!this.ctx || !this.canvas) return;
+    this.ctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
+
+    this.drawReelsCanvas();
+
+    // During spin, skip overlay drawing for better frame pacing.
+    if (!this.isSpinning) {
+      this.lineCheck();
+
+      if (this.jokerSelectionActive) {
+        this.drawJokerSelectionBoxes();
+      }
+      if (this.jokerPosition > 0 && (this.jokerAdded || this.jokerSelectionActive)) {
+        this.drawJokerSprite(this.jokerCanvasX, this.jokerCanvasY);
+      }
+    }
+
+    if (this.webglEnabled) {
+      this.presentWebGLFrame();
+    }
   }
 
   createOddsTables() {
     // Use default symbols and odds for initial game type (1 = Numbers)
-    const symbols = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2];
+    const symbols = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
     const odds = [...this.kvote];
     this.updateOddsTables(symbols, odds);
   }
@@ -2553,6 +3249,8 @@ export class SlotMachine extends HTMLElement {
       if (!Number.isFinite(page)) return;
       void this.loadHistoryPage(page);
     });
+
+    window.addEventListener('resize', () => this.initCanvas());
   }
 
   setMenuView(view) {
@@ -2743,7 +3441,7 @@ export class SlotMachine extends HTMLElement {
         headers.Authorization = `Bearer ${this.jwtToken}`;
       }
 
-      const response = await fetch(`/api/games/slot-machine/history?page=${targetPage}`, {
+      const response = await fetchWithCsrf(`/api/games/slot-machine/history?page=${targetPage}`, {
         method: 'GET',
         headers
       });
@@ -2860,26 +3558,19 @@ export class SlotMachine extends HTMLElement {
     element.parentElement.querySelectorAll('.control-group').forEach(el => el.classList.remove('active'));
     element.classList.add('active');
 
-    const spinnersEl = this.shadowRoot.getElementById('spinners');
     const infoPanelEl = this.shadowRoot.querySelector('.info-panel');
 
     if (value === 1) {
-      // Multi-line mode: show 3D perspective and line selection
-      this.scenes.forEach(scene => scene.style.perspective = 'initial');
+      // Multi-line mode: show full 3x5 with lines and joker controls
       this.shadowRoot.getElementById('linesContainer').style.display = 'flex';
       this.shadowRoot.getElementById('jokerContainer').style.display = 'block';
-      spinnersEl.style.overflow = 'hidden';
-      spinnersEl.style.transform = 'translateY(0)';
-      infoPanelEl.style.marginTop = '0.5rem';
+      infoPanelEl.style.marginTop = '0';
       this.setCanvasFullHeight();
     } else {
-      // Single line mode (value === 2): show 3D effect and canvas shrinks to middle row
-      this.scenes.forEach(scene => scene.style.perspective = '1000px');
+      // Single line mode (value === 2): hide lines/joker controls
       this.shadowRoot.getElementById('linesContainer').style.display = 'none';
       this.shadowRoot.getElementById('jokerContainer').style.display = 'none';
-      spinnersEl.style.overflow = 'visible';
-      spinnersEl.style.transform = 'translateY(20px)';
-      infoPanelEl.style.marginTop = '3rem';
+      infoPanelEl.style.marginTop = '0';
       this.setCanvasMiddleRow();
     }
     this.drawLines();
@@ -2889,18 +3580,17 @@ export class SlotMachine extends HTMLElement {
   setCanvasFullHeight() {
     if (!this.canvas) return;
     this.canvas.classList.remove('single-line-mode');
-    this.canvas.style.top = '0';
-    this.canvas.style.height = '100%';
+    this.canvas.style.overflow = 'hidden';
+    this.canvas.style.transform = 'translateY(0)';
+    this.renderFrame();
   }
 
   setCanvasMiddleRow() {
-    if (!this.canvas || !this.cellHalfHeight) return;
+    if (!this.canvas) return;
     this.canvas.classList.add('single-line-mode');
-    // Middle row starts at padding + 2*halfStep, height is 2*halfStep
-    const topPosition = this.spinnerPaddingTop + (this.cellHalfHeight * 2);
-    const rowHeight = this.cellHalfHeight * 2;
-    this.canvas.style.top = `${topPosition}px`;
-    this.canvas.style.height = `${rowHeight}px`;
+    this.canvas.style.overflow = 'visible';
+    this.canvas.style.transform = 'translateY(0)';
+    this.renderFrame();
   }
 
   toggleLine(index, element) {
@@ -2935,11 +3625,7 @@ export class SlotMachine extends HTMLElement {
     }
 
     // Redraw canvas
-    this.clearCanvas();
-    if (isActive) {
-      this.drawPayline(index);
-    }
-    this.lineCheck();
+    this.drawLines();
 
     // Handle joker if active
     if (this.jokerAdded && this.jokerPosition > 0) {
@@ -2949,7 +3635,7 @@ export class SlotMachine extends HTMLElement {
       if (validLines.length === 0) {
         this.removeJoker();
       } else {
-        this.drawJokerAtPosition(this.jokerCanvasX, this.jokerCanvasY);
+        this.renderFrame();
       }
     }
 
@@ -2961,15 +3647,16 @@ export class SlotMachine extends HTMLElement {
       // Calculate which grid positions are active based on selected lines
       this.calculateValidJokerPositions();
       this.countActivePaylines();
+      this.jokerSelectionActive = true;
       this.drawJokerSelectionGrid();
       this.shadowRoot.getElementById('linesContainer').style.display = 'none';
     } else {
       this.jokerPosition = 0;
       this.jokerCost = 0;
       this.jokerAdded = false;
+      this.jokerSelectionActive = false;
       this.removeCanvasClickListener();
-      this.clearCanvas();
-      this.lineCheck();
+      this.drawLines();
       this.shadowRoot.getElementById('linesContainer').style.display = 'flex';
       this.shadowRoot.getElementById('jokerStatus').textContent = 'NO (0 $)';
 
@@ -3011,59 +3698,22 @@ export class SlotMachine extends HTMLElement {
   }
 
   drawJokerSelectionGrid() {
-    // Ensure canvas is initialized
     if (!this.ctx || !this.cellHalfHeight || !this.cellHalfWidth) {
       this.initCanvas();
     }
-
-    this.clearCanvas();
-    this.ctx.strokeStyle = '#3c0081';
-    this.ctx.shadowColor = 'black';
-    this.ctx.shadowBlur = 18;
-    this.ctx.shadowOffsetX = 0;
-    this.ctx.shadowOffsetY = 0;
-
-    // Draw selection boxes for each valid joker position
-    // Add padding offset so boxes align with the actual reel positions
-    const padX = this.spinnerPaddingLeft || 0;
-    const padY = this.spinnerPaddingTop || 0;
-
-    console.log('[SLOT_MACHINE] drawJokerSelectionGrid:', { padX, padY, cellHalfWidth: this.cellHalfWidth, cellHalfHeight: this.cellHalfHeight, validJokerPositions: this.validJokerPositions });
-
-    for (let i = 0; i < 15; i++) {
-      if (this.validJokerPositions[i] === 1) {
-        let x, y;
-        if (i < 5) {
-          // Top row
-          x = padX + this.cellHalfWidth * 2 * i;
-          y = padY;
-        } else if (i < 10) {
-          // Middle row
-          x = padX + this.cellHalfWidth * 2 * (i - 5);
-          y = padY + this.cellHalfHeight * 2;
-        } else {
-          // Bottom row
-          x = padX + this.cellHalfWidth * 2 * (i - 10);
-          y = padY + this.cellHalfHeight * 4;
-        }
-
-        this.ctx.beginPath();
-        this.ctx.rect(x, y, this.cellHalfWidth * 2, this.cellHalfHeight * 2);
-        this.ctx.stroke();
-      }
-    }
-
-    this.ctx.shadowBlur = 0;
+    this.jokerSelectionActive = true;
+    this.renderFrame();
     this.addCanvasClickListener();
-    this.ctx.strokeStyle = this.lineColor;
   }
 
   addCanvasClickListener() {
+    if (!this.canvas) return;
     this.canvas.classList.add('joker-active');
     this.canvas.addEventListener('click', this.boundCanvasClick);
   }
 
   removeCanvasClickListener() {
+    if (!this.canvas) return;
     this.canvas.classList.remove('joker-active');
     this.canvas.removeEventListener('click', this.boundCanvasClick);
   }
@@ -3110,40 +3760,10 @@ export class SlotMachine extends HTMLElement {
   }
 
   redrawWithJoker(x, y) {
-    // Clear and redraw boxes
-    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-
-    // Draw selection boxes with padding offset
-    const padX = this.spinnerPaddingLeft || 0;
-    const padY = this.spinnerPaddingTop || 0;
-
-    this.ctx.strokeStyle = '#3c0081';
-    this.ctx.shadowColor = 'black';
-    this.ctx.shadowBlur = 18;
-
-    for (let i = 0; i < 15; i++) {
-      if (this.validJokerPositions[i] === 1) {
-        let bx, by;
-        if (i < 5) {
-          bx = padX + this.cellHalfWidth * 2 * i;
-          by = padY;
-        } else if (i < 10) {
-          bx = padX + this.cellHalfWidth * 2 * (i - 5);
-          by = padY + this.cellHalfHeight * 2;
-        } else {
-          bx = padX + this.cellHalfWidth * 2 * (i - 10);
-          by = padY + this.cellHalfHeight * 4;
-        }
-        this.ctx.beginPath();
-        this.ctx.rect(bx, by, this.cellHalfWidth * 2, this.cellHalfHeight * 2);
-        this.ctx.stroke();
-      }
-    }
-
-    this.ctx.shadowBlur = 0;
-    this.ctx.strokeStyle = this.lineColor;
-    console.log('kurcina', x, y);
-    // Now draw joker image on top using the existing method
+    this.jokerCanvasX = x;
+    this.jokerCanvasY = y;
+    this.jokerSelectionActive = true;
+    this.renderFrame();
     this.drawJokerAtPosition(x, y);
   }
 
@@ -3171,26 +3791,8 @@ export class SlotMachine extends HTMLElement {
   }
 
   drawJokerAtPosition(x, y) {
-    // Base64 joker image
-    this.img.src = "data:image/png;base64,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";
+    this.drawJokerSprite(x, y);
 
-
-    const w = this.img.width;
-    const h = this.img.height;
-    const sizer = Math.min((2 * this.cellHalfWidth / w), (2 * this.cellHalfHeight / h));
-
-    let drawX, drawY;
-    if (this.cellHalfWidth > this.cellHalfHeight) {
-      drawX = x + ((2 * this.cellHalfWidth - w * sizer) / 2);
-      drawY = y;
-    } else {
-      drawX = x;
-      drawY = y + ((2 * this.cellHalfHeight - h * sizer) / 2);
-    }
-
-    this.ctx.drawImage(this.img, drawX, drawY, w * sizer, h * sizer);
-
-    // Show "Confirm Joker" button if not already confirmed
     const confirmBtn = this.shadowRoot.getElementById('confirmJokerBtn');
     const removeBtn = this.shadowRoot.getElementById('removeJokerBtn');
     const checkbox = this.shadowRoot.getElementById('jokerCheckbox');
@@ -3204,6 +3806,7 @@ export class SlotMachine extends HTMLElement {
   confirmJoker() {
     this.jokerAdded = true;
     this.jokerCost = this.bet * 5;
+    this.jokerSelectionActive = false;
     this.shadowRoot.getElementById('jokerStatus').textContent = `YES (${this.jokerCost} $)`;
 
     // Hide "Confirm Joker" button, show "Remove Joker" button
@@ -3212,10 +3815,8 @@ export class SlotMachine extends HTMLElement {
 
     this.removeCanvasClickListener();
 
-    // Clear and redraw lines with joker
-    this.clearCanvas();
-    this.lineCheck();
-    this.drawJokerAtPosition(this.jokerCanvasX, this.jokerCanvasY);
+    // Redraw lines with joker on the selected position
+    this.drawLines();
 
     // Disable checkbox
     this.shadowRoot.getElementById('jokerCheckbox').disabled = true;
@@ -3230,14 +3831,14 @@ export class SlotMachine extends HTMLElement {
     this.jokerPosition = 0;
     this.jokerCost = 0;
     this.jokerAdded = false;
+    this.jokerSelectionActive = false;
     this.jokerAffectedLines = [];
     this.jokerCanvasX = 0;
     this.jokerCanvasY = 0;
     this.shadowRoot.getElementById('jokerStatus').textContent = 'NO (0 $)';
     this.removeCanvasClickListener();
 
-    this.clearCanvas();
-    this.lineCheck();
+    this.drawLines();
 
     // Hide both joker buttons
     this.shadowRoot.getElementById('confirmJokerBtn').style.display = 'none';
@@ -3258,11 +3859,11 @@ export class SlotMachine extends HTMLElement {
   updateSymbols() {
     // Symbol sets for each game type
     const symbolSets = {
-      1: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2],
-      2: ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'I', 'II'],
-      3: ['🍏', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🥝', '🍒', '🍏', '🍐'],
-      4: ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐼', '🐨', '🦁', '🐯', '🐶', '🐱'],
-      5: ['😀', '😁', '😂', '🤣', '😅', '😎', '🤩', '😈', '🥳', '🤖', '😀', '😁']
+      1: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+      2: ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'],
+      3: ['🍏', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🥝', '🍒'],
+      4: ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐼', '🐨', '🦁', '🐯'],
+      5: ['😀', '😁', '😂', '🤣', '😅', '😎', '🤩', '😈', '🥳', '🤖']
     };
 
     // Odds for each game type (5 symbol-pairs × 4 matches = 20 values)
@@ -3276,23 +3877,19 @@ export class SlotMachine extends HTMLElement {
 
     const symbols = symbolSets[this.gameTypeValue] || symbolSets[1];
     const odds = oddsSets[this.gameTypeValue] || oddsSets[1];
+    this.symbolStrip = [...symbols];
     this.kvote = [...odds];
 
-    // Update carousel symbols and reset to position 0
-    this.carousels.forEach((carousel, i) => {
-      carousel.querySelectorAll('.carousel__cell p').forEach((cell, idx) => {
-        cell.textContent = symbols[idx];
-      });
-      // Reset carousel to position 0 (first symbol)
-      this.currentRotations[i] = 0;
-      carousel.style.cssText = 'transform: translateZ(-220px) rotateX(0deg); transition: 0.1s;';
-    });
+    this.cancelReelAnimation();
+    this.currentRotations = [0, 0, 0, 0, 0];
+    this.renderRotations = [0, 0, 0, 0, 0];
 
     // Update odds tables
     this.updateOddsTables(symbols, odds);
 
     // Update bet options for this game type
     this.updateBetOptions();
+    this.drawLines();
   }
 
   updateOddsTables(symbols, odds) {
@@ -3350,8 +3947,10 @@ export class SlotMachine extends HTMLElement {
 
   clearCanvas() {
     if (!this.ctx) return;
-    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    this.img = new Image();
+    this.ctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
+    if (this.webglEnabled) {
+      this.presentWebGLFrame();
+    }
   }
 
   lineCheck() {
@@ -3449,11 +4048,7 @@ export class SlotMachine extends HTMLElement {
   }
 
   drawLines() {
-    this.clearCanvas();
-    this.lineCheck();
-    if (this.jokerAdded && this.jokerPosition > 0) {
-      this.drawJokerAtPosition(this.jokerCanvasX, this.jokerCanvasY);
-    }
+    this.renderFrame();
   }
 
   getTotalBet() {
@@ -3583,7 +4178,7 @@ export class SlotMachine extends HTMLElement {
       brojKredita: this.credits + this.getTotalBet()
     };
 
-    const response = await fetch('/api/games/slot-machine', {
+    const response = await fetchWithCsrf('/api/games/slot-machine', {
       method: 'POST',
       headers,
       body: JSON.stringify(body)
@@ -3606,7 +4201,7 @@ export class SlotMachine extends HTMLElement {
         authHeaders.Authorization = `Bearer ${this.jwtToken}`;
       }
 
-      const statsResponse = await fetch('/api/games/slot-machine', {
+      const statsResponse = await fetchWithCsrf('/api/games/slot-machine', {
         method: 'POST',
         headers: authHeaders,
         body: JSON.stringify({ action: 'slot_stats' })
@@ -3620,7 +4215,7 @@ export class SlotMachine extends HTMLElement {
         return;
       }
 
-      const response = await fetch('/api/games/slot-machine', {
+      const response = await fetchWithCsrf('/api/games/slot-machine', {
         method: 'POST',
         headers: authHeaders,
         body: JSON.stringify({ action: 'slot_history', page: 1 })
@@ -3650,10 +4245,8 @@ export class SlotMachine extends HTMLElement {
    * @param {boolean} isFinalSpin - True when spinning to final position
    */
   rotateReels(values, isFinalSpin = false) {
-    // In multi-line mode (3x5), generate random directions for each reel
-    // In single-line mode (1x5), all reels spin same direction
     if (!isFinalSpin) {
-      this.spinDirections = this.carousels.map(() => {
+      this.spinDirections = this.spinDirections.map(() => {
         if (this.rewardMode === 1) {
           return Math.random() < 0.5 ? 1 : -1;
         }
@@ -3661,35 +4254,34 @@ export class SlotMachine extends HTMLElement {
       });
     }
 
+    const transitions = new Array(5).fill(null);
+
     if (!isFinalSpin) {
-      // For initial spin: start each wheel with a staggered delay (left to right)
-      this.carousels.forEach((carousel, i) => {
+      for (let i = 0; i < 5; i++) {
         const direction = this.spinDirections[i];
-        const currentRotation = this.currentRotations[i];
+        const currentRotation = this.currentRotations[i] || 0;
         const spinRotations = 360 * (Math.floor(Math.random() * 5) + 8);
         const target = currentRotation + (direction * spinRotations);
 
         this.currentRotations[i] = target;
-
-        // Staggered start: each wheel starts 100ms after the previous
-        carousel.style.transition = `transform 1s linear ${i * 0.1}s`;
-        carousel.style.transform = `translateZ(-220px) rotateX(${target}deg)`;
-      });
+        transitions[i] = {
+          from: this.renderRotations[i] || 0,
+          to: target,
+          duration: 1000,
+          delay: i * 100,
+          easing: (progress) => progress,
+        };
+      }
     } else {
-      // Final spin - decelerate and land on target value
-      this.carousels.forEach((carousel, i) => {
-        const direction = this.spinDirections[i];
-        const currentRotation = this.currentRotations[i];
+      const stepAngle = this.getReelStepAngle();
+      for (let i = 0; i < 5; i++) {
+        const direction = this.spinDirections[i] || -1;
+        const currentRotation = this.currentRotations[i] || 0;
 
-        // Each symbol is 30° apart (12 cells × 30° = 360°)
-        // To show value N (1-10), rotate to -(N-1) * 30
-        const targetAngle = -(values[i] - 1) * 30;
-
-        // Calculate final rotation that lands exactly on targetAngle
+        const targetAngle = -(values[i] - 1) * stepAngle;
         const fullRotations = 360 * (8 + Math.floor(Math.random() * 4) + i);
         let rotation = targetAngle + (direction * fullRotations);
 
-        // Ensure rotation is ahead of current position in spin direction
         while (direction === -1 && rotation > currentRotation) {
           rotation -= 360;
         }
@@ -3698,10 +4290,17 @@ export class SlotMachine extends HTMLElement {
         }
 
         this.currentRotations[i] = rotation;
-        carousel.style.transition = `transform ${4.5 + i * 0.3}s cubic-bezier(0.12, 0.8, 0.32, 1) ${i * 0.15}s`;
-        carousel.style.transform = `translateZ(-220px) rotateX(${rotation}deg)`;
-      });
+        transitions[i] = {
+          from: this.renderRotations[i] || 0,
+          to: rotation,
+          duration: (4.5 + (i * 0.3)) * 1000,
+          delay: i * 150,
+          easing: (progress) => this.easeOutSpin(progress),
+        };
+      }
     }
+
+    this.animateReels(transitions);
   }
 
   startProgressTimer(data) {
@@ -3726,12 +4325,9 @@ export class SlotMachine extends HTMLElement {
     const progressBar = this.shadowRoot.getElementById('progressBar');
     progressLabel.textContent = '5 sec';
     progressBar.value = 0;
-
-    // Don't reset the transform - the carousel is already at the correct position
-    // from the animation. Just clear the transition for future use.
-    this.carousels.forEach((carousel) => {
-      carousel.style.transition = 'none';
-    });
+    this.cancelReelAnimation();
+    this.renderRotations = [...this.currentRotations];
+    this.drawLines();
 
     if (data[8] !== undefined) this.credits = data[8];
     if (data[7] && data[7] > 0) this.showWin(data);
@@ -3824,18 +4420,17 @@ export class SlotMachine extends HTMLElement {
       progressLabel.textContent = '5 sec';
       progressBar.value = 0;
 
-      // Animate each carousel directly to final position with quick deceleration
-      this.carousels.forEach((carousel, i) => {
+      this.cancelReelAnimation();
+
+      const stepAngle = this.getReelStepAngle();
+      for (let i = 0; i < 5; i++) {
         const targetValue = this.stopArray[i];
-        const targetAngle = -(targetValue - 1) * 30;
+        const targetAngle = -(targetValue - 1) * stepAngle;
 
-        // Store the final rotation
         this.currentRotations[i] = targetAngle;
-
-        // Instant stop - 10ms
-        carousel.style.transition = 'transform 0.01s ease-out';
-        carousel.style.transform = `translateZ(-220px) rotateX(${targetAngle}deg)`;
-      });
+        this.renderRotations[i] = targetAngle;
+      }
+      this.drawLines();
 
       // Wait for animations to complete, then finalize
       setTimeout(() => {

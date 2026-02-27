@@ -88,17 +88,21 @@ export class StripeClient {
       Authorization: `Bearer ${this.secretKey}`,
     };
 
-    let body;
+    let body: string | undefined;
     if (form) {
       body = encodeFormObject(form);
       headers["Content-Type"] = "application/x-www-form-urlencoded";
     }
 
-    const response = await fetch(url, {
+    const requestInit: RequestInit = {
       method,
       headers,
-      body,
-    });
+    };
+    if (body !== undefined) {
+      requestInit.body = body;
+    }
+
+    const response = await fetch(url, requestInit);
 
     const payload = (await response.json()) as Record<string, unknown>;
     if (!response.ok) {
