@@ -1,36 +1,56 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { rmSync } from "node:fs";
 
 import { SlotStore } from "../../dist/game/store.js";
 import { handleSlotMachineAction } from "../../dist/game/controller.js";
 import { hashPassword } from "../../dist/lib/security.js";
 
-function makeStore(dbPath) {
-  return new SlotStore({ dbPath });
+function isDbUnavailable(error) {
+  const code =
+    typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+  return ["EPERM", "ECONNREFUSED", "EHOSTUNREACH", "ENOTFOUND", "ETIMEDOUT"].includes(code);
+}
+
+async function makeStoreOrSkip(t) {
+  const store = new SlotStore();
+  try {
+    await store.init();
+    return store;
+  } catch (error) {
+    if (isDbUnavailable(error)) {
+      const reason = error instanceof Error ? error.message : String(error);
+      t.skip(`PostgreSQL unavailable for parity tests: ${reason}`);
+      return null;
+    }
+    throw error;
+  }
+}
+
+function uniqueEmail(prefix) {
+  const nonce = `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+  return `${prefix}-${nonce}@example.com`;
 }
 
 async function makeUser(store, email = "p@example.com") {
   const pw = hashPassword("secret123");
-  const userId = store.createUser(email, pw.hash, pw.salt);
-  store.addBalanceUnits(userId, 2000 * 100);
+  const userId = await store.createUser(email, pw.hash, pw.salt);
+  await store.addBalanceUnits(userId, 2000 * 100);
   return userId;
 }
 
-test("parity: joker fraud response zeros user balance", async () => {
-  const dbPath = "/tmp/slotm-parity-fraud.sqlite";
-  rmSync(dbPath, { force: true });
+test("parity: invalid joker state is rejected without mutating balance", async (t) => {
+  const store = await makeStoreOrSkip(t);
+  if (!store) {
+    return;
+  }
+  const userId = await makeUser(store, uniqueEmail("fraud"));
+  const balanceBefore = await store.getBalanceCoins(userId);
 
-  const store = makeStore(dbPath);
-  await store.init();
-  const userId = await makeUser(store, "fraud@example.com");
-
-  const res = handleSlotMachineAction(
+  const res = await handleSlotMachineAction(
     {
       action: "slot_spin",
       ulog: 2,
       igra: 1,
-      kvote: [100, 50, 30, 5, 50, 30, 20, 4, 30, 20, 10, 3],
       brojLinija: [1, 1, 1, 0, 0, 0, 0],
       dzoker: 5,
       vrednostDzokera: 5,
@@ -41,26 +61,24 @@ test("parity: joker fraud response zeros user balance", async () => {
     userId,
   );
 
-  assert.equal(res.statusCode, 200);
-  assert.equal(res.body.success, true);
-  assert.equal(store.getBalanceCoins(userId), 0);
-  assert.equal(res.body.data.result[6], "Varali ste, krediti su vam oduzeti");
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.body.success, false);
+  assert.match(res.body.message, /invalid joker state/i);
+  assert.equal(await store.getBalanceCoins(userId), balanceBefore);
 });
 
-test("parity: valid spin + mini-game persists transactions/history/stats", async () => {
-  const dbPath = "/tmp/slotm-parity-flow.sqlite";
-  rmSync(dbPath, { force: true });
+test("parity: valid spin + mini-game persists transactions/history/stats", async (t) => {
+  const store = await makeStoreOrSkip(t);
+  if (!store) {
+    return;
+  }
+  const userId = await makeUser(store, uniqueEmail("flow"));
 
-  const store = makeStore(dbPath);
-  await store.init();
-  const userId = await makeUser(store, "flow@example.com");
-
-  const spin = handleSlotMachineAction(
+  const spin = await handleSlotMachineAction(
     {
       action: "slot_spin",
       ulog: 2,
       igra: 1,
-      kvote: [100, 50, 30, 5, 50, 30, 20, 4, 30, 20, 10, 3],
       brojLinija: [1, 1, 1, 0, 0, 0, 0],
       dzoker: 0,
       vrednostDzokera: 0,
@@ -73,7 +91,7 @@ test("parity: valid spin + mini-game persists transactions/history/stats", async
   assert.equal(spin.statusCode, 200);
   assert.equal(spin.body.success, true);
 
-  const mini = handleSlotMachineAction(
+  const mini = await handleSlotMachineAction(
     {
       action: "slot_minigame",
       tickets: [[1, 2, 3], [4, 5], [], [], []],
@@ -85,9 +103,9 @@ test("parity: valid spin + mini-game persists transactions/history/stats", async
   assert.equal(mini.statusCode, 200);
   assert.equal(mini.body.success, true);
 
-  const history = handleSlotMachineAction({ action: "slot_history", page: 1 }, store, userId);
-  const stats = handleSlotMachineAction({ action: "slot_stats" }, store, userId);
-  const tx = store.listTransactions(userId, 50);
+  const history = await handleSlotMachineAction({ action: "slot_history", page: 1 }, store, userId);
+  const stats = await handleSlotMachineAction({ action: "slot_stats" }, store, userId);
+  const tx = await store.listTransactions(userId, 50);
 
   assert.equal(history.statusCode, 200);
   assert.equal(history.body.success, true);

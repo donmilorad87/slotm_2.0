@@ -2,6 +2,15 @@
 set -euo pipefail
 
 APP_DIR="/home/node/app"
+RUN_MODE_RAW="${ENV:-${BUILD_ENV:-prod}}"
+RUN_MODE="$(printf '%s' "${RUN_MODE_RAW}" | tr '[:upper:]' '[:lower:]')"
+
+if [ "${RUN_MODE}" != "dev" ] && [ "${RUN_MODE}" != "prod" ]; then
+    echo "[slotm-node] Unknown ENV='${RUN_MODE_RAW}', expected 'dev' or 'prod'. Falling back to prod."
+    RUN_MODE="prod"
+fi
+
+echo "[slotm-node] Runtime mode: ${RUN_MODE}"
 
 # ------------------------------------------------
 # 1. Fix ownership of bind-mounted app directory
@@ -12,7 +21,7 @@ if ! chown -R node:node "${APP_DIR}" 2>/dev/null; then
 fi
 
 # ------------------------------------------------
-# 2. Source the root .env so all vars are exported
+# 2. Source app .env (Node-only secrets) so vars are exported
 # ------------------------------------------------
 if [ -f "${APP_DIR}/.env" ]; then
     set -a
@@ -35,13 +44,17 @@ if [ ! -f "${APP_DIR}/node_modules/.package-lock.json" ]; then
 fi
 
 # ------------------------------------------------
-# 4. Build TypeScript → dist/ (as node user)
+# 4. Mode switch:
+#    - dev: run npm run dev directly (no PM2)
+#    - prod: build dist once, then delegate to PM2 CMD
 # ------------------------------------------------
-echo "[slotm-node] Building..."
-gosu node sh -c "cd ${APP_DIR} && npm run build"
+if [ "${RUN_MODE}" = "dev" ]; then
+    echo "[slotm-node] Starting npm run dev (nodemon, no PM2)..."
+    exec gosu node sh -c "cd ${APP_DIR} && npm run dev"
+fi
 
-# ------------------------------------------------
-# 5. Delegate to CMD (pm2-runtime) as node user
-# ------------------------------------------------
-echo "[slotm-node] Starting PM2..."
+echo "[slotm-node] Building dist (prod mode)..."
+gosu node sh -c "cd ${APP_DIR} && npm run build:dist"
+
+echo "[slotm-node] Starting PM2 (prod mode)..."
 exec gosu node "$@"

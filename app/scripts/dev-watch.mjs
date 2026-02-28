@@ -65,7 +65,7 @@ async function createFingerprint() {
 
 function runBuild() {
   return new Promise((resolve) => {
-    const child = spawn("npm", ["run", "build"], {
+    const child = spawn("npm", ["run", "build:dist"], {
       cwd: PROJECT_ROOT,
       stdio: "inherit",
       env: process.env,
@@ -102,7 +102,7 @@ async function maybeBuild() {
     building = true;
 
     await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
-    console.log("[slotm-node] Source change detected. Running npm run build...");
+    console.log("[slotm-node] Source change detected. Running npm run build:dist...");
     const ok = await runBuild();
     if (!ok) {
       console.error("[slotm-node] Build failed. Waiting for next change...");

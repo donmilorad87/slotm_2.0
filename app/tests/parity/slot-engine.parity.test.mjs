@@ -29,11 +29,11 @@ test("parity: build_grid without joker matches Rust expectations", () => {
   assert.equal(grid[0], "2");
   assert.equal(grid[1], "3");
   assert.equal(grid[4], "6");
-  assert.equal(grid[10], "10");
+  assert.equal(grid[10], "22");
   assert.equal(grid[11], "1");
 });
 
-test("parity: generated symbols stay within 1..10 range", () => {
+test("parity: generated symbols stay within configured symbol range", () => {
   const minSymbols = generateSymbols(() => 0);
   const maxSymbols = generateSymbols(() => 0.999999);
 
@@ -54,14 +54,14 @@ test("parity: multi-line payout with fixed reels mirrors Rust payoff model", () 
   const result = executeSpinWithReels(request, [5, 5, 5, 5, 5], () => 0.9);
 
   assert.equal(result.status, "Sve ok2");
-  assert.equal(result.totalPayout, 500);
+  assert.equal(result.totalPayout, 227576);
   assert.equal(result.miniGameTriggered, false);
   assert.deepEqual(
     result.winningLines.map((w) => [w.lineIndex, w.symbol, w.matchCount, w.multiplier, w.payout]),
     [
-      [0, 5, 5, 100, 200],
-      [1, 6, 5, 100, 200],
-      [2, 4, 5, 50, 100],
+      [0, 5, 5, 39173, 78346],
+      [1, 6, 5, 39173, 78346],
+      [2, 4, 5, 35442, 70884],
     ],
   );
 });
@@ -74,12 +74,12 @@ test("parity: single-line payout and status", () => {
 
   const result = executeSpinWithReels(request, [5, 5, 5, 4, 3], () => 0.9);
   assert.equal(result.status, "Sve ok3");
-  assert.equal(result.totalPayout, 60);
+  assert.equal(result.totalPayout, 170);
   assert.equal(result.grid, null);
   assert.equal(result.winningLines.length, 1);
   assert.equal(result.winningLines[0].symbol, 5);
   assert.equal(result.winningLines[0].matchCount, 3);
-  assert.equal(result.winningLines[0].multiplier, 30);
+  assert.equal(result.winningLines[0].multiplier, 85);
 });
 
 test("parity: single-line supports symbol 10 payout group", () => {
@@ -90,11 +90,11 @@ test("parity: single-line supports symbol 10 payout group", () => {
 
   const result = executeSpinWithReels(request, [10, 10, 10, 2, 1], () => 0.9);
   assert.equal(result.status, "Sve ok3");
-  assert.equal(result.totalPayout, 120);
+  assert.equal(result.totalPayout, 202);
   assert.equal(result.winningLines.length, 1);
   assert.equal(result.winningLines[0].symbol, 10);
   assert.equal(result.winningLines[0].matchCount, 3);
-  assert.equal(result.winningLines[0].multiplier, 60);
+  assert.equal(result.winningLines[0].multiplier, 101);
 });
 
 test("parity: multi-line with joker reports Sve ok1 and joker in grid", () => {

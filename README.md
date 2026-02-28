@@ -58,7 +58,7 @@ All database operations use stored procedures (see `app/migrations/001_init.sql`
 
 ## Stripe Configuration
 
-Set these in `.env`:
+Set these in `app/.env`:
 
 - `STRIPE_KEY` - Publishable key
 - `STRIPE_SECRET` - Secret key
@@ -86,18 +86,23 @@ docker compose up -d
 
 ## Development
 
-The `app/` directory is bind-mounted into the container. PM2 watches `dist/` for changes in dev mode.
-The repo root `.env` is also mounted into the node container at `/home/node/app/.env`, and loaded at startup.
+The `app/` directory is bind-mounted into the container.
+The `app/.env` file is mounted into the node container at `/home/node/app/.env`, and loaded at startup.
+When `ENV=dev`, the node container runs `npm run dev` with nodemon (no PM2), rebuilding `dist/` and restarting the server when watched files change.
+When `ENV=prod`, the node container builds `dist/` once and starts PM2, serving `/home/node/app/dist/server.js`.
 
 ```bash
 # Enter node container
 docker compose exec node bash
 
-# Run build manually inside container
-cd /home/appuser/app && npm run build
+# Optional manual rebuild
+cd /home/node/app && npm run build:dist
+
+# Optional manual app reload in prod mode
+pm2 reload slotm
 
 # Run tests
-cd /home/appuser/app && npm run test:parity
+cd /home/node/app && npm run test:parity
 ```
 
 ## Application URLs

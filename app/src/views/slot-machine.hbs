@@ -118,12 +118,16 @@
       <p class="flash-msg">{{flash_message}}</p>
 
       <section class="game-page__content">
-        <slot-machine
+        <section
+          id="slotMachineRoot"
+          class="slot-machine-root"
           data-balance="{{user_balance_coins}}"
           data-user-id="{{user_id}}"
           data-jwt-token="{{jwt_token}}"
           data-games-url="/games"
-        ></slot-machine>
+        >
+          {{{slot_machine_markup}}}
+        </section>
       </section>
 
       <div class="footer" id="footer"><p>Blazing Sun 2015 - <span id="footerYear"></span>. Sva prava zadržana.</p></div>

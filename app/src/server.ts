@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -37,6 +38,7 @@ import type {
 const __filename = fileURLToPath(import.meta.url);
 const DIST_DIR = path.dirname(__filename);
 const TEMPLATE_DIR = path.join(DIST_DIR, "views");
+const SLOT_MACHINE_MARKUP_PATH = path.join(TEMPLATE_DIR, "slot-machine-markup.html");
 const CLIENT_DIR = path.join(DIST_DIR, "client");
 const CLIENT_STYLES_DIR = path.join(CLIENT_DIR, "styles");
 const CLIENT_IMAGES_DIR = path.join(CLIENT_DIR, "images");
@@ -99,6 +101,7 @@ const allowedCorsOrigins = parseAllowedOrigins(env.CORS_ALLOWED_ORIGINS || "");
 
 const stripe = new StripeClient(env.STRIPE_SECRET || "");
 const store = new SlotStore();
+let slotMachineMarkupCache = "";
 const {
   optionalJwt,
   requireJwt,
@@ -246,6 +249,15 @@ function txRowsHtml(transactions: WalletTransaction[]): string {
       `;
     })
     .join("");
+}
+
+async function getSlotMachineMarkup(): Promise<string> {
+  if (slotMachineMarkupCache) {
+    return slotMachineMarkupCache;
+  }
+
+  slotMachineMarkupCache = await fs.readFile(SLOT_MACHINE_MARKUP_PATH, "utf8");
+  return slotMachineMarkupCache;
 }
 
 function cardRowsHtml(cards: StripePaymentMethod[], defaultPaymentMethodId: string): string {
@@ -432,6 +444,7 @@ async function handleGamePage(req: Request, res: Response): Promise<void> {
     user_email: freshUser?.email || user.email,
     user_balance_coins: String(userBalanceCoins),
     jwt_token: auth.token || "",
+    slot_machine_markup: await getSlotMachineMarkup(),
     stripe_public_key: env.STRIPE_KEY || "",
     flash_message: finalize.flash || "",
   });
@@ -994,6 +1007,7 @@ async function start(): Promise<void> {
     helmet({
       contentSecurityPolicy: false,
       crossOriginEmbedderPolicy: false,
+      crossOriginResourcePolicy: false,
     }),
   );
   app.use(compression());
@@ -1059,18 +1073,14 @@ async function start(): Promise<void> {
 
   app.use("/api", apiLimiter);
   app.use("/api", (req: Request, res: Response, next: NextFunction) => {
-    const origin = requestOriginHeader(req);
-    if (!origin) {
+    const originHeader = requestOriginHeader(req);
+    const requestOrigin = normalizeOrigin(requestOriginExpress(req));
+    const resolvedOrigin = originHeader || requestOrigin;
+
+    if (!allowedCorsOrigins.has(resolvedOrigin)) {
       res.status(403).json({
         success: false,
-        message: "Origin header is required",
-      });
-      return;
-    }
-    if (!allowedCorsOrigins.has(origin)) {
-      res.status(403).json({
-        success: false,
-        message: `Origin is not allowed: ${origin}`,
+        message: `Origin is not allowed: ${resolvedOrigin}`,
       });
       return;
     }

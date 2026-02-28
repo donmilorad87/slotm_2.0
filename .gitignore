@@ -12,6 +12,8 @@ data/
 # Environment (contains secrets)
 .env
 !.env.example
+app/.env
+!app/.env.example
 
 # Docker volumes
 pgdata/

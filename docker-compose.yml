@@ -41,6 +41,8 @@ services:
       postgres:
         condition: service_healthy
     environment:
+      ENV: ${ENV}
+      BUILD_ENV: ${BUILD_ENV}
       APP_HOST: ${APP_HOST}
       APP_PORT: ${APP_PORT}
       NODE_ENV: ${NODE_ENV}
@@ -49,12 +51,11 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
-      STRIPE_KEY: ${STRIPE_KEY}
-      STRIPE_SECRET: ${STRIPE_SECRET}
-      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
     volumes:
       - ./app:/home/node/app
-      - ./.env:/home/node/app/.env:ro
+      - ./app/.env:/home/node/app/.env:ro
       - node_modules:/home/node/app/node_modules
     networks:
       slotm_net:

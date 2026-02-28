@@ -1,7 +1,7 @@
 import type { ApiError, ApiSuccess } from "../types/domain.js";
 
 export const REEL_COUNT = 5;
-export const SYMBOL_COUNT = 10;
+export const SYMBOL_COUNT = 22;
 export const GRID_SIZE = 15;
 export const PAYLINE_COUNT = 7;
 export const BALANCE_TO_COIN_RATIO = 100;
@@ -13,6 +13,7 @@ export type GameModeId = 1 | 2 | 3 | 4 | 5;
 export type PaylineState = 0 | 1;
 export type GameModeName = "numbers" | "roman" | "fruits" | "animals" | "emoji";
 export type RewardModeName = "single" | "multi";
+type OddsMatchCount = 2 | 3 | 4 | 5;
 
 export interface SpinRequest {
   brojKredita: number;
@@ -69,13 +70,84 @@ export const PAYLINES: readonly number[][] = [
   [10, 6, 2, 8, 14],
 ];
 
-export const DEFAULT_KVOTE: readonly number[] = [
-  200, 100, 60, 10, // 10/9
-  150, 80, 50, 8,   // 8/7
-  100, 50, 30, 5,   // 6/5
-  50, 30, 20, 4,    // 4/3
-  30, 20, 10, 3,    // 2/1
+const ODDS_MATCH_ORDER: readonly OddsMatchCount[] = [5, 4, 3, 2];
+const NUMBERS_TARGET_RTP = 0.86;
+const NUMBERS_GROUP_COEFFICIENTS: readonly number[] = [
+  1.85, 1.75, 1.65, 1.55, 1.45, 1.35, 1.25, 1.15, 1.05, 0.95, 0.85,
 ];
+const GAME_MODE_ODDS_COEFFICIENT: Readonly<Record<GameModeId, number>> = {
+  1: 1.0,
+  2: 0.94,
+  3: 1.08,
+  4: 1.03,
+  5: 0.98,
+};
+
+function exactMatchProbability(symbolCount: number, matchCount: OddsMatchCount): number {
+  if (matchCount === 5) {
+    return 1 / (symbolCount ** 5);
+  }
+  return (symbolCount - 1) / (symbolCount ** (matchCount + 1));
+}
+
+function symbolsInGroup(symbolCount: number, groupIndex: number): number {
+  const remaining = symbolCount - (groupIndex * 2);
+  if (remaining <= 0) {
+    return 0;
+  }
+  return remaining >= 2 ? 2 : 1;
+}
+
+function resolveGroupCoefficients(groupCount: number): number[] {
+  if (groupCount <= 0) {
+    return [];
+  }
+  if (groupCount === NUMBERS_GROUP_COEFFICIENTS.length) {
+    return [...NUMBERS_GROUP_COEFFICIENTS];
+  }
+  if (groupCount === 1) {
+    return [NUMBERS_GROUP_COEFFICIENTS[0] ?? 1];
+  }
+
+  const top = NUMBERS_GROUP_COEFFICIENTS[0] ?? 1;
+  const bottom = NUMBERS_GROUP_COEFFICIENTS[NUMBERS_GROUP_COEFFICIENTS.length - 1] ?? top;
+  return Array.from({ length: groupCount }, (_, index) => {
+    const ratio = index / (groupCount - 1);
+    return top + ((bottom - top) * ratio);
+  });
+}
+
+function buildBaseNumbersKvote(symbolCount: number): number[] {
+  const groupCount = Math.ceil(symbolCount / 2);
+  const groupCoefficients = resolveGroupCoefficients(groupCount);
+  const coefficientSum = groupCoefficients.reduce((sum, value) => sum + value, 0);
+  const scaleDenominator = ODDS_MATCH_ORDER.length * coefficientSum;
+  const scale = scaleDenominator > 0 ? (NUMBERS_TARGET_RTP / scaleDenominator) : 0;
+  const kvote: number[] = [];
+
+  for (let groupIndex = 0; groupIndex < groupCount; groupIndex += 1) {
+    const groupCoefficient = groupCoefficients[groupIndex] ?? 1;
+    const groupSymbolCount = symbolsInGroup(symbolCount, groupIndex);
+
+    for (const matchCount of ODDS_MATCH_ORDER) {
+      const probability = groupSymbolCount * exactMatchProbability(symbolCount, matchCount);
+      const multiplier = probability > 0 ? Math.round((scale * groupCoefficient) / probability) : 0;
+      kvote.push(Math.max(1, multiplier));
+    }
+  }
+
+  return kvote;
+}
+
+export const DEFAULT_KVOTE: readonly number[] = buildBaseNumbersKvote(SYMBOL_COUNT);
+
+export function kvoteForGameMode(gameMode: GameModeId): number[] {
+  const coefficient = GAME_MODE_ODDS_COEFFICIENT[gameMode] ?? 1;
+  if (coefficient === 1) {
+    return [...DEFAULT_KVOTE];
+  }
+  return DEFAULT_KVOTE.map((value) => Math.max(1, Math.round(value * coefficient)));
+}
 
 export function activeLineCount(request: SpinRequest): number {
   return request.brojLinija.filter((line) => line === 1).length;

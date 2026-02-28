@@ -14,12 +14,15 @@ async function refreshBalance() {
     const balance = Number(json.data?.balance_coins || 0);
     window.USER_BALANCE_COINS = balance;
 
-    const slotEl = document.querySelector("slot-machine");
-    if (slotEl) {
-      slotEl.credits = balance;
-      slotEl.setAttribute("data-balance", String(balance));
-      if (typeof slotEl.updateDisplay === "function") {
-        slotEl.updateDisplay();
+    const slotRoot = document.getElementById("slotMachineRoot");
+    const slotInstance = window.__slotMachineInstance;
+    if (slotRoot) {
+      slotRoot.setAttribute("data-balance", String(balance));
+    }
+    if (slotInstance) {
+      slotInstance.credits = balance;
+      if (typeof slotInstance.updateDisplay === "function") {
+        slotInstance.updateDisplay();
       }
     }
   } catch {

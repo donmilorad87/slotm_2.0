@@ -8,10 +8,10 @@ import {
 import type { SlotStore } from "./store.js";
 import {
   BALANCE_TO_COIN_RATIO,
-  DEFAULT_KVOTE,
   PAYLINE_COUNT,
   error,
   gameModeName,
+  kvoteForGameMode,
   rewardModeName,
   success,
   toPhpResponse,
@@ -84,16 +84,8 @@ function normalizeLines(rawLines: unknown): PaylineState[] {
   return normalized;
 }
 
-function normalizeKvote(rawKvote: unknown): number[] {
-  if (!Array.isArray(rawKvote) || rawKvote.length === 0) {
-    return [...DEFAULT_KVOTE];
-  }
-
-  const kvote = rawKvote.map((value) => toInt(value, 0));
-  while (kvote.length < DEFAULT_KVOTE.length) {
-    kvote.push(DEFAULT_KVOTE[kvote.length] ?? 0);
-  }
-  return kvote.slice(0, DEFAULT_KVOTE.length);
+function normalizeKvote(gameMode: SpinRequest["igra"]): number[] {
+  return kvoteForGameMode(gameMode);
 }
 
 function normalizeSpinRequest(payloadRaw: unknown): SpinRequest {
@@ -101,6 +93,7 @@ function normalizeSpinRequest(payloadRaw: unknown): SpinRequest {
   const nacin = Number(payload.nacin) === 1 ? 1 : 2;
   const dzoker = toInt(payload.dzoker, 0);
   const igraRaw = toInt(payload.igra, 1);
+  const igra = igraRaw >= 1 && igraRaw <= 5 ? (igraRaw as SpinRequest["igra"]) : 1;
 
   return {
     brojKredita: toInt(payload.brojKredita, 0),
@@ -109,8 +102,8 @@ function normalizeSpinRequest(payloadRaw: unknown): SpinRequest {
     nacin,
     dzoker: dzoker > 0 ? dzoker : 0,
     vrednostDzokera: Math.max(0, toInt(payload.vrednostDzokera, 0)),
-    kvote: normalizeKvote(payload.kvote),
-    igra: igraRaw >= 1 && igraRaw <= 5 ? (igraRaw as SpinRequest["igra"]) : 1,
+    kvote: normalizeKvote(igra),
+    igra,
   };
 }
 
@@ -174,12 +167,9 @@ async function handleSpin(
   const request = normalizeSpinRequest(payload);
 
   if (!validateJoker(request)) {
-    await store.zeroBalance(userId);
     return {
-      statusCode: 200,
-      body: success({
-        result: makeFraudResponse(request),
-      }),
+      statusCode: 400,
+      body: error("Invalid joker state for current bet"),
     };
   }
 

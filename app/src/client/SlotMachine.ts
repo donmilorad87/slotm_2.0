@@ -1,1600 +1,18 @@
 // @ts-nocheck
 import { fetchWithCsrf } from "./http.js";
 
-/**
- * SlotMachine Web Component
- *
- * A self-contained slot machine game component. Fits within its container
- * without affecting the parent page layout.
- *
- * Usage:
- * <slot-machine
- *   data-balance="1000"
- *   data-user-id="1"
- *   data-jwt-token="..."
- * ></slot-machine>
- */
-
-const template = document.createElement('template');
 const HISTORY_PAGE_SIZE = 20;
-template.innerHTML = `
-  <style>
-    :host {
-      display: block;
-      font-family: "Lucida Sans Unicode", "Lucida Grande", sans-serif;
-      /* Blazing Sun Theme Colors */
-      --primary-color: var(--color-accent, #667eea);
-      --primary-light: var(--color-accent-light, #818cf8);
-      --primary-dark: var(--color-accent-dark, #4f46e5);
-      --success-color: var(--color-success, #10b981);
-      --danger-color: var(--color-error, #ef4444);
-      --warning-color: var(--color-warning, #f59e0b);
-      --info-color: var(--color-info, #3b82f6);
-      /* Text Colors */
-      --slot-text-primary: var(--text-primary, #333333);
-      --slot-text-secondary: var(--text-secondary, #555555);
-      --slot-text-muted: var(--text-muted, #666666);
-      /* Background Colors */
-      --slot-card-bg: var(--card-bg, #ffffff);
-      --slot-input-bg: var(--input-bg, #ffffff);
-      --slot-border-color: var(--input-border, #e0e0e0);
-      --bg-gradient: var(--slot-bg-gradient, linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab));
-      --slot-panel-shadow: var(--panel-shadow, 0 4px rgba(0,0,0,0.3));
-      /* Carousel Cell Colors (theme-aware) */
-      --slot-cell-border: var(--card-bg, #ffffff);
-      --slot-cell-shadow-light: var(--cell-shadow-light, rgba(255, 255, 255, 0.5));
-      --slot-cell-shadow-dark: var(--cell-shadow-dark, rgba(0, 0, 0, 1));
-      --slot-cell-shadow-gray: var(--cell-shadow-gray, gray);
-      --slot-cell-inset-border: var(--card-bg, #ffffff);
-      --slot-symbol-text: var(--symbol-text, #f5da76);
-      --slot-symbol-border: var(--symbol-border, rgba(245, 218, 118, 0.24));
-      --slot-symbol-glow: var(--symbol-glow, rgba(245, 218, 118, 0.55));
-    }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    .slot-game {
-      background: var(--bg-gradient);
-      background-attachment: fixed;
-      border: 1px solid var(--slot-border-color);
-      box-shadow: var(--slot-panel-shadow);
-      border-radius: 1rem;
-      padding: 1.5rem;
-      user-select: none;
-      -webkit-user-select: none;
-    }
-
-    .slot-menu {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0.5rem;
-      margin-bottom: 1rem;
-      flex-wrap: wrap;
-    }
-
-    .slot-menu-tab {
-      border-radius: 6px;
-      border: 2px solid var(--slot-border-color);
-      background: color-mix(in srgb, var(--slot-card-bg) 60%, transparent);
-      color: var(--slot-text-primary);
-      padding: 0.55rem 1rem;
-      font-size: 0.85rem;
-      font-weight: 700;
-      cursor: pointer;
-      box-shadow: 0 4px rgba(0,0,0,0.3);
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-    }
-
-    .slot-menu-tab:hover {
-      background: color-mix(in srgb, var(--primary-color) 60%, transparent);
-      color: white;
-      border-color: var(--primary-color);
-    }
-
-    .slot-menu-tab.active {
-      background: color-mix(in srgb, var(--success-color) 60%, transparent);
-      color: white;
-    }
-
-    .slot-menu-tab h1 {
-      margin: 0;
-      font-size: inherit;
-      font-weight: inherit;
-      line-height: 1;
-      letter-spacing: inherit;
-      text-transform: inherit;
-    }
-
-    .slot-view[hidden] {
-      display: none !important;
-    }
-
-    .slot-rules-panel {
-      background: color-mix(in srgb, var(--slot-card-bg) 60%, transparent);
-      border: 2px solid var(--slot-border-color);
-      border-radius: 6px;
-      box-shadow: 0 4px rgba(0,0,0,0.3);
-      color: var(--slot-text-primary);
-      padding: 1rem;
-      display: grid;
-      gap: 1rem;
-    }
-
-    .slot-rules-quote {
-      border: 1px solid color-mix(in srgb, var(--slot-border-color) 70%, transparent);
-      border-radius: 6px;
-      background: color-mix(in srgb, var(--slot-input-bg) 45%, transparent);
-      padding: 0.85rem;
-      font-style: italic;
-      color: var(--slot-text-secondary);
-      line-height: 1.45;
-    }
-
-    .slot-rules-section h2 {
-      font-size: 1rem;
-      margin-bottom: 0.45rem;
-      color: var(--slot-text-primary);
-    }
-
-    .slot-rules-section ul {
-      margin: 0;
-      padding-left: 1rem;
-      color: var(--slot-text-secondary);
-      line-height: 1.45;
-      display: grid;
-      gap: 0.35rem;
-    }
-
-    .slot-history-panel {
-      background: color-mix(in srgb, var(--slot-card-bg) 60%, transparent);
-      border: 2px solid var(--slot-border-color);
-      border-radius: 6px;
-      box-shadow: 0 4px rgba(0,0,0,0.3);
-      color: var(--slot-text-primary);
-      padding: 1rem;
-      display: grid;
-      gap: 0.8rem;
-    }
-
-    .slot-history-status {
-      color: var(--slot-text-secondary);
-      font-size: 0.9rem;
-      min-height: 1.2rem;
-    }
-
-    .slot-history-table-wrap {
-      overflow-x: auto;
-      border: 1px solid color-mix(in srgb, var(--slot-border-color) 70%, transparent);
-      border-radius: 6px;
-      background: color-mix(in srgb, var(--slot-input-bg) 45%, transparent);
-    }
-
-    .slot-history-table {
-      width: 100%;
-      border-collapse: collapse;
-      min-width: 940px;
-    }
-
-    .slot-history-table th,
-    .slot-history-table td {
-      padding: 0.45rem 0.5rem;
-      border-bottom: 1px solid color-mix(in srgb, var(--slot-border-color) 65%, transparent);
-      font-size: 0.82rem;
-      text-align: left;
-      color: var(--slot-text-secondary);
-    }
-
-    .slot-history-table th {
-      color: var(--slot-text-primary);
-      font-weight: 700;
-      white-space: nowrap;
-    }
-
-    .slot-history-table td.slot-history-net-positive {
-      color: var(--success-color);
-      font-weight: 700;
-    }
-
-    .slot-history-table td.slot-history-net-negative {
-      color: var(--danger-color);
-      font-weight: 700;
-    }
-
-    .slot-history-controls {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 0.6rem;
-      flex-wrap: wrap;
-    }
-
-    .slot-history-pagination {
-      display: flex;
-      gap: 0.35rem;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-
-    .slot-history-pagination button {
-      min-width: 34px;
-      height: 34px;
-      padding: 0.3rem 0.5rem;
-      border-radius: 6px;
-      border: 2px solid var(--slot-border-color);
-      background: color-mix(in srgb, var(--slot-card-bg) 60%, transparent);
-      color: var(--slot-text-primary);
-      box-shadow: 0 4px rgba(0,0,0,0.3);
-      font-weight: 700;
-    }
-
-    .slot-history-pagination button.active {
-      background: color-mix(in srgb, var(--success-color) 60%, transparent);
-      color: white;
-    }
-
-    .slot-history-jump {
-      display: flex;
-      align-items: center;
-      gap: 0.35rem;
-      color: var(--slot-text-secondary);
-      font-size: 0.82rem;
-    }
-
-    .slot-history-jump input {
-      width: 64px;
-      text-align: center;
-    }
-
-    /* Top Controls Row */
-    .slot-top-controls {
-      display: grid;
-      grid-template-columns: 180px 1fr 180px;
-      gap: 1rem;
-      margin-bottom: 1rem;
-      align-items: center;
-    }
-
-    .slot-top-controls-center {
-      display: flex;
-      justify-content: center;
-      align-items: stretch;
-      gap: 0.5rem;
-      flex-wrap: wrap;
-    }
-
-    .slot-controls-wrapper {
-      display: flex;
-      align-items: stretch;
-      gap: 0.5rem;
-      background: color-mix(in srgb, var(--slot-card-bg) 60%, transparent);
-      border: 2px solid var(--slot-border-color);
-      border-radius: 6px;
-      padding: 8px;
-      box-shadow: 0 4px rgba(0,0,0,0.3);
-      color: var(--slot-text-primary);
-    }
-
-    .slot-right-column {
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-      color: var(--slot-text-primary);
-    }
-
-    .spins-counter {
-      width: 100%;
-      margin: 0;
-      padding: 0;
-      border: 0;
-      background: transparent;
-      box-shadow: none;
-      font-size: 0.75rem;
-      text-align: center;
-      line-height: 1.2;
-      color: var(--slot-text-secondary);
-    }
-
-    .spins-counter span {
-      color: var(--slot-text-primary);
-      font-weight: bold;
-    }
-
-    /* Buttons */
-    button {
-      display: inline-block;
-      padding: 8px 20px;
-      cursor: pointer;
-      border: 1px solid #bbb;
-      overflow: visible;
-      font: bold 13px arial, helvetica, sans-serif;
-      text-decoration: none;
-      color: #555;
-      background-color: #ddd;
-      background-image: linear-gradient(to bottom, rgba(255, 255, 255, 1), rgba(255, 255, 255, 0));
-      background-clip: padding-box;
-      border-radius: 3px;
-      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.3), 0 2px 2px -1px rgba(0, 0, 0, 0.5), 0 1px 0 rgba(255, 255, 255, 0.3) inset;
-      text-shadow: 0 1px 0 rgba(255, 255, 255, 0.9);
-    }
-
-    button:hover { background-color: #eee; }
-    button:active {
-      background: #e9e9e9;
-      position: relative;
-      top: 1px;
-      text-shadow: none;
-      box-shadow: 0 1px 1px rgba(0, 0, 0, 0.3) inset;
-    }
-
-    button[disabled] {
-      border-color: #eaeaea;
-      background: #fafafa;
-      cursor: default;
-      position: static;
-      color: #999;
-      box-shadow: none !important;
-      text-shadow: none !important;
-    }
-
-    .disabled {
-      pointer-events: none;
-      opacity: 0.5;
-      cursor: default;
-    }
-
-    /* Blazing Sun Theme Buttons (same style as control-group) */
-    .btn-primary,
-    .btn-secondary {
-      padding: 0.625rem 1.25rem;
-      font-size: 0.9375rem;
-      font-weight: 500;
-      border: 2px solid var(--slot-border-color);
-      border-radius: 6px;
-      background: color-mix(in srgb, var(--slot-card-bg) 60%, transparent);
-      color: var(--slot-text-primary);
-      cursor: pointer;
-      min-width: 100px;
-      height: 96px;
-      box-shadow: 0 4px rgba(0,0,0,0.3);
-    }
-
-    .btn-primary:hover,
-    .btn-secondary:hover {
-      background: color-mix(in srgb, var(--primary-color) 60%, transparent);
-      color: white;
-      border-color: var(--primary-color);
-    }
-
-    .btn-primary:active,
-    .btn-secondary:active {
-      box-shadow: 0 2px rgba(0,0,0,0.3);
-      transform: translateY(2px);
-    }
-
-    .btn-primary.active,
-    .btn-secondary.active {
-      background: color-mix(in srgb, var(--success-color) 60%, transparent);
-      color: white;
-    }
-
-    /* Progress Bar Container */
-    .progress-container {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      flex-direction: column;
-      gap: 0.375rem;
-      background: color-mix(in srgb, var(--slot-card-bg) 60%, transparent);
-      border: 2px solid var(--slot-border-color);
-      border-radius: 6px;
-      padding: 0.5rem 20px;
-      width: 200px;
-      height: 96px;
-      box-shadow: 0 4px rgba(0,0,0,0.3);
-      color: var(--slot-text-primary);
-    }
-
-    .progress-label {
-      font-size: 0.75rem;
-      color: var(--slot-text-secondary);
-      font-weight: bold;
-      display: none;
-    }
-
-    progress {
-      display: block;
-      width: 160px;
-      height: 25px;
-      padding: 4px;
-      border: 1px solid color-mix(in srgb, var(--slot-border-color) 60%, transparent);
-      background: color-mix(in srgb, var(--slot-card-bg) 50%, transparent);
-      border-radius: 20px;
-      box-shadow: 0 4px rgba(0, 0, 0, 0.3);
-    }
-
-    progress::-webkit-progress-bar {
-      border-radius: 20px;
-      background: color-mix(in srgb, var(--slot-card-bg) 50%, transparent);
-      box-shadow: inset 0 0px 12px 1px rgba(0, 0, 0, 0.3);
-    }
-    progress::-webkit-progress-value {
-      border-radius: 20px;
-      background: color-mix(in srgb, var(--slot-card-bg) 60%, transparent);
-      box-shadow: inset 0 0px 12px 1px rgba(0, 0, 0, 0.3);
-    }
-    progress::-moz-progress-bar {
-      border-radius: 20px;
-      background: color-mix(in srgb, var(--slot-card-bg) 60%, transparent);
-      box-shadow: inset 0 0px 12px 1px rgba(0, 0, 0, 0.3);
-    }
-
-    /* Main Game Layout */
-    .slot-layout {
-      display: grid;
-      grid-template-columns: 180px 1fr 180px;
-      gap: 1rem;
-      align-items: start;
-    }
-
-    @media (max-width: 900px) {
-      .slot-layout {
-        grid-template-columns: 1fr;
-      }
-      .slot-sidebar { order: 2; }
-      .slot-center { order: 1; }
-      .slot-options { order: 3; }
-    }
-
-    /* Center Column */
-    .slot-center {
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-      transform: translateY(0);
-    }
-
-    /* Sidebars */
-    .slot-sidebar,
-    .slot-options {
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-    }
-
-    .slot-options,
-    .slot-sidebar {
-      background: color-mix(in srgb, var(--slot-card-bg) 60%, transparent);
-      border: 2px solid var(--slot-border-color);
-      border-radius: 6px;
-      padding: 8px;
-      box-shadow: 0 4px rgba(0,0,0,0.3);
-      color: var(--slot-text-primary);
-      align-self: start;
-    }
-
-    .nav-div {
-      background: color-mix(in srgb, var(--slot-input-bg) 60%, transparent);
-      padding: 8px;
-      border-radius: 6px;
-      border: 2px solid var(--slot-border-color);
-      box-shadow: 0 4px rgba(0,0,0,0.3);
-    }
-
-    .nav-div button {
-      width: 100%;
-      margin-bottom: 8px;
-      min-height: 80px;
-      background: color-mix(in srgb, var(--slot-card-bg) 60%, transparent);
-      color: var(--slot-text-primary);
-      border: 2px solid var(--slot-border-color);
-      border-radius: 6px;
-      box-shadow: 0 4px rgba(0,0,0,0.3);
-      cursor: pointer;
-      font-size: 0.9375rem;
-      font-weight: 500;
-    }
-
-    .nav-div button:hover {
-      background: color-mix(in srgb, var(--primary-color) 60%, transparent);
-      color: white;
-      border-color: var(--primary-color);
-    }
-
-    .slot-options button,
-    .slot-sidebar button {
-      width: 100%;
-      width: -webkit-fill-available;
-      border: 2px solid var(--slot-border-color);
-      border-radius: 6px;
-      margin: 8px;
-      box-shadow: 0 4px rgba(0,0,0,0.3);
-      padding: 1%;
-      background: color-mix(in srgb, var(--slot-card-bg) 60%, transparent);
-      color: var(--slot-text-primary);
-      cursor: pointer;
-    }
-
-    .slot-options button:hover,
-    .slot-sidebar button:hover {
-      background: color-mix(in srgb, var(--primary-color) 60%, transparent);
-      color: white;
-      border-color: var(--primary-color);
-    }
-
-    .slot-options .control-group,
-    .slot-sidebar .control-group {
-      width: 100%;
-      width: -webkit-fill-available;
-      border: 2px solid var(--slot-border-color);
-      border-radius: 6px;
-      margin: 8px;
-      box-shadow: 0 4px rgba(0,0,0,0.3);
-      padding: 1%;
-      text-align: center;
-    }
-
-    /* Stronger borders for all clickable elements */
-    .slot-controls-wrapper button,
-    .slot-controls-wrapper .btn-primary,
-    .slot-controls-wrapper .btn-secondary,
-    .slot-sidebar button,
-    .slot-sidebar .control-group,
-    .slot-options button,
-    .slot-options .control-group {
-      border-width: 2px;
-    }
-
-    .control-group {
-      width: 100%;
-      border: 2px solid var(--slot-border-color);
-      margin-bottom: 4px;
-      padding: 4px 8px;
-      background: color-mix(in srgb, var(--slot-card-bg) 60%, transparent);
-      cursor: pointer;
-      color: var(--slot-text-secondary);
-
-    }
-
-    .control-group:hover {
-      background: color-mix(in srgb, var(--primary-color) 60%, transparent);
-      color: white;
-      border-color: var(--primary-color);
-    }
-
-    .control-group label,
-    .control-group input {
-      pointer-events: none;
-      cursor: pointer;
-    }
-
-    .control-group.active {
-      background: color-mix(in srgb, var(--success-color) 60%, transparent);
-      color: white;
-    }
-
-    .control-group.active:hover {
-      background: color-mix(in srgb, var(--success-color) 80%, transparent);
-    }
-
-    /* Joker Container & Lines Container */
-    .joker-container,
-    .lines-container {
-      display: none;
-      flex-direction: column;
-      gap: 0.5rem;
-      background: color-mix(in srgb, var(--slot-card-bg) 60%, transparent);
-      border: 2px solid var(--slot-border-color);
-      border-radius: 6px;
-      padding: 8px;
-      margin: 8px;
-      box-shadow: 0 4px rgba(0,0,0,0.3);
-      color: var(--slot-text-primary);
-    }
-
-    .joker-hint {
-      font-size: 9px;
-      padding: 5px 0;
-      margin: 4px 0 0;
-    }
-
-    /* Lines Container */
-    .lines-container > div {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      border: 2px solid var(--slot-border-color);
-      border-radius: 6px;
-      width: 100%;
-      padding: 6px 8px;
-      background: color-mix(in srgb, var(--slot-card-bg) 60%, transparent);
-      box-shadow: 0 4px rgba(0,0,0,0.3);
-      cursor: pointer;
-      color: var(--slot-text-secondary);
-      transition: all 0.2s;
-    }
-
-    .lines-container > div:hover {
-      background: color-mix(in srgb, var(--primary-color) 60%, transparent);
-      color: white;
-      border-color: var(--primary-color);
-    }
-
-    .lines-container > div.active {
-      background: color-mix(in srgb, var(--success-color) 60%, transparent);
-      color: white;
-    }
-
-    .lines-container > div.active:hover {
-      background: color-mix(in srgb, var(--success-color) 80%, transparent);
-    }
-
-    .lines-container > div.disabled {
-      pointer-events: none;
-      opacity: 0.6;
-    }
-
-    .lines-container label {
-      cursor: pointer;
-    }
-
-    /* Reels/Spinners */
-    .spinners {
-      display: block;
-      width: 100%;
-      height: clamp(220px, 30vw, 320px);
-      overflow: hidden;
-      --spinner-inner-padding: 10px;
-      padding: 0;
-      position: relative;
-      border-radius: 6px;
-      transform: translateY(0);
-      border: 2px solid var(--slot-border-color);
-      background: color-mix(in srgb, var(--slot-card-bg) 60%, transparent);
-      box-shadow: 0 4px rgba(0,0,0,0.3);
-    }
-
-    .spinners.joker-active {
-      cursor: pointer;
-    }
-
-    /* Info Panel */
-    .info-panel {
-      width: 100%;
-      border: 2px solid var(--slot-border-color);
-      border-radius: 6px;
-      display: flex;
-      overflow: hidden;
-      padding: 0.75rem;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      background: color-mix(in srgb, var(--slot-card-bg) 60%, transparent);
-      box-shadow: 0 4px rgba(0,0,0,0.3);
-      color: var(--slot-text-primary);
-      margin-top: 0;
-    }
-
-    .info-panel > div {
-      border: 2px solid var(--slot-border-color);
-      border-radius: 6px;
-      padding: 4px 8px;
-      background: color-mix(in srgb, var(--slot-card-bg) 60%, transparent);
-      font-size: 0.875rem;
-      box-shadow: 0 4px rgba(0,0,0,0.3);
-      color: var(--slot-text-primary);
-    }
-
-    /* Odds Tables */
-    .odds-container {
-      width: 100%;
-      border: 2px solid var(--slot-border-color);
-      border-radius: 6px;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      padding: 0.75rem;
-      background: color-mix(in srgb, var(--slot-card-bg) 60%, transparent);
-      box-shadow: 0 4px rgba(0,0,0,0.3);
-      color: var(--slot-text-primary);
-    }
-
-    .odds-table {
-      flex: 1;
-      min-width: 150px;
-      border-collapse: separate;
-      border-spacing: 2px;
-      background: color-mix(in srgb, var(--slot-card-bg) 60%, transparent);
-      border: 2px solid var(--slot-border-color);
-      border-radius: 6px;
-      padding: 4px;
-      box-shadow: 0 4px rgba(0,0,0,0.3);
-    }
-
-    .odds-table caption {
-      font-size: 14px;
-      margin-bottom: 4px;
-      font-weight: bold;
-      color: var(--slot-text-primary);
-    }
-
-    .odds-table td {
-      font-size: 10px;
-      height: 16px;
-      background-color: color-mix(in srgb, var(--slot-card-bg) 60%, transparent);
-      text-align: center;
-      vertical-align: middle;
-      padding: 4px 6px;
-      color: var(--slot-text-primary);
-      border-radius: 4px;
-      border: 1px solid var(--slot-border-color);
-      box-shadow: 0 2px rgba(0,0,0,0.2);
-    }
-
-    .odds-table td:empty,
-    .odds-table .empty-cell {
-      background-color: transparent;
-      border-color: transparent;
-      box-shadow: none;
-    }
-
-    .odds-value {
-      background-color: color-mix(in srgb, var(--success-color) 60%, transparent) !important;
-      color: white !important;
-      font-weight: bold;
-    }
-
-    .line-label {
-      background-color: color-mix(in srgb, var(--slot-input-bg) 60%, transparent) !important;
-      font-weight: bold;
-      font-size: 9px;
-      white-space: nowrap;
-    }
-
-    /* Win Overlay */
-    .win-overlay {
-      padding: 1.25rem;
-      background: color-mix(in srgb, var(--slot-card-bg) 45%, rgba(18, 20, 24, 0.96));
-      border: 2px solid var(--slot-border-color);
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      z-index: 100001;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      flex-direction: column;
-      border-radius: 6px;
-      box-shadow: 0 4px rgba(0,0,0,0.3);
-      min-width: 300px;
-      max-width: calc(100vw - 2rem);
-      color: var(--slot-text-primary);
-      margin: 0;
-    }
-
-    .win-overlay h1 {
-      margin: 0.5rem 0;
-      color: var(--slot-text-primary);
-    }
-
-    .win-overlay h2 {
-      margin: 0.5rem 0;
-      color: var(--slot-text-primary);
-    }
-
-    .win-overlay p {
-      color: var(--slot-text-secondary);
-      margin: 0.25rem 0;
-    }
-
-    .win-overlay-actions {
-      margin-top: 0.5rem;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0.5rem;
-      flex-wrap: wrap;
-    }
-
-    .win-overlay .btn-primary,
-    .win-overlay .btn-secondary {
-      min-width: 130px;
-      height: auto;
-      margin: 0;
-    }
-
-    .win-overlay::backdrop {
-      background: rgba(8, 10, 16, 0.45);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-    }
-
-    /* Bingo Mini Game Overlay */
-    .minigame-overlay {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: min(920px, calc(100vw - 1.5rem));
-      max-width: calc(100vw - 1.5rem);
-      max-height: calc(100vh - 1.5rem);
-      padding: 0;
-      margin: 0;
-      border: 2px solid var(--slot-border-color);
-      border-radius: 16px;
-      background: color-mix(in srgb, var(--slot-card-bg) 45%, rgba(18, 20, 24, 0.94));
-      box-shadow: 0 4px rgba(0,0,0,0.3);
-      z-index: 100002;
-      overflow: hidden;
-      color: var(--slot-text-primary);
-    }
-
-    .minigame-overlay::backdrop {
-      background: rgba(8, 10, 16, 0.45);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-    }
-
-    .minigame-container {
-      background: color-mix(in srgb, var(--slot-input-bg) 35%, transparent);
-      border-radius: 14px;
-      padding: 20px;
-      width: 100%;
-      max-height: calc(100vh - 3rem);
-      overflow-y: auto;
-      border: 1px solid color-mix(in srgb, var(--slot-border-color) 70%, transparent);
-      box-shadow: inset 0 0px 12px 1px rgba(0, 0, 0, 0.3);
-    }
-
-    .minigame-header {
-      text-align: center;
-      margin-bottom: 20px;
-      color: var(--slot-text-primary);
-    }
-
-    .minigame-header h2 {
-      margin: 0 0 10px 0;
-      font-size: 1.5rem;
-      color: var(--primary-color);
-    }
-
-    .minigame-header p {
-      margin: 5px 0;
-      font-size: 0.9rem;
-      color: var(--slot-text-secondary);
-    }
-
-    .minigame-prize {
-      font-size: 1.2rem;
-      color: var(--success-color);
-      font-weight: bold;
-    }
-
-    .minigame-layout {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 20px;
-    }
-
-    @media (max-width: 600px) {
-      .minigame-layout {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    .minigame-numbers {
-      background: color-mix(in srgb, var(--slot-card-bg) 40%, transparent);
-      border-radius: 12px;
-      padding: 15px;
-      border: 2px solid var(--slot-border-color);
-      box-shadow: 0 4px rgba(0, 0, 0, 0.3);
-    }
-
-    .minigame-numbers h3 {
-      margin: 0 0 15px 0;
-      color: var(--slot-text-primary);
-      font-size: 1rem;
-      text-align: center;
-    }
-
-    .number-grid {
-      display: grid;
-      grid-template-columns: repeat(6, 1fr);
-      gap: 8px;
-    }
-
-    .number-btn {
-      width: 100%;
-      aspect-ratio: 1;
-      border-radius: 50%;
-      border: 2px solid var(--slot-border-color);
-      background: color-mix(in srgb, var(--slot-card-bg) 45%, transparent);
-      color: var(--slot-text-primary);
-      font-weight: bold;
-      font-size: 0.9rem;
-      cursor: pointer;
-      transition: all 0.2s;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .number-btn:hover:not(.selected):not(.disabled) {
-      background: color-mix(in srgb, var(--primary-color) 65%, transparent);
-      transform: scale(1.1);
-      color: white;
-    }
-
-    .number-btn.selected {
-      background: color-mix(in srgb, var(--success-color) 70%, transparent);
-      border-color: var(--success-color);
-      transform: scale(1.05);
-      color: white;
-    }
-
-    .number-btn.disabled {
-      opacity: 0.3;
-      cursor: not-allowed;
-    }
-
-    .number-btn.drawn {
-      background: linear-gradient(145deg, #ff6b6b, #c92a2a);
-      border-color: #ff6b6b;
-      animation: pulse 0.5s ease-out;
-    }
-
-    .number-btn.matched {
-      background: linear-gradient(145deg, #ffd700, #ffa500);
-      border-color: #ffd700;
-      animation: glow 1s ease-in-out infinite;
-    }
-
-    @keyframes pulse {
-      0% { transform: scale(1); }
-      50% { transform: scale(1.2); }
-      100% { transform: scale(1); }
-    }
-
-    @keyframes glow {
-      0%, 100% { box-shadow: 0 0 5px #ffd700; }
-      50% { box-shadow: 0 0 20px #ffd700; }
-    }
-
-    .minigame-tickets {
-      background: color-mix(in srgb, var(--slot-card-bg) 40%, transparent);
-      border-radius: 12px;
-      padding: 15px;
-      border: 2px solid var(--slot-border-color);
-      box-shadow: 0 4px rgba(0, 0, 0, 0.3);
-    }
-
-    .minigame-tickets h3 {
-      margin: 0 0 15px 0;
-      color: var(--slot-text-primary);
-      font-size: 1rem;
-      text-align: center;
-    }
-
-    .tickets-container {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    .ticket {
-      background: color-mix(in srgb, var(--slot-input-bg) 40%, transparent);
-      border: 2px solid var(--slot-border-color);
-      border-radius: 8px;
-      padding: 10px;
-      min-height: 50px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-
-    .ticket.active {
-      border-color: var(--primary-color);
-      background: color-mix(in srgb, var(--primary-color) 30%, transparent);
-    }
-
-    .ticket-label {
-      font-size: 0.8rem;
-      color: var(--slot-text-muted);
-      min-width: 60px;
-    }
-
-    .ticket-numbers {
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-      flex: 1;
-    }
-
-    .ticket-number {
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      background: color-mix(in srgb, var(--primary-color) 60%, transparent);
-      color: white;
-      font-size: 0.8rem;
-      font-weight: bold;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .ticket-number:hover {
-      transform: scale(1.1);
-      background: #c92a2a;
-    }
-
-    .ticket-number.matched {
-      background: linear-gradient(145deg, #ffd700, #ffa500);
-    }
-
-    .ticket-result {
-      font-size: 0.75rem;
-      color: var(--slot-text-secondary);
-      margin-left: auto;
-      text-align: right;
-    }
-
-    .ticket-result.win {
-      color: var(--success-color);
-      font-weight: bold;
-    }
-
-    .minigame-controls {
-      margin-top: 20px;
-      display: flex;
-      justify-content: center;
-      gap: 15px;
-      flex-wrap: wrap;
-    }
-
-    .minigame-btn {
-      padding: 12px 30px;
-      border-radius: 8px;
-      border: 2px solid var(--slot-border-color);
-      box-shadow: 0 4px rgba(0, 0, 0, 0.3);
-      font-size: 1rem;
-      font-weight: bold;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .minigame-btn-primary {
-      background: color-mix(in srgb, var(--primary-color) 65%, transparent);
-      color: white;
-    }
-
-    .minigame-btn-primary:hover:not(:disabled) {
-      transform: scale(1.05);
-      box-shadow: 0 5px 20px rgba(var(--primary-color-rgb), 0.4);
-    }
-
-    .minigame-btn-secondary {
-      background: color-mix(in srgb, var(--slot-card-bg) 55%, transparent);
-      color: var(--slot-text-primary);
-    }
-
-    .minigame-btn-secondary:hover:not(:disabled) {
-      background: color-mix(in srgb, var(--slot-card-bg) 70%, transparent);
-    }
-
-    .minigame-btn-success {
-      background: color-mix(in srgb, var(--success-color) 65%, transparent);
-      color: white;
-    }
-
-    .minigame-btn-success:hover:not(:disabled) {
-      transform: scale(1.05);
-      box-shadow: 0 5px 20px rgba(40, 167, 69, 0.4);
-    }
-
-    .minigame-btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    .minigame-drawn {
-      margin-top: 20px;
-      text-align: center;
-    }
-
-    .minigame-drawn h3 {
-      color: var(--slot-text-primary);
-      margin: 0 0 15px 0;
-    }
-
-    .drawn-numbers {
-      display: flex;
-      justify-content: center;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-
-    .drawn-number {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      background: linear-gradient(145deg, #ff6b6b, #c92a2a);
-      color: #fff;
-      font-weight: bold;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      animation: popIn 0.3s ease-out;
-    }
-
-    @keyframes popIn {
-      0% { transform: scale(0); opacity: 0; }
-      70% { transform: scale(1.2); }
-      100% { transform: scale(1); opacity: 1; }
-    }
-
-    .minigame-result {
-      margin-top: 20px;
-      text-align: center;
-      padding: 20px;
-      background: color-mix(in srgb, var(--slot-card-bg) 40%, transparent);
-      border-radius: 12px;
-      border: 2px solid var(--slot-border-color);
-      box-shadow: 0 4px rgba(0, 0, 0, 0.3);
-    }
-
-    .minigame-result h2 {
-      color: var(--success-color);
-      margin: 0 0 10px 0;
-    }
-
-    .minigame-result p {
-      color: var(--slot-text-primary);
-      margin: 5px 0;
-    }
-
-    .minigame-result .total-win {
-      font-size: 1.5rem;
-      color: #ffd700;
-      font-weight: bold;
-    }
-
-    .minigame-info {
-      margin-top: 15px;
-      padding: 10px;
-      background: color-mix(in srgb, var(--slot-input-bg) 35%, transparent);
-      border-radius: 8px;
-      font-size: 0.8rem;
-      color: var(--slot-text-secondary);
-      text-align: center;
-      border: 1px solid color-mix(in srgb, var(--slot-border-color) 70%, transparent);
-    }
-
-    /* Odds Table Section */
-    .minigame-odds {
-      margin-top: 20px;
-      padding: 15px;
-      background: color-mix(in srgb, var(--slot-input-bg) 35%, transparent);
-      border-radius: 8px;
-      border: 1px solid color-mix(in srgb, var(--slot-border-color) 70%, transparent);
-    }
-
-    .minigame-odds h3 {
-      color: #ffd700;
-      margin-bottom: 10px;
-      font-size: 0.9rem;
-      text-align: center;
-    }
-
-    .odds-table-container {
-      max-height: 200px;
-      overflow-y: auto;
-    }
-
-    .odds-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.75rem;
-    }
-
-    .odds-table th, .odds-table td {
-      padding: 6px 8px;
-      text-align: center;
-      border-bottom: 1px solid color-mix(in srgb, var(--slot-border-color) 70%, transparent);
-    }
-
-    .odds-table th {
-      background: rgba(255,215,0,0.2);
-      color: #ffd700;
-      font-weight: bold;
-    }
-
-    .odds-table td {
-      color: var(--slot-text-secondary);
-    }
-
-    .odds-table tr:hover {
-      background: rgba(255,255,255,0.05);
-    }
-
-    /* Number button states */
-    .number-btn.used-other {
-      background: linear-gradient(145deg, #3a3a6a, #2a2a4a);
-      border-color: #666;
-      color: #aaa;
-    }
-
-    .number-btn.used-other::after {
-      content: '';
-      position: absolute;
-      top: 2px;
-      right: 2px;
-      width: 6px;
-      height: 6px;
-      background: #ffd700;
-      border-radius: 50%;
-    }
-
-    /* Removable ticket numbers */
-    .ticket-number.removable {
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-
-    .ticket-number.removable:hover {
-      background: #ff4444;
-      border-color: #ff6666;
-      transform: scale(1.1);
-    }
-
-    .ticket-number.removable:hover::after {
-      content: '×';
-      position: absolute;
-      top: -5px;
-      right: -5px;
-      width: 14px;
-      height: 14px;
-      background: #ff0000;
-      color: white;
-      font-size: 10px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    /* Stake display in header */
-    .minigame-stake {
-      color: #4CAF50;
-      font-weight: bold;
-    }
-
-    /* Toast Notification System */
-    .minigame-toast-container {
-      position: absolute;
-      top: 1rem;
-      right: 1rem;
-      z-index: 100003;
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-      max-width: 320px;
-    }
-
-    .minigame-toast {
-      background: color-mix(in srgb, var(--slot-card-bg) 65%, rgba(18, 20, 24, 0.92));
-      border: 1px solid color-mix(in srgb, var(--slot-border-color) 70%, transparent);
-      border-radius: 0.5rem;
-      padding: 0.875rem 1rem;
-      color: var(--slot-text-primary);
-      font-size: 0.875rem;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-      animation: toastSlideIn 0.3s ease-out;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .minigame-toast--error {
-      border-color: #ef4444;
-      background: rgba(239, 68, 68, 0.15);
-    }
-
-    .minigame-toast--warning {
-      border-color: #f59e0b;
-      background: rgba(245, 158, 11, 0.15);
-    }
-
-    .minigame-toast--success {
-      border-color: #10b981;
-      background: rgba(16, 185, 129, 0.15);
-    }
-
-    .minigame-toast--info {
-      border-color: #3b82f6;
-      background: rgba(59, 130, 246, 0.15);
-    }
-
-    @keyframes toastSlideIn {
-      from {
-        transform: translateX(100%);
-        opacity: 0;
-      }
-      to {
-        transform: translateX(0);
-        opacity: 1;
-      }
-    }
-
-    @keyframes toastSlideOut {
-      from {
-        transform: translateX(0);
-        opacity: 1;
-      }
-      to {
-        transform: translateX(100%);
-        opacity: 0;
-      }
-    }
-
-    /* Coin Selector */
-    .coin-selector {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      margin: 15px 0;
-      padding: 15px;
-      background: color-mix(in srgb, var(--slot-input-bg) 40%, transparent);
-      border-radius: 8px;
-      border: 1px solid color-mix(in srgb, var(--slot-border-color) 70%, transparent);
-    }
-
-    .coin-selector-label {
-      color: #ffd700;
-      font-size: 0.9rem;
-      font-weight: bold;
-      text-align: center;
-    }
-
-    .coin-selector-buttons {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 8px;
-    }
-
-    .coin-btn {
-      padding: 8px 16px;
-      border-radius: 20px;
-      border: 2px solid var(--slot-border-color);
-      background: color-mix(in srgb, var(--slot-card-bg) 55%, transparent);
-      color: var(--slot-text-primary);
-      font-size: 0.85rem;
-      font-weight: bold;
-      cursor: pointer;
-      transition: all 0.2s;
-      box-shadow: 0 4px rgba(0, 0, 0, 0.3);
-    }
-
-    .coin-btn:hover {
-      background: color-mix(in srgb, var(--primary-color) 55%, transparent);
-      transform: scale(1.05);
-      color: white;
-    }
-
-    .coin-btn.selected {
-      background: linear-gradient(145deg, #ffd700, #ffa500);
-      color: #000;
-      border-color: #ffd700;
-      box-shadow: 0 0 10px rgba(255, 215, 0, 0.4);
-    }
-
-    /* Total Bet Display */
-    .total-bet-display {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 10px 15px;
-      margin: 10px 0;
-      background: color-mix(in srgb, var(--slot-input-bg) 40%, transparent);
-      border-radius: 8px;
-      border: 1px solid color-mix(in srgb, var(--slot-border-color) 70%, transparent);
-      box-shadow: 0 4px rgba(0, 0, 0, 0.3);
-    }
-
-    .total-bet-label {
-      color: #aaa;
-      font-size: 0.9rem;
-    }
-
-    .total-bet-value {
-      color: #ffd700;
-      font-size: 1.1rem;
-      font-weight: bold;
-    }
-
-    .total-bet-value.insufficient {
-      color: #ef4444;
-    }
-
-    /* Balance Display */
-    .balance-display-mini {
-      color: #10b981;
-      font-size: 0.85rem;
-    }
-
-    .balance-display-mini.low {
-      color: #f59e0b;
-    }
-
-    .balance-display-mini.insufficient {
-      color: #ef4444;
-    }
-
-    /* Globally Used Numbers - Cannot be selected in other tickets */
-    .number-btn.globally-used {
-      opacity: 0.3;
-      cursor: not-allowed;
-      background: color-mix(in srgb, var(--slot-input-bg) 35%, transparent);
-      border-color: #333;
-    }
-
-    .number-btn.globally-used:hover {
-      transform: none;
-      background: color-mix(in srgb, var(--slot-input-bg) 35%, transparent);
-    }
-
-  </style>
-
-  <div class="slot-game" data-inspiration="https://3dtransforms.desandro.com/carousel">
-    <div class="slot-menu" role="tablist" aria-label="Slot menu tabs">
-      <button class="slot-menu-tab active" id="slotMenuGame" type="button" role="tab" aria-selected="true" aria-controls="slotViewGame"><h1>Slot Machine</h1></button>
-      <button class="slot-menu-tab" id="slotMenuRules" type="button" role="tab" aria-selected="false" aria-controls="slotViewRules">Game Rules</button>
-      <button class="slot-menu-tab" id="slotMenuHistory" type="button" role="tab" aria-selected="false" aria-controls="slotViewHistory">History</button>
-    </div>
-
-    <section class="slot-view slot-view-game" id="slotViewGame">
-      <!-- Top Controls -->
-      <div class="slot-top-controls">
-        <div></div>
-        <div class="slot-top-controls-center">
-          <div class="slot-controls-wrapper">
-            <button class="btn-primary" id="startBtn">Start Game</button>
-            <div class="progress-container" id="progressContainer">
-              <div class="spins-counter">Spins played: <span id="spinsCount">0</span></div>
-              <span class="progress-label" id="progressLabel">5 sec</span>
-              <progress value="0" max="5" id="progressBar"></progress>
-            </div>
-            <button class="btn-secondary" id="stopBtn">Stop</button>
-          </div>
-        </div>
-        <div></div>
-      </div>
-
-      <!-- Main Layout -->
-      <div class="slot-layout">
-        <!-- Left Sidebar: Bet & Lines -->
-        <div class="slot-sidebar">
-          <div class="nav-div">
-            <button id="betBtn">Bet</button>
-            <div id="betOptions"></div>
-            <div class="joker-container" id="jokerContainer">
-              <input type="checkbox" id="jokerCheckbox" name="joker">
-              <label for="jokerCheckbox">Buy Joker</label>
-              <p class="joker-hint">Joker costs 5x bet.</p>
-              <button id="confirmJokerBtn" style="display: none; margin-top: 8px;">Confirm Joker</button>
-              <button id="removeJokerBtn" style="display: none; margin-top: 8px;">Remove Joker</button>
-            </div>
-            <div class="lines-container" id="linesContainer"></div>
-          </div>
-        </div>
-
-        <!-- Center: Reels -->
-        <div class="slot-center">
-          <canvas class="spinners single-line-mode" id="spinners"></canvas>
-
-          <!-- Info Panel -->
-          <div class="info-panel">
-            <div>Bet: <span id="currentBet">2</span> $</div>
-            <div>Type: <span id="gameType">Numbers</span></div>
-            <div>Joker: <span id="jokerStatus">NO (0 $)</span></div>
-            <div>Lines: <span id="lineCount">1</span></div>
-            <div>Total: <span id="totalBet">2</span> $</div>
-            <div>Krediti: <span id="credits">0</span> $</div>
-          </div>
-
-          <!-- Odds Tables -->
-          <div class="odds-container" id="oddsContainer"></div>
-        </div>
-
-        <!-- Right Sidebar: Game Options -->
-        <div class="slot-right-column">
-          <div class="slot-options">
-            <div class="nav-div">
-              <button id="gameTypeBtn">Game Type</button>
-              <div id="gameTypeOptions"></div>
-              <button id="rewardModeBtn">Reward Mode</button>
-              <div id="rewardModeOptions"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="slot-view slot-view-rules" id="slotViewRules" hidden>
-      <div class="slot-rules-panel">
-        <div class="slot-rules-section">
-          <h2>Game Types</h2>
-          <ul>
-            <li>Choose one symbol set: Numbers, Roman, Fruits, Animals, or Emoji.</li>
-            <li>Selected game type defines available bet values and payout table.</li>
-            <li>You can change game type any time before spin.</li>
-          </ul>
-        </div>
-
-        <div class="slot-rules-section">
-          <h2>Reward Modes</h2>
-          <ul>
-            <li><strong>1x5 Middle:</strong> one middle line only.</li>
-            <li><strong>3x5 Multi-line:</strong> full 3x5 setup with multiple paylines.</li>
-            <li>If you switch from 3x5 to 1x5, Joker state is removed.</li>
-          </ul>
-        </div>
-
-        <div class="slot-rules-section">
-          <h2>Bets</h2>
-          <ul>
-            <li>Pick your bet from the Bet panel.</li>
-            <li>Total in 1x5 mode is current bet value.</li>
-            <li>Total in 3x5 mode is active lines × bet.</li>
-          </ul>
-        </div>
-
-        <div class="slot-rules-section">
-          <h2>Lines And Joker In 3x5</h2>
-          <ul>
-            <li>In 3x5 mode you can activate multiple paylines (minimum one line remains active).</li>
-            <li>More active lines increase chance to hit, but also increase total stake.</li>
-            <li>In 3x5 mode you can buy Joker and place it on valid positions.</li>
-            <li>Joker adds cost and modifies eligible win combinations.</li>
-          </ul>
-        </div>
-
-        <div class="slot-rules-section">
-          <h2>Mini Game</h2>
-          <ul>
-            <li>Mini game can appear after qualifying slot wins.</li>
-            <li>You select tickets and coin value, then numbers are drawn.</li>
-            <li>Final bonus payout is added back to slot balance.</li>
-          </ul>
-        </div>
-      </div>
-    </section>
-
-    <section class="slot-view slot-view-history" id="slotViewHistory" hidden>
-      <div class="slot-history-panel">
-        <div class="slot-history-status" id="slotHistoryStatus">History is loading...</div>
-        <div class="slot-history-table-wrap" id="slotHistoryTableWrap"></div>
-        <div class="slot-history-controls">
-          <div class="slot-history-pagination" id="slotHistoryPagination"></div>
-          <div class="slot-history-jump">
-            <span>Page</span>
-            <input id="slotHistoryPageInput" type="number" min="1" step="1" value="1">
-            <button type="button" id="slotHistoryGoPage">Go</button>
-          </div>
-        </div>
-      </div>
-    </section>
-  </div>
-`;
+const CLASSIC_SYMBOL_COUNT = 22;
+const ODDS_MATCH_ORDER = [5, 4, 3, 2];
+const NUMBERS_TARGET_RTP = 0.86;
+const BASE_GROUP_COEFFICIENTS = [1.85, 1.75, 1.65, 1.55, 1.45, 1.35, 1.25, 1.15, 1.05, 0.95, 0.85];
+const GAME_TYPE_ODDS_COEFFICIENTS = {
+  1: 1.0,
+  2: 0.94,
+  3: 1.08,
+  4: 1.03,
+  5: 0.98,
+};
 
 /**
  * BingoMiniGame - Bonus game after winning on slot machine
@@ -2252,25 +670,42 @@ class BingoMiniGame {
   }
 }
 
-/**
- * SlotMachine Custom Element
- */
-export class SlotMachine extends HTMLElement {
-  constructor() {
-    super();
-    this.attachShadow({ mode: 'open' });
-    this.shadowRoot.appendChild(template.content.cloneNode(true));
+function createRootScope(rootElement) {
+  return {
+    getElementById(id) {
+      const candidate = rootElement.ownerDocument?.getElementById(id) || null;
+      return candidate && rootElement.contains(candidate) ? candidate : null;
+    },
+    querySelector(selector) {
+      return rootElement.querySelector(selector);
+    },
+    querySelectorAll(selector) {
+      return rootElement.querySelectorAll(selector);
+    },
+    appendChild(node) {
+      return rootElement.appendChild(node);
+    },
+  };
+}
+
+export class SlotMachine {
+  constructor(rootElement, options = {}) {
+    if (!rootElement) {
+      throw new Error('SlotMachine root element is required');
+    }
+
+    this.rootElement = rootElement;
+    this.shadowRoot = createRootScope(rootElement);
+    this.initialBalance = Number.parseInt(
+      String(options.balance ?? rootElement.dataset?.balance ?? 0),
+      10,
+    ) || 0;
+    this.initialJwtToken = String(options.jwtToken ?? rootElement.dataset?.jwtToken ?? '');
 
     // State
     this.credits = 0;
     this.bet = 2;
-    this.kvote = [
-      200, 100, 60, 10,
-      150, 80, 50, 8,
-      100, 50, 30, 5,
-      50, 30, 20, 4,
-      30, 20, 10, 3
-    ];
+    this.kvote = this.getOddsForGameType(1);
     this.spinsCount = 0;
     this.stopArray = [];
     this.selectedPaylines = [1, 0, 0, 0, 0, 0, 0];
@@ -2287,12 +722,29 @@ export class SlotMachine extends HTMLElement {
     this.historyTotalItems = 0;
     this.historyItems = [];
     this.historyLoading = false;
+    this.isMounted = false;
+    this.magicOpenAiMode = false;
+    this.magicOpenAiPrevView = 'game';
+    this.magicOpenAiPrevBodyOverflow = '';
+    // Start magic mode facing the user (0deg yaw), then swing left/right.
+    this.magicCameraYawRad = 0;
+    this.magicCameraPitchRad = -0.08;
+    this.magicCameraDepthOffset = -34;
+    this.magicSwingAngleRad = 0;
+    this.magicSwingAmplitudeRad = (40 * Math.PI) / 180;
+    this.magicInitialLeftSwingRad = (20 * Math.PI) / 180;
+    this.magicSwingSpeedRadPerSec = 0.3;
+    this.magicSwingAnimationFrame = null;
+    this.magicSwingStartTime = 0;
+    this.currentSpinDurationMs = 5000;
+    this.spinCountdownSeconds = 5;
 
     this.jwtToken = '';
     this.spinDirections = [-1, -1, -1, -1, -1];
     this.currentRotations = [0, 0, 0, 0, 0];
     this.renderRotations = [0, 0, 0, 0, 0];
-    this.symbolStrip = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    this.reelSpringOffsets = [0, 0, 0, 0, 0];
+    this.symbolStrip = this.getSymbolSetForGameType(1);
     this.reelAnimationFrame = null;
     this.jokerSelectionActive = false;
     this.canvas = null;
@@ -2313,14 +765,21 @@ export class SlotMachine extends HTMLElement {
     this.canvasHeight = 0;
     this.reelBorderColor = 'rgba(245, 218, 118, 0.8)';
     this.reelPanelBaseColor = 'rgb(255, 255, 255)';
+    this.reelCellFillColor = 'rgba(208, 156, 61, 0.2)';
+    this.reelWoodTopColor = 'rgb(188, 129, 67)';
+    this.reelWoodMidColor = 'rgb(144, 93, 43)';
+    this.reelWoodBottomColor = 'rgb(96, 58, 23)';
     this.cellHalfHeight = 0;
     this.middleRowCenterY = 0;
     this.bottomRowCenterY = 0;
   }
 
-  connectedCallback() {
-    this.credits = parseInt(this.getAttribute('data-balance')) || 0;
-    this.jwtToken = this.getAttribute('data-jwt-token') || '';
+  mount() {
+    if (this.isMounted) return;
+    this.isMounted = true;
+
+    this.credits = this.initialBalance;
+    this.jwtToken = this.initialJwtToken;
 
     // Additional state for joker/lines
     this.validJokerPositions = new Array(15).fill(0);
@@ -2335,7 +794,7 @@ export class SlotMachine extends HTMLElement {
     this.cellHalfWidth = 0;
     this.spinnerPaddingLeft = 0;
     this.spinnerPaddingTop = 0;
-    this.lineColor = 'rgba(60, 0, 129, 0.4)';
+    this.lineColor = 'rgb(68, 42, 11)';
 
     // Bind event handlers
     this.boundCanvasClick = this.handleCanvasClick.bind(this);
@@ -2353,34 +812,37 @@ export class SlotMachine extends HTMLElement {
     // Lines
     const linesContainer = this.shadowRoot.getElementById('linesContainer');
     for (let i = 0; i < 7; i++) {
-      const div = document.createElement('div');
-      div.className = i === 0 ? 'active' : '';
-      div.dataset.line = i;
-      div.innerHTML = `<label>Line ${i + 1}</label>`;
-      div.addEventListener('click', () => this.toggleLine(i, div));
-      linesContainer.appendChild(div);
+      const lineButton = document.createElement('button');
+      lineButton.type = 'button';
+      lineButton.className = `control-group line-btn${i === 0 ? ' active' : ''}`;
+      lineButton.dataset.line = String(i);
+      lineButton.textContent = `Line ${i + 1}`;
+      lineButton.addEventListener('click', () => this.toggleLine(i, lineButton));
+      linesContainer.appendChild(lineButton);
     }
 
     // Game types
     const gameTypeOptions = this.shadowRoot.getElementById('gameTypeOptions');
     ['Numbers', 'Roman', 'Fruits', 'Animals', 'Emoji'].forEach((type, idx) => {
-      const div = document.createElement('div');
-      div.className = 'control-group' + (idx === 0 ? ' active' : '');
-      div.dataset.value = idx + 1;
-      div.innerHTML = `<label>${type}</label>`;
-      div.addEventListener('click', () => this.selectGameType(idx + 1, type, div));
-      gameTypeOptions.appendChild(div);
+      const optionButton = document.createElement('button');
+      optionButton.type = 'button';
+      optionButton.className = 'control-group' + (idx === 0 ? ' active' : '');
+      optionButton.dataset.value = String(idx + 1);
+      optionButton.textContent = type;
+      optionButton.addEventListener('click', () => this.selectGameType(idx + 1, type, optionButton));
+      gameTypeOptions.appendChild(optionButton);
     });
 
     // Reward modes
     const rewardModeOptions = this.shadowRoot.getElementById('rewardModeOptions');
     [{ value: 2, label: '1x5 Middle' }, { value: 1, label: '3x5 Multi-line' }].forEach((mode, idx) => {
-      const div = document.createElement('div');
-      div.className = 'control-group' + (idx === 0 ? ' active' : '');
-      div.dataset.value = mode.value;
-      div.innerHTML = `<label>${mode.label}</label>`;
-      div.addEventListener('click', () => this.selectRewardMode(mode.value, div));
-      rewardModeOptions.appendChild(div);
+      const optionButton = document.createElement('button');
+      optionButton.type = 'button';
+      optionButton.className = 'control-group' + (idx === 0 ? ' active' : '');
+      optionButton.dataset.value = String(mode.value);
+      optionButton.textContent = mode.label;
+      optionButton.addEventListener('click', () => this.selectRewardMode(mode.value, optionButton));
+      rewardModeOptions.appendChild(optionButton);
     });
 
     // Canvas reels
@@ -2407,8 +869,20 @@ export class SlotMachine extends HTMLElement {
       || 10;
     const themedBorderColor = computedStyle.getPropertyValue('--slot-border-color').trim();
     const themedPanelColor = computedStyle.getPropertyValue('--slot-card-bg').trim();
+    const woodTop = computedStyle.getPropertyValue('--slot-wheel-wood-top').trim();
+    const woodMid = computedStyle.getPropertyValue('--slot-wheel-wood-mid').trim();
+    const woodBottom = computedStyle.getPropertyValue('--slot-wheel-wood-bottom').trim();
     this.reelBorderColor = themedBorderColor || 'rgba(245, 218, 118, 0.8)';
     this.reelPanelBaseColor = this.parseCssColorToRgb(themedPanelColor, 'rgb(255, 255, 255)');
+    const topbar = document.querySelector('.topbar');
+    const topbarBackground = topbar
+      ? getComputedStyle(topbar).backgroundColor.trim()
+      : '';
+    const panelBackground = themedPanelColor || 'rgba(208, 156, 61, 0.2)';
+    this.reelCellFillColor = topbarBackground || panelBackground;
+    this.reelWoodTopColor = this.parseCssColorToRgb(woodTop, 'rgb(188, 129, 67)');
+    this.reelWoodMidColor = this.parseCssColorToRgb(woodMid, 'rgb(144, 93, 43)');
+    this.reelWoodBottomColor = this.parseCssColorToRgb(woodBottom, 'rgb(96, 58, 23)');
 
     const rect = this.canvas.getBoundingClientRect();
     const cssWidth = Math.max(1, Math.floor(rect.width));
@@ -2667,15 +1141,146 @@ export class SlotMachine extends HTMLElement {
     return 1 - Math.pow(1 - progress, 3.4);
   }
 
+  cubicBezierComponent(t, control1, control2) {
+    const inv = 1 - t;
+    return (3 * inv * inv * t * control1) + (3 * inv * t * t * control2) + (t * t * t);
+  }
+
+  cubicBezierEase(progress, p1x = 0.22, p1y = 0.61, p2x = 0.36, p2y = 1) {
+    const clamped = Math.max(0, Math.min(1, Number(progress) || 0));
+    let low = 0;
+    let high = 1;
+    let t = clamped;
+
+    for (let i = 0; i < 10; i += 1) {
+      const x = this.cubicBezierComponent(t, p1x, p2x);
+      if (Math.abs(x - clamped) < 0.0001) break;
+      if (x < clamped) {
+        low = t;
+      } else {
+        high = t;
+      }
+      t = (low + high) * 0.5;
+    }
+
+    return this.cubicBezierComponent(t, p1y, p2y);
+  }
+
   getReelStepAngle() {
     const stripLength = Array.isArray(this.symbolStrip) ? this.symbolStrip.length : 0;
     if (!Number.isFinite(stripLength) || stripLength < 2) {
-      return 36;
+      return 360 / CLASSIC_SYMBOL_COUNT;
     }
     return 360 / stripLength;
   }
 
-  animateReels(transitions) {
+  buildNumberSymbols() {
+    return Array.from({ length: CLASSIC_SYMBOL_COUNT }, (_, index) => index + 1);
+  }
+
+  toRomanNumber(value) {
+    const numericValue = Math.max(1, Math.floor(Number(value) || 1));
+    const map = [
+      [1000, 'M'],
+      [900, 'CM'],
+      [500, 'D'],
+      [400, 'CD'],
+      [100, 'C'],
+      [90, 'XC'],
+      [50, 'L'],
+      [40, 'XL'],
+      [10, 'X'],
+      [9, 'IX'],
+      [5, 'V'],
+      [4, 'IV'],
+      [1, 'I'],
+    ];
+
+    let remaining = numericValue;
+    let result = '';
+    for (let i = 0; i < map.length; i += 1) {
+      const [romanValue, romanSymbol] = map[i];
+      while (remaining >= romanValue) {
+        remaining -= romanValue;
+        result += romanSymbol;
+      }
+    }
+    return result || 'I';
+  }
+
+  getSymbolSetForGameType(gameType = 1) {
+    const numberSymbols = this.buildNumberSymbols();
+    const symbolSets = {
+      1: numberSymbols,
+      2: numberSymbols.map((value) => this.toRomanNumber(value)),
+      3: ['🍏', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍒', '🍍', '🥥', '🥝', '🍑', '🍎', '🥭', '🍈', '🍅', '🥕', '🌽', '🥔', '🍆'],
+      4: ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🐔', '🐧', '🐦', '🐙', '🦋', '🐢', '🐬'],
+      5: ['😀', '😁', '😂', '🤣', '😅', '😊', '😎', '🤩', '😍', '😘', '😜', '🤪', '🥳', '🤖', '👻', '😈', '🫠', '😇', '🤠', '🥶', '😡', '🤯'],
+    };
+
+    return symbolSets[gameType] || symbolSets[1];
+  }
+
+  resolveGroupCoefficients(groupCount) {
+    if (groupCount <= 0) {
+      return [];
+    }
+    if (groupCount === BASE_GROUP_COEFFICIENTS.length) {
+      return [...BASE_GROUP_COEFFICIENTS];
+    }
+    if (groupCount === 1) {
+      return [BASE_GROUP_COEFFICIENTS[0]];
+    }
+
+    const top = BASE_GROUP_COEFFICIENTS[0];
+    const bottom = BASE_GROUP_COEFFICIENTS[BASE_GROUP_COEFFICIENTS.length - 1];
+    return Array.from({ length: groupCount }, (_, index) => {
+      const ratio = index / (groupCount - 1);
+      return top + ((bottom - top) * ratio);
+    });
+  }
+
+  getExactMatchProbability(symbolCount, matchCount) {
+    const safeCount = Math.max(2, Number(symbolCount) || CLASSIC_SYMBOL_COUNT);
+    if (matchCount === 5) {
+      return 1 / (safeCount ** 5);
+    }
+    return (safeCount - 1) / (safeCount ** (matchCount + 1));
+  }
+
+  buildBaseNumbersOdds(symbolCount = CLASSIC_SYMBOL_COUNT) {
+    const groupCount = Math.ceil(symbolCount / 2);
+    const groupCoefficients = this.resolveGroupCoefficients(groupCount);
+    const coefficientSum = groupCoefficients.reduce((sum, value) => sum + value, 0);
+    const scale = NUMBERS_TARGET_RTP / (ODDS_MATCH_ORDER.length * coefficientSum);
+    const odds = [];
+
+    for (let groupIndex = 0; groupIndex < groupCount; groupIndex += 1) {
+      const groupCoefficient = groupCoefficients[groupIndex] ?? 1;
+      const groupSymbolCount = Math.max(0, Math.min(2, symbolCount - (groupIndex * 2)));
+
+      for (let i = 0; i < ODDS_MATCH_ORDER.length; i += 1) {
+        const matchCount = ODDS_MATCH_ORDER[i];
+        const probability = groupSymbolCount * this.getExactMatchProbability(symbolCount, matchCount);
+        const multiplier = probability > 0 ? Math.round((scale * groupCoefficient) / probability) : 0;
+        odds.push(Math.max(1, multiplier));
+      }
+    }
+
+    return odds;
+  }
+
+  getOddsForGameType(gameType = 1) {
+    const baseOdds = this.buildBaseNumbersOdds(CLASSIC_SYMBOL_COUNT);
+    const coefficient = GAME_TYPE_ODDS_COEFFICIENTS[gameType] ?? 1;
+
+    if (coefficient === 1) {
+      return baseOdds;
+    }
+    return baseOdds.map((value) => Math.max(1, Math.round(value * coefficient)));
+  }
+
+  animateReels(transitions, onComplete = null) {
     this.cancelReelAnimation();
 
     const startedAt = performance.now();
@@ -2713,6 +1318,9 @@ export class SlotMachine extends HTMLElement {
       }
 
       this.reelAnimationFrame = null;
+      if (typeof onComplete === 'function') {
+        onComplete();
+      }
     };
 
     this.reelAnimationFrame = requestAnimationFrame(nextFrame);
@@ -2722,7 +1330,10 @@ export class SlotMachine extends HTMLElement {
     const symbolText = String(symbol ?? '');
     const numberValue = Number(symbolText);
     if (Number.isFinite(numberValue) && symbolText !== '') {
-      return ((Math.max(1, numberValue) - 1) * 36) % 360;
+      const symbolCount = Array.isArray(this.symbolStrip) && this.symbolStrip.length
+        ? this.symbolStrip.length
+        : CLASSIC_SYMBOL_COUNT;
+      return ((Math.max(1, numberValue) - 1) * (360 / symbolCount)) % 360;
     }
 
     const hueWheel = [0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352];
@@ -2773,14 +1384,144 @@ export class SlotMachine extends HTMLElement {
     return `rgba(${rgbMatch[1]}, ${rgbMatch[2]}, ${rgbMatch[3]}, ${safeAlpha})`;
   }
 
+  getWoodGradientColors(depthWeight = 0.5) {
+    const depth = Math.max(0, Math.min(1, Number(depthWeight) || 0));
+    return {
+      top: this.colorWithAlpha(this.reelWoodTopColor || 'rgb(188, 129, 67)', 0.78 + (depth * 0.16)),
+      middle: this.colorWithAlpha(this.reelWoodMidColor || 'rgb(144, 93, 43)', 0.76 + (depth * 0.14)),
+      bottom: this.colorWithAlpha(this.reelWoodBottomColor || 'rgb(96, 58, 23)', 0.82 + (depth * 0.14)),
+    };
+  }
+
+  getSymbolFontSizePx(baseCellHeight, symbol) {
+    const text = String(symbol ?? '');
+    const charCount = text.length;
+    let scale = 0.33;
+    if (charCount >= 6) {
+      scale = 0.2;
+    } else if (charCount >= 5) {
+      scale = 0.23;
+    } else if (charCount >= 4) {
+      scale = 0.26;
+    } else if (charCount >= 3) {
+      scale = 0.29;
+    }
+    return Math.max(15, baseCellHeight * scale);
+  }
+
+  transformByMagicCamera(x, y, z, includeDepthOffset = true) {
+    let viewX = x;
+    let viewY = y;
+    let viewZ = z;
+
+    if (this.magicOpenAiMode) {
+      const yaw = Number(this.magicCameraYawRad) || 0;
+      const yawCos = Math.cos(yaw);
+      const yawSin = Math.sin(yaw);
+      const yawX = (viewX * yawCos) + (viewZ * yawSin);
+      const yawZ = (viewZ * yawCos) - (viewX * yawSin);
+      viewX = yawX;
+      viewZ = yawZ;
+
+      const pitch = Number(this.magicCameraPitchRad) || 0;
+      if (Math.abs(pitch) > 0.0001) {
+        const pitchCos = Math.cos(pitch);
+        const pitchSin = Math.sin(pitch);
+        const pitchY = (viewY * pitchCos) - (viewZ * pitchSin);
+        const pitchZ = (viewY * pitchSin) + (viewZ * pitchCos);
+        viewY = pitchY;
+        viewZ = pitchZ;
+      }
+
+      if (includeDepthOffset) {
+        viewZ += Number(this.magicCameraDepthOffset) || 0;
+      }
+    }
+
+    return { x: viewX, y: viewY, z: viewZ };
+  }
+
   projectPoint3D(x, y, z, centerX, centerY, perspective) {
-    const safeZ = Math.max(-perspective + 1, z);
+    const transformed = this.transformByMagicCamera(x, y, z, true);
+    const viewX = transformed.x;
+    const viewY = transformed.y;
+    const viewZ = transformed.z;
+
+    const safeZ = Math.max(-perspective + 1, viewZ);
     const scale = perspective / (perspective - safeZ);
     return {
-      x: centerX + (x * scale),
-      y: centerY + (y * scale),
+      x: centerX + (viewX * scale),
+      y: centerY + (viewY * scale),
       scale,
     };
+  }
+
+  projectWorldPoint(x, y, z, centerX, centerY, perspective, yawRad, pitchRad, depthOffset) {
+    const yawCos = Math.cos(yawRad);
+    const yawSin = Math.sin(yawRad);
+    let viewX = (x * yawCos) + (z * yawSin);
+    let viewZ = (z * yawCos) - (x * yawSin);
+
+    let viewY = y;
+    if (Math.abs(pitchRad) > 0.0001) {
+      const pitchCos = Math.cos(pitchRad);
+      const pitchSin = Math.sin(pitchRad);
+      const pY = (viewY * pitchCos) - (viewZ * pitchSin);
+      const pZ = (viewY * pitchSin) + (viewZ * pitchCos);
+      viewY = pY;
+      viewZ = pZ;
+    }
+
+    viewZ += depthOffset;
+    const safeZ = Math.max(-perspective + 1, viewZ);
+    const scale = perspective / (perspective - safeZ);
+    return {
+      x: centerX + (viewX * scale),
+      y: centerY + (viewY * scale),
+      scale,
+      viewZ,
+    };
+  }
+
+  drawMagicReelTunnel(reelCenterX, reelCenterY, reelWidth, reelAreaHeight) {
+    const ctx = this.ctx;
+    if (!ctx || !this.magicOpenAiMode) return;
+
+    const holeRx = Math.max(6, reelWidth * 0.13);
+    const holeRy = Math.max(14, reelAreaHeight * 0.2);
+
+    // Punch a visible center tunnel so reels look like rotating pipes/rings.
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.beginPath();
+    ctx.ellipse(reelCenterX, reelCenterY, holeRx, holeRy, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Add tunnel rim and inner shadow for depth.
+    ctx.save();
+    const rimGradient = ctx.createRadialGradient(
+      reelCenterX,
+      reelCenterY,
+      Math.max(1, holeRx * 0.18),
+      reelCenterX,
+      reelCenterY,
+      holeRy,
+    );
+    rimGradient.addColorStop(0, 'rgba(14, 10, 4, 0.86)');
+    rimGradient.addColorStop(0.65, 'rgba(14, 10, 4, 0.42)');
+    rimGradient.addColorStop(1, 'rgba(14, 10, 4, 0)');
+    ctx.beginPath();
+    ctx.ellipse(reelCenterX, reelCenterY, holeRx * 1.08, holeRy * 1.04, 0, 0, Math.PI * 2);
+    ctx.fillStyle = rimGradient;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.ellipse(reelCenterX, reelCenterY, holeRx * 1.02, holeRy * 1.02, 0, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(108, 78, 24, 0.92)';
+    ctx.lineWidth = Math.max(1.6, reelWidth * 0.04);
+    ctx.stroke();
+    ctx.restore();
   }
 
   drawRoundedQuadPath(points, radiusPx) {
@@ -2843,10 +1584,776 @@ export class SlotMachine extends HTMLElement {
     ctx.closePath();
   }
 
+  drawPolygonPath(points) {
+    const ctx = this.ctx;
+    if (!ctx || !Array.isArray(points) || points.length < 3) return;
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i++) {
+      ctx.lineTo(points[i].x, points[i].y);
+    }
+    ctx.closePath();
+  }
+
+  drawDiamondBadge(points, depthWeight = 0.5) {
+    const ctx = this.ctx;
+    if (!ctx || !Array.isArray(points) || points.length !== 4) return;
+
+    const [top, right, bottom, left] = points;
+    const minY = Math.min(top.y, right.y, bottom.y, left.y);
+    const maxY = Math.max(top.y, right.y, bottom.y, left.y);
+    const minX = Math.min(top.x, right.x, bottom.x, left.x);
+    const maxX = Math.max(top.x, right.x, bottom.x, left.x);
+    if (!Number.isFinite(minY) || !Number.isFinite(maxY) || !Number.isFinite(minX) || !Number.isFinite(maxX)) {
+      return;
+    }
+
+    const depth = Math.max(0, Math.min(1, Number(depthWeight) || 0));
+    const width = maxX - minX;
+    const height = maxY - minY;
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    const drawDiamondPath = () => {
+      ctx.beginPath();
+      ctx.moveTo(top.x, top.y);
+      ctx.lineTo(right.x, right.y);
+      ctx.lineTo(bottom.x, bottom.y);
+      ctx.lineTo(left.x, left.y);
+      ctx.closePath();
+    };
+
+    const darkGoldA = depth > 0.5 ? 'rgba(122, 84, 20, 0.98)' : 'rgba(104, 70, 16, 0.97)';
+    const darkGoldB = depth > 0.5 ? 'rgba(94, 62, 12, 0.98)' : 'rgba(81, 53, 10, 0.98)';
+    const brightGold = depth > 0.5 ? 'rgba(245, 202, 94, 0.97)' : 'rgba(227, 175, 72, 0.96)';
+    const midGold = depth > 0.5 ? 'rgba(187, 131, 42, 0.97)' : 'rgba(169, 117, 33, 0.97)';
+
+    let fillGradient = null;
+    if (this.magicOpenAiMode) {
+      const outerRadius = Math.max(6, Math.max(width, height) * 0.58);
+      fillGradient = ctx.createRadialGradient(
+        centerX,
+        centerY,
+        Math.max(1, outerRadius * 0.09),
+        centerX,
+        centerY,
+        outerRadius,
+      );
+      fillGradient.addColorStop(0, brightGold);
+      fillGradient.addColorStop(0.5, midGold);
+      fillGradient.addColorStop(1, darkGoldA);
+    } else if (typeof ctx.createConicGradient === 'function') {
+      fillGradient = ctx.createConicGradient(-Math.PI / 2, centerX, centerY);
+      fillGradient.addColorStop(0, darkGoldA);
+      fillGradient.addColorStop(0.2, brightGold);
+      fillGradient.addColorStop(0.42, midGold);
+      fillGradient.addColorStop(0.66, darkGoldB);
+      fillGradient.addColorStop(0.86, brightGold);
+      fillGradient.addColorStop(1, darkGoldA);
+    } else {
+      fillGradient = ctx.createLinearGradient(minX, minY, maxX, maxY);
+      fillGradient.addColorStop(0, darkGoldA);
+      fillGradient.addColorStop(0.38, brightGold);
+      fillGradient.addColorStop(1, darkGoldB);
+    }
+
+    ctx.save();
+    drawDiamondPath();
+    ctx.fillStyle = fillGradient;
+    ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    drawDiamondPath();
+    ctx.strokeStyle = this.reelBorderColor || 'rgba(219, 162, 54, 0.98)';
+    ctx.lineWidth = Math.max(1.2, width * 0.04);
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  scaleDiamondPoints(points, scaleX = 1, scaleY = 1) {
+    if (!Array.isArray(points) || points.length !== 4) {
+      return points;
+    }
+    const centerX = (points[0].x + points[1].x + points[2].x + points[3].x) / 4;
+    const centerY = (points[0].y + points[1].y + points[2].y + points[3].y) / 4;
+    return points.map((point) => ({
+      x: centerX + ((point.x - centerX) * scaleX),
+      y: centerY + ((point.y - centerY) * scaleY),
+    }));
+  }
+
+  drawWoodDiamondBadge(points, depthWeight = 0.5) {
+    const ctx = this.ctx;
+    if (!ctx || !Array.isArray(points) || points.length !== 4) return;
+
+    const [top, right, bottom, left] = points;
+    const minY = Math.min(top.y, right.y, bottom.y, left.y);
+    const maxY = Math.max(top.y, right.y, bottom.y, left.y);
+    const minX = Math.min(top.x, right.x, bottom.x, left.x);
+    const maxX = Math.max(top.x, right.x, bottom.x, left.x);
+    if (!Number.isFinite(minY) || !Number.isFinite(maxY) || !Number.isFinite(minX) || !Number.isFinite(maxX)) {
+      return;
+    }
+
+    const depth = Math.max(0, Math.min(1, Number(depthWeight) || 0));
+    const width = maxX - minX;
+    const height = maxY - minY;
+    const cornerRadius = Math.max(1, Math.min(4, Math.min(width, height) * 0.45));
+    const woodTop = this.colorWithAlpha(this.reelWoodTopColor || 'rgb(188, 129, 67)', 0.96);
+    const woodMid = this.colorWithAlpha(this.reelWoodMidColor || 'rgb(144, 93, 43)', 0.95);
+    const woodBottom = this.colorWithAlpha(this.reelWoodBottomColor || 'rgb(96, 58, 23)', 0.98);
+    const woodGradient = ctx.createLinearGradient(minX, minY, maxX, maxY);
+    woodGradient.addColorStop(0, woodTop);
+    woodGradient.addColorStop(0.46, woodMid);
+    woodGradient.addColorStop(1, woodBottom);
+
+    ctx.save();
+    this.drawRoundedQuadPath(points, cornerRadius);
+    ctx.fillStyle = woodGradient;
+    ctx.shadowColor = depth > 0.5 ? 'rgba(225, 173, 64, 0.9)' : 'rgba(198, 148, 50, 0.88)';
+    ctx.shadowBlur = 20;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+    ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    this.drawRoundedQuadPath(points, cornerRadius);
+    ctx.strokeStyle = 'rgba(106, 72, 26, 0.96)';
+    ctx.lineWidth = Math.max(1, width * 0.032);
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  drawNeonDiamondBadge(points, highlightStrength = 1, depthWeight = 0.5) {
+    const ctx = this.ctx;
+    if (!ctx || !Array.isArray(points) || points.length !== 4) return;
+
+    const [top, right, bottom, left] = points;
+    const minY = Math.min(top.y, right.y, bottom.y, left.y);
+    const maxY = Math.max(top.y, right.y, bottom.y, left.y);
+    const minX = Math.min(top.x, right.x, bottom.x, left.x);
+    const maxX = Math.max(top.x, right.x, bottom.x, left.x);
+    if (!Number.isFinite(minY) || !Number.isFinite(maxY) || !Number.isFinite(minX) || !Number.isFinite(maxX)) {
+      return;
+    }
+
+    const depth = Math.max(0, Math.min(1, Number(depthWeight) || 0));
+    const strength = Math.max(1, Number(highlightStrength) || 1);
+    const width = maxX - minX;
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    const glowBlur = Math.min(36, 18 + (strength * 6));
+
+    const drawDiamondPath = () => {
+      ctx.beginPath();
+      ctx.moveTo(top.x, top.y);
+      ctx.lineTo(right.x, right.y);
+      ctx.lineTo(bottom.x, bottom.y);
+      ctx.lineTo(left.x, left.y);
+      ctx.closePath();
+    };
+
+    const neonWhite = depth > 0.5 ? 'rgba(249, 254, 255, 0.99)' : 'rgba(240, 250, 255, 0.98)';
+    const neonBlue = depth > 0.5 ? 'rgba(173, 226, 255, 0.97)' : 'rgba(154, 214, 250, 0.96)';
+    const neonBlueDeep = depth > 0.5 ? 'rgba(126, 190, 236, 0.95)' : 'rgba(112, 174, 220, 0.94)';
+
+    let fillGradient = null;
+    if (typeof ctx.createConicGradient === 'function') {
+      fillGradient = ctx.createConicGradient(-Math.PI / 2, centerX, centerY);
+      fillGradient.addColorStop(0, neonWhite);
+      fillGradient.addColorStop(0.22, neonBlue);
+      fillGradient.addColorStop(0.5, neonWhite);
+      fillGradient.addColorStop(0.76, neonBlueDeep);
+      fillGradient.addColorStop(1, neonWhite);
+    } else {
+      fillGradient = ctx.createLinearGradient(minX, minY, maxX, maxY);
+      fillGradient.addColorStop(0, neonWhite);
+      fillGradient.addColorStop(0.5, neonBlue);
+      fillGradient.addColorStop(1, neonWhite);
+    }
+
+    ctx.save();
+    drawDiamondPath();
+    ctx.fillStyle = fillGradient;
+    ctx.shadowColor = 'rgba(182, 236, 255, 0.98)';
+    ctx.shadowBlur = glowBlur;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+    ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    drawDiamondPath();
+    ctx.strokeStyle = 'rgba(233, 251, 255, 0.96)';
+    ctx.lineWidth = Math.max(1, width * 0.035);
+    ctx.shadowColor = 'rgba(149, 223, 255, 0.92)';
+    ctx.shadowBlur = Math.max(10, glowBlur - 7);
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  drawFlatDiamondBadge(centerX, centerY, baseCellWidth, baseCellHeight, depthWeight = 0.5, paylineHighlight = 0) {
+    const isMagic = Boolean(this.magicOpenAiMode);
+    const highlightStrength = Math.max(0, Number(paylineHighlight) || 0);
+    const highlightScaleBoost = highlightStrength > 0
+      ? Math.min(0.28, 0.12 + (highlightStrength * 0.07))
+      : 0;
+    const halfW = Math.max(11, baseCellWidth * (isMagic ? 0.42 : 0.36));
+    const halfH = Math.max(10, baseCellHeight * (isMagic ? 0.38 : 0.36));
+    const centerLiftY = isMagic ? (baseCellHeight * 0.08) : 0;
+    const diamondCenterY = centerY - centerLiftY;
+    const basePoints = [
+      { x: centerX, y: diamondCenterY - halfH },
+      { x: centerX + halfW, y: diamondCenterY },
+      { x: centerX, y: diamondCenterY + halfH },
+      { x: centerX - halfW, y: diamondCenterY },
+    ];
+    const baseStretchX = isMagic ? 1.2 : 1.1;
+    const baseStretchY = isMagic ? 1.0 : 0.97;
+    const stretchedPoints = this.scaleDiamondPoints(
+      basePoints,
+      baseStretchX + highlightScaleBoost,
+      baseStretchY + (highlightScaleBoost * 0.2),
+    );
+    const woodBackPoints = this.scaleDiamondPoints(
+      stretchedPoints,
+      1.12 + (highlightScaleBoost * 0.55),
+      1.08 + (highlightScaleBoost * 0.35),
+    );
+    this.drawWoodDiamondBadge(woodBackPoints, depthWeight);
+    if (highlightStrength > 0) {
+      this.drawNeonDiamondBadge(stretchedPoints, highlightStrength, depthWeight);
+    } else {
+      this.drawDiamondBadge(stretchedPoints, depthWeight);
+    }
+  }
+
+  drawCurvedDiamondBadge({
+    angleRad,
+    angleSpanRad,
+    radius,
+    reelCenterX,
+    reelCenterY,
+    perspective,
+    baseCellWidth,
+    baseCellHeight,
+    depthWeight,
+    paylineHighlight = 0,
+  }) {
+    const isMagic = Boolean(this.magicOpenAiMode);
+    const highlightStrength = Math.max(0, Number(paylineHighlight) || 0);
+    const highlightScaleBoost = highlightStrength > 0
+      ? Math.min(0.28, 0.12 + (highlightStrength * 0.07))
+      : 0;
+    const halfW = Math.max(11, baseCellWidth * (isMagic ? 0.42 : 0.36));
+    const halfH = Math.max(10, baseCellHeight * (isMagic ? 0.38 : 0.36));
+    const centerShiftRad = isMagic ? (angleSpanRad * 0.08) : 0;
+    const angleOffset = (halfH / Math.max(1, baseCellHeight)) * angleSpanRad;
+    const projectAtAngle = (xLocal, sampleAngle) => {
+      const y3d = -radius * Math.sin(sampleAngle);
+      const z3d = (radius * Math.cos(sampleAngle)) - radius;
+      return this.projectPoint3D(xLocal, y3d, z3d, reelCenterX, reelCenterY, perspective);
+    };
+
+    const basePoints = [
+      projectAtAngle(0, angleRad + centerShiftRad + angleOffset),
+      projectAtAngle(halfW, angleRad + centerShiftRad),
+      projectAtAngle(0, angleRad + centerShiftRad - angleOffset),
+      projectAtAngle(-halfW, angleRad + centerShiftRad),
+    ];
+    const baseStretchX = isMagic ? 1.2 : 1.1;
+    const baseStretchY = isMagic ? 1.0 : 0.97;
+    const stretchedPoints = this.scaleDiamondPoints(
+      basePoints,
+      baseStretchX + highlightScaleBoost,
+      baseStretchY + (highlightScaleBoost * 0.2),
+    );
+    const woodBackPoints = this.scaleDiamondPoints(
+      stretchedPoints,
+      1.12 + (highlightScaleBoost * 0.55),
+      1.08 + (highlightScaleBoost * 0.35),
+    );
+    this.drawWoodDiamondBadge(woodBackPoints, depthWeight);
+    if (highlightStrength > 0) {
+      this.drawNeonDiamondBadge(stretchedPoints, highlightStrength, depthWeight);
+    } else {
+      this.drawDiamondBadge(stretchedPoints, depthWeight);
+    }
+  }
+
+  drawCurvedDiamondBadgeWorld({
+    angleRad,
+    angleSpanRad,
+    radius,
+    reelCenterX,
+    reelCenterY,
+    perspective,
+    baseCellWidth,
+    baseCellHeight,
+    depthWeight,
+    paylineHighlight = 0,
+    yawRad,
+    pitchRad,
+    depthOffset,
+    symbolScale = 1,
+  }) {
+    const isMagic = Boolean(this.magicOpenAiMode);
+    const highlightStrength = Math.max(0, Number(paylineHighlight) || 0);
+    const highlightScaleBoost = highlightStrength > 0
+      ? Math.min(0.28, 0.12 + (highlightStrength * 0.07))
+      : 0;
+    const effectiveCellWidth = baseCellWidth * symbolScale;
+    const effectiveCellHeight = baseCellHeight * symbolScale;
+    const halfW = Math.max(11, effectiveCellWidth * (isMagic ? 0.42 : 0.36));
+    const halfH = Math.max(10, effectiveCellHeight * (isMagic ? 0.38 : 0.36));
+    const centerShiftRad = isMagic ? (angleSpanRad * 0.08) : 0;
+    const angleOffset = (halfH / Math.max(1, effectiveCellHeight)) * angleSpanRad;
+
+    const projectAtAngle = (xLocal, sampleAngle) => {
+      const y3d = -radius * Math.sin(sampleAngle);
+      const z3d = (radius * Math.cos(sampleAngle)) - radius;
+      return this.projectWorldPoint(
+        xLocal,
+        y3d,
+        z3d,
+        reelCenterX,
+        reelCenterY,
+        perspective,
+        yawRad,
+        pitchRad,
+        depthOffset,
+      );
+    };
+
+    const basePoints = [
+      projectAtAngle(0, angleRad + centerShiftRad + angleOffset),
+      projectAtAngle(halfW, angleRad + centerShiftRad),
+      projectAtAngle(0, angleRad + centerShiftRad - angleOffset),
+      projectAtAngle(-halfW, angleRad + centerShiftRad),
+    ];
+
+    const baseStretchX = isMagic ? 1.2 : 1.1;
+    const baseStretchY = isMagic ? 1.0 : 0.97;
+    const stretchedPoints = this.scaleDiamondPoints(
+      basePoints,
+      baseStretchX + highlightScaleBoost,
+      baseStretchY + (highlightScaleBoost * 0.2),
+    );
+    if (!isMagic) {
+      const woodBackPoints = this.scaleDiamondPoints(
+        stretchedPoints,
+        1.12 + (highlightScaleBoost * 0.55),
+        1.08 + (highlightScaleBoost * 0.35),
+      );
+      this.drawWoodDiamondBadge(woodBackPoints, depthWeight);
+    }
+    if (highlightStrength > 0) {
+      this.drawNeonDiamondBadge(stretchedPoints, highlightStrength, depthWeight);
+    } else {
+      this.drawDiamondBadge(stretchedPoints, depthWeight);
+    }
+  }
+
+  drawCurvedReelCell(cell) {
+    const ctx = this.ctx;
+    if (!ctx) return;
+
+    const {
+      symbol,
+      depthWeight,
+      baseCellWidth,
+      baseCellHeight,
+      angleRad,
+      angleSpanRad,
+      radius,
+      reelCenterX,
+      reelCenterY,
+      perspective,
+      paylineHighlight = 0,
+    } = cell;
+
+    if (!Number.isFinite(angleRad) || !Number.isFinite(angleSpanRad) || !Number.isFinite(radius)) {
+      return;
+    }
+
+    // When precomputed edges are provided (world-space pipeline), use them directly.
+    // This bypasses per-cell edge computation and the widening hack, ensuring
+    // adjacent cells share exact boundary vertices with zero gap.
+    const savedYaw = this.magicCameraYawRad;
+    if (cell.precomputedEdges) {
+      if (cell.totalYawRad !== undefined) {
+        this.magicCameraYawRad = cell.totalYawRad;
+      }
+    }
+
+    const segments = cell.precomputedEdges
+      ? (cell.precomputedEdges.leftEdge.length - 1)
+      : (this.magicOpenAiMode ? 40 : 28);
+    let leftEdge;
+    let rightEdge;
+    let centerEdge;
+
+    if (cell.precomputedEdges) {
+      leftEdge = cell.precomputedEdges.leftEdge;
+      rightEdge = cell.precomputedEdges.rightEdge;
+      centerEdge = cell.precomputedEdges.centerEdge;
+    } else {
+      const halfW = baseCellWidth / 2;
+      leftEdge = [];
+      rightEdge = [];
+      centerEdge = [];
+
+      for (let i = 0; i <= segments; i++) {
+        const t = i / segments;
+        const angle = angleRad + ((0.5 - t) * angleSpanRad);
+        const y = -radius * Math.sin(angle);
+        const z = (radius * Math.cos(angle)) - radius;
+        let sampleHalfW = halfW;
+        if (this.magicOpenAiMode) {
+          const sampleNormal = this.transformByMagicCamera(
+            0,
+            -Math.sin(angle),
+            Math.cos(angle),
+            false,
+          );
+          // Widen mostly in bottom-back zone to close cracks without global overlap.
+          const backStrength = Math.max(0, sampleNormal.z);
+          const bottomStrength = Math.max(0, Math.min(1, y / Math.max(1, radius)));
+          const widenFactor = 1 + (backStrength * (0.14 + (bottomStrength * 0.2)));
+          sampleHalfW = halfW * widenFactor;
+        }
+        const left = this.projectPoint3D(-sampleHalfW, y, z, reelCenterX, reelCenterY, perspective);
+        const right = this.projectPoint3D(sampleHalfW, y, z, reelCenterX, reelCenterY, perspective);
+        leftEdge.push(left);
+        rightEdge.push(right);
+        centerEdge.push({
+          x: (left.x + right.x) / 2,
+          y: (left.y + right.y) / 2,
+        });
+      }
+    }
+
+    const topCenter = centerEdge[0];
+    const bottomCenter = centerEdge[centerEdge.length - 1];
+    const midIndex = Math.floor(segments / 2);
+    const midLeft = leftEdge[midIndex];
+    const midRight = rightEdge[midIndex];
+    const projectedWidth = Math.hypot(midRight.x - midLeft.x, midRight.y - midLeft.y);
+    const projectedHeight = Math.hypot(bottomCenter.x - topCenter.x, bottomCenter.y - topCenter.y);
+    const minProjectedHeight = this.magicOpenAiMode ? 0.12 : 1;
+    const minProjectedWidth = this.magicOpenAiMode ? 0.05 : 1;
+    if (projectedHeight < minProjectedHeight || projectedWidth < minProjectedWidth) {
+      if (cell.precomputedEdges) this.magicCameraYawRad = savedYaw;
+      return;
+    }
+
+    const frontStrength = Math.max(0, Math.cos(angleRad));
+    const sideBorderWidth = this.magicOpenAiMode
+      ? 1.2 + (0.55 * Math.max(0, Math.min(1, depthWeight)))
+      : 2.2 + ((6 - 2.2) * frontStrength);
+    const topBottomBorderWidth = this.magicOpenAiMode
+      ? sideBorderWidth
+      : 1.1 + ((3 - 1.1) * frontStrength);
+    const borderAlpha = this.magicOpenAiMode
+      ? 0.96
+      : 0.72 + (0.26 * frontStrength);
+    const edgeColor = this.magicOpenAiMode
+      ? (this.reelBorderColor || 'rgba(219, 162, 54, 0.98)')
+      : (this.lineColor || 'rgb(94, 61, 17)');
+    const lastEdgeIndex = leftEdge.length - 1;
+    const panelBackgroundColor = this.reelCellFillColor || 'rgba(208, 156, 61, 0.2)';
+    const itemBackground = this.magicOpenAiMode
+      ? this.colorWithAlpha(panelBackgroundColor, 0.42)
+      : panelBackgroundColor;
+    const panelPoints = [...leftEdge, ...rightEdge.slice().reverse()];
+
+    const drawCurvedPanelPath = () => {
+      this.drawPolygonPath(panelPoints);
+    };
+
+    ctx.save();
+    drawCurvedPanelPath();
+    ctx.fillStyle = itemBackground;
+    ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    ctx.strokeStyle = edgeColor;
+    ctx.globalAlpha = borderAlpha;
+    ctx.lineCap = 'butt';
+    ctx.lineJoin = 'miter';
+    ctx.shadowBlur = 0;
+
+    ctx.lineWidth = sideBorderWidth;
+    ctx.beginPath();
+    ctx.moveTo(leftEdge[0].x, leftEdge[0].y);
+    for (let i = 1; i < leftEdge.length; i++) {
+      ctx.lineTo(leftEdge[i].x, leftEdge[i].y);
+    }
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(rightEdge[0].x, rightEdge[0].y);
+    for (let i = 1; i < rightEdge.length; i++) {
+      ctx.lineTo(rightEdge[i].x, rightEdge[i].y);
+    }
+    ctx.stroke();
+
+    if (!this.magicOpenAiMode) {
+      ctx.lineWidth = topBottomBorderWidth;
+      ctx.beginPath();
+      ctx.moveTo(leftEdge[0].x, leftEdge[0].y);
+      ctx.lineTo(rightEdge[0].x, rightEdge[0].y);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(leftEdge[lastEdgeIndex].x, leftEdge[lastEdgeIndex].y);
+      ctx.lineTo(rightEdge[lastEdgeIndex].x, rightEdge[lastEdgeIndex].y);
+      ctx.stroke();
+    } else {
+      const drawMagicTopBottom = (leftPoint, rightPoint) => {
+        // Match ring border styling exactly: same color, width, and edge span.
+        ctx.strokeStyle = edgeColor;
+        ctx.globalAlpha = borderAlpha;
+        ctx.lineWidth = topBottomBorderWidth;
+        ctx.beginPath();
+        ctx.moveTo(leftPoint.x, leftPoint.y);
+        ctx.lineTo(rightPoint.x, rightPoint.y);
+        ctx.stroke();
+      };
+
+      // One border before and one after each rotating symbol cell.
+      drawMagicTopBottom(leftEdge[0], rightEdge[0]);
+      drawMagicTopBottom(leftEdge[lastEdgeIndex], rightEdge[lastEdgeIndex]);
+    }
+    ctx.restore();
+
+    // Render curved diamond below symbol text; appears on all wheel sides.
+    if (!cell.precomputedEdges) {
+      ctx.save();
+      this.drawCurvedDiamondBadge({
+        angleRad,
+        angleSpanRad,
+        radius,
+        reelCenterX,
+        reelCenterY,
+        perspective,
+        baseCellWidth,
+        baseCellHeight,
+        depthWeight,
+        paylineHighlight,
+      });
+      ctx.restore();
+    } else {
+      const symbolCellScale = this.magicOpenAiMode ? 0.72 : 1;
+      this.drawCurvedDiamondBadgeWorld({
+        angleRad,
+        angleSpanRad,
+        radius,
+        reelCenterX,
+        reelCenterY,
+        perspective,
+        baseCellWidth,
+        baseCellHeight,
+        depthWeight,
+        paylineHighlight,
+        yawRad: Number(cell.totalYawRad ?? this.magicCameraYawRad) || 0,
+        pitchRad: Number(this.magicCameraPitchRad) || 0,
+        depthOffset: Number(this.magicCameraDepthOffset) || 0,
+        symbolScale: symbolCellScale,
+      });
+    }
+
+    ctx.save();
+    if (!this.magicOpenAiMode) {
+      drawCurvedPanelPath();
+      ctx.clip();
+    }
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    let symbolCenterX = (midLeft.x + midRight.x) / 2;
+    let symbolCenterY = (topCenter.y + bottomCenter.y) / 2;
+    if (this.magicOpenAiMode && cell.precomputedEdges) {
+      const centerShiftRad = angleSpanRad * 0.08;
+      const shiftedAngle = angleRad + centerShiftRad;
+      const shiftY = -radius * Math.sin(shiftedAngle);
+      const shiftZ = (radius * Math.cos(shiftedAngle)) - radius;
+      const shiftedCenter = this.projectWorldPoint(
+        0,
+        shiftY,
+        shiftZ,
+        reelCenterX,
+        reelCenterY,
+        perspective,
+        Number(cell.totalYawRad ?? this.magicCameraYawRad) || 0,
+        Number(this.magicCameraPitchRad) || 0,
+        Number(this.magicCameraDepthOffset) || 0,
+      );
+      symbolCenterX = shiftedCenter.x;
+      symbolCenterY = shiftedCenter.y;
+    }
+    ctx.translate(symbolCenterX, symbolCenterY);
+    let faceTowardsCamera = Math.cos(angleRad);
+    if (this.magicOpenAiMode) {
+      const normal = this.transformByMagicCamera(
+        0,
+        -Math.sin(angleRad),
+        Math.cos(angleRad),
+        false,
+      );
+      const totalYaw = Number(cell.totalYawRad ?? this.magicCameraYawRad) || 0;
+      const yawFacingSign = Math.cos(totalYaw) >= 0 ? 1 : -1;
+      // Render symbols/diamonds on the outer ring surface.
+      faceTowardsCamera = normal.z * yawFacingSign;
+    }
+    const isBackSide = faceTowardsCamera <= (this.magicOpenAiMode ? 0.03 : 0.02);
+
+    // Stable local basis for symbols/diamonds so they stay attached to the ring while
+    // remaining readable at side-facing swing angles.
+    const axisXx = midRight.x - midLeft.x;
+    const axisXy = midRight.y - midLeft.y;
+    const axisYx = bottomCenter.x - topCenter.x;
+    const axisYy = bottomCenter.y - topCenter.y;
+    const axisXLength = Math.hypot(axisXx, axisXy);
+    const axisYLength = Math.hypot(axisYx, axisYy);
+    const minAxisYLength = this.magicOpenAiMode ? 0.01 : 0.05;
+    if (axisYLength < minAxisYLength) {
+      ctx.restore();
+      if (cell.precomputedEdges) this.magicCameraYawRad = savedYaw;
+      return;
+    }
+    let axisYUnitX = axisYx / Math.max(axisYLength, 0.0001);
+    let axisYUnitY = axisYy / Math.max(axisYLength, 0.0001);
+    let axisXUnitX;
+    let axisXUnitY;
+    if (this.magicOpenAiMode && axisXLength < 0.05) {
+      // Stable silhouette fallback: derive X axis perpendicular to Y axis.
+      axisXUnitX = axisYUnitY;
+      axisXUnitY = -axisYUnitX;
+      const alignment = (axisXUnitX * axisXx) + (axisXUnitY * axisXy);
+      if (alignment < 0) {
+        axisXUnitX *= -1;
+        axisXUnitY *= -1;
+      }
+    } else {
+      axisXUnitX = axisXx / Math.max(axisXLength, 0.0001);
+      axisXUnitY = axisXy / Math.max(axisXLength, 0.0001);
+    }
+
+    const yDotX = (axisYUnitX * axisXUnitX) + (axisYUnitY * axisXUnitY);
+    axisYUnitX -= axisXUnitX * yDotX;
+    axisYUnitY -= axisXUnitY * yDotX;
+    const orthoYLength = Math.hypot(axisYUnitX, axisYUnitY);
+    if (orthoYLength < 0.001) {
+      axisYUnitX = -axisXUnitY;
+      axisYUnitY = axisXUnitX;
+    } else {
+      axisYUnitX /= orthoYLength;
+      axisYUnitY /= orthoYLength;
+    }
+
+    const symbolScaleXRaw = axisXLength / Math.max(1, baseCellWidth);
+    const symbolScaleY = axisYLength / Math.max(1, baseCellHeight);
+    let symbolScaleXText = symbolScaleXRaw;
+    if (this.magicOpenAiMode) {
+      // Keep numbers readable at side-on silhouettes without distorting badge curvature.
+      symbolScaleXText = Math.max(0.34, symbolScaleXText);
+    }
+
+    // Raw projected basis follows the true panel quadrilateral (best for ring curvature).
+    const rawPlaneTxX = axisXx / Math.max(1, baseCellWidth);
+    const rawPlaneTxY = axisXy / Math.max(1, baseCellWidth);
+    const rawPlaneTyX = axisYx / Math.max(1, baseCellHeight);
+    const rawPlaneTyY = axisYy / Math.max(1, baseCellHeight);
+
+    let textTxX = axisXUnitX * symbolScaleXText;
+    let textTxY = axisXUnitY * symbolScaleXText;
+    let textTyX = axisYUnitX * symbolScaleY;
+    let textTyY = axisYUnitY * symbolScaleY;
+    if (this.magicOpenAiMode && cell.precomputedEdges) {
+      // Keep numbers on the same projected tangent as diamonds during swing.
+      textTxX = rawPlaneTxX;
+      textTxY = rawPlaneTxY;
+      textTyX = rawPlaneTyX;
+      textTyY = rawPlaneTyY;
+    }
+    const textDet = (textTxX * textTyY) - (textTxY * textTyX);
+    if (textDet < 0) {
+      // Keep glyphs readable (non-mirrored).
+      textTxX *= -1;
+      textTxY *= -1;
+    }
+    if (this.magicOpenAiMode && !cell.precomputedEdges && textTyY < 0) {
+      // Prevent upside-down numbers at extreme rotations.
+      textTxX *= -1;
+      textTxY *= -1;
+      textTyX *= -1;
+      textTyY *= -1;
+    }
+    const symbolCellScale = (this.magicOpenAiMode && cell.precomputedEdges) ? 0.72 : 1;
+    const symbolCellWidth = baseCellWidth * symbolCellScale;
+    const symbolCellHeight = baseCellHeight * symbolCellScale;
+    if (isBackSide) {
+      // Keep numbers on outer-facing side only; diamonds are already drawn for all sectors.
+      ctx.restore();
+      if (cell.precomputedEdges) this.magicCameraYawRad = savedYaw;
+      return;
+    }
+    ctx.transform(textTxX, textTxY, textTyX, textTyY, 0, 0);
+    if (this.magicOpenAiMode) {
+      if (!cell.precomputedEdges) {
+        ctx.rotate(Math.PI);
+        const symbolCenterY = (topCenter.y + bottomCenter.y) / 2;
+        const rowsAboveCenter = Math.max(0, (reelCenterY - symbolCenterY) / Math.max(1, baseCellHeight));
+        const rotationBands = Math.floor(rowsAboveCenter + 0.05);
+        const extraDeg = Math.min(36, rotationBands * 10);
+        if (extraDeg > 0) {
+          ctx.rotate((extraDeg * Math.PI) / 180);
+        }
+      }
+    }
+    const symbolText = String(symbol ?? '');
+    ctx.font = `700 ${this.getSymbolFontSizePx(symbolCellHeight, symbolText)}px "Lucida Sans Unicode", "Lucida Grande", sans-serif`;
+    ctx.fillStyle = 'rgba(44, 29, 9, 0.98)';
+    ctx.strokeStyle = 'rgba(19, 13, 4, 0.82)';
+    ctx.lineWidth = Math.max(0.8, symbolCellHeight * 0.028);
+    ctx.shadowColor = 'rgba(255, 236, 162, 0.98)';
+    ctx.shadowBlur = 20;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+    const symbolTextY = 0;
+    ctx.strokeText(symbolText, 0, symbolTextY);
+    ctx.fillText(symbolText, 0, symbolTextY);
+    ctx.restore();
+
+    // Restore camera yaw if it was overridden for precomputed edges.
+    if (cell.precomputedEdges) {
+      this.magicCameraYawRad = savedYaw;
+    }
+  }
+
   drawReelCell(cell) {
     const ctx = this.ctx;
     if (!ctx) return;
-    const { points, symbol, depthWeight, baseCellWidth, baseCellHeight } = cell;
+    if (cell?.curved) {
+      this.drawCurvedReelCell(cell);
+      return;
+    }
+    const {
+      points,
+      symbol,
+      depthWeight,
+      baseCellWidth,
+      baseCellHeight,
+      paylineHighlight = 0,
+    } = cell;
     const [topLeft, topRight, bottomRight, bottomLeft] = points;
 
     const centerX = (topLeft.x + topRight.x + bottomRight.x + bottomLeft.x) / 4;
@@ -2863,53 +2370,51 @@ export class SlotMachine extends HTMLElement {
     const projectedHeight = Math.hypot(bottomMidX - topMidX, bottomMidY - topMidY);
     const projectedWidth = Math.hypot(rightMidX - leftMidX, rightMidY - leftMidY);
     if (projectedHeight < 6 || projectedWidth < 8) return;
-    const cornerRadius = Math.min(16, projectedHeight * 0.42, projectedWidth * 0.42);
 
-    const fillAlpha = 0.34 + (depthWeight * 0.22);
-    const borderAlpha = 0.12 + (depthWeight * 0.1);
-    const topColor = this.colorWithAlpha(this.reelPanelBaseColor, Math.min(1, fillAlpha + 0.08));
-    const middleColor = this.colorWithAlpha(this.reelPanelBaseColor, fillAlpha);
-    const bottomColor = this.colorWithAlpha(this.reelPanelBaseColor, Math.max(0.16, fillAlpha - 0.1));
-    const minY = Math.min(topLeft.y, topRight.y, bottomRight.y, bottomLeft.y);
-    const maxY = Math.max(topLeft.y, topRight.y, bottomRight.y, bottomLeft.y);
+    const borderAlpha = 0.98;
+    const edgeColor = this.lineColor || 'rgb(94, 61, 17)';
+    const itemBackground = this.reelCellFillColor || 'rgba(62, 44, 19, 0.88)';
+    const panelPoints = [topLeft, topRight, bottomRight, bottomLeft];
 
     ctx.save();
-    this.drawRoundedQuadPath(points, cornerRadius);
-
-    const fillGradient = ctx.createLinearGradient(0, minY, 0, maxY);
-    fillGradient.addColorStop(0, topColor);
-    fillGradient.addColorStop(0.5, middleColor);
-    fillGradient.addColorStop(1, bottomColor);
-
-    // Outer black shadow (10px spread)
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
-    ctx.shadowBlur = 10;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 0;
-    ctx.fillStyle = fillGradient;
+    this.drawPolygonPath(panelPoints);
+    ctx.fillStyle = itemBackground;
     ctx.fill();
     ctx.restore();
 
-    // Inset black shadow (10px spread) clipped inside panel shape
     ctx.save();
-    this.drawRoundedQuadPath(points, cornerRadius);
-    ctx.clip();
-    this.drawRoundedQuadPath(points, cornerRadius);
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)';
-    ctx.lineWidth = 14;
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.92)';
-    ctx.shadowBlur = 10;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 0;
+    ctx.strokeStyle = edgeColor;
+    ctx.globalAlpha = borderAlpha;
+    ctx.lineCap = 'butt';
+    ctx.lineJoin = 'miter';
+    ctx.shadowBlur = 0;
+
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.moveTo(topLeft.x, topLeft.y);
+    ctx.lineTo(bottomLeft.x, bottomLeft.y);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(topRight.x, topRight.y);
+    ctx.lineTo(bottomRight.x, bottomRight.y);
+    ctx.stroke();
+
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(topLeft.x, topLeft.y);
+    ctx.lineTo(topRight.x, topRight.y);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(bottomLeft.x, bottomLeft.y);
+    ctx.lineTo(bottomRight.x, bottomRight.y);
     ctx.stroke();
     ctx.restore();
 
+    // Diamond background below the symbol.
     ctx.save();
-    this.drawRoundedQuadPath(points, cornerRadius);
-    ctx.strokeStyle = this.reelBorderColor || 'rgba(245, 218, 118, 0.8)';
-    ctx.globalAlpha = borderAlpha;
-    ctx.lineWidth = Math.max(10, projectedHeight * 0.06);
-    ctx.stroke();
+    this.drawFlatDiamondBadge(centerX, centerY, baseCellWidth, baseCellHeight, depthWeight, paylineHighlight);
     ctx.restore();
 
     ctx.save();
@@ -2917,15 +2422,15 @@ export class SlotMachine extends HTMLElement {
     ctx.textBaseline = 'middle';
     ctx.translate(centerX, centerY);
     ctx.scale(projectedWidth / baseCellWidth, projectedHeight / baseCellHeight);
-    ctx.font = `700 ${Math.max(24, baseCellHeight * 0.44)}px "Lucida Sans Unicode", "Lucida Grande", sans-serif`;
-    ctx.fillStyle = 'rgba(245, 218, 118, 0.86)';
-    ctx.strokeStyle = 'rgba(245, 218, 118, 0.2)';
-    ctx.lineWidth = Math.max(1, baseCellHeight * 0.04);
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';
-    ctx.shadowBlur = 10;
+    const symbolText = String(symbol ?? '');
+    ctx.font = `700 ${this.getSymbolFontSizePx(baseCellHeight, symbolText)}px "Lucida Sans Unicode", "Lucida Grande", sans-serif`;
+    ctx.fillStyle = 'rgba(44, 29, 9, 0.98)';
+    ctx.strokeStyle = 'rgba(19, 13, 4, 0.82)';
+    ctx.lineWidth = Math.max(0.9, baseCellHeight * 0.03);
+    ctx.shadowColor = 'rgba(255, 236, 162, 0.98)';
+    ctx.shadowBlur = 20;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
-    const symbolText = String(symbol ?? '');
     ctx.strokeText(symbolText, 0, 0);
     ctx.fillText(symbolText, 0, 0);
     ctx.restore();
@@ -2939,23 +2444,43 @@ export class SlotMachine extends HTMLElement {
     const padY = this.spinnerPaddingTop || 0;
     const contentWidth = Math.max(1, this.canvasWidth - (padX * 2));
     const contentHeight = Math.max(1, this.canvasHeight - (padY * 2));
-    const reelWidth = contentWidth / 5;
-    const rowHeight = contentHeight / 3;
-    const reelCenterY = padY + (contentHeight / 2);
+    const magicRenderScale = this.magicOpenAiMode ? 0.26 : 1;
+    const reelAreaWidth = Math.max(1, contentWidth * magicRenderScale);
+    const reelAreaHeight = Math.max(1, contentHeight * magicRenderScale);
+    const reelAreaY = padY + ((contentHeight - reelAreaHeight) / 2);
+    const baseReelWidth = reelAreaWidth / 5;
+    const magicRingSeparationPx = 30;
+    const reelSpacing = this.magicOpenAiMode
+      ? (baseReelWidth + magicRingSeparationPx)
+      : baseReelWidth;
+    const reelSpanWidth = baseReelWidth + (reelSpacing * 4);
+    const reelStartX = padX + ((contentWidth - reelSpanWidth) / 2);
+    const reelWidth = baseReelWidth;
+    const rowHeight = reelAreaHeight / 3;
+    const reelCenterY = reelAreaY + (reelAreaHeight / 2);
+    const reelSpringOffsets = Array.isArray(this.reelSpringOffsets) && this.reelSpringOffsets.length >= 5
+      ? this.reelSpringOffsets
+      : [0, 0, 0, 0, 0];
     const strip = Array.isArray(this.symbolStrip) && this.symbolStrip.length
       ? this.symbolStrip
-      : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+      : this.buildNumberSymbols();
 
-    const cellGapPx = this.rewardMode === 2 ? 4 : 8;
-    const stepAngle = 360 / strip.length;
-    const baseCellWidth = reelWidth * 0.88;
+    const cellGapPx = 0;
+    const seamOverlapPx = this.magicOpenAiMode ? 5 : 2;
+    const reelUnitCount = Math.max(1, strip.length);
+    const stepAngle = 360 / reelUnitCount;
+    // Keep symbol indexing aligned with normal mode so magic starts at 0deg reel orientation.
+    const magicSymbolPhaseOffset = 0;
+    const baseCellWidth = reelWidth + seamOverlapPx;
     const baseCellPitch = rowHeight;
-    const baseCellHeight = Math.max(18, baseCellPitch - cellGapPx);
+    const baseCellHeight = Math.max(18, baseCellPitch - cellGapPx + seamOverlapPx);
 
-    if (this.rewardMode === 1) {
+    if (this.rewardMode === 1 && !this.magicOpenAiMode) {
       for (let reelIndex = 0; reelIndex < 5; reelIndex++) {
-        const reelLeft = padX + (reelIndex * reelWidth);
+        const reelLeft = reelStartX + (reelIndex * reelSpacing);
         const reelCenterX = reelLeft + (reelWidth / 2);
+        const reelYOffset = Number(reelSpringOffsets[reelIndex] || 0);
+        const reelCenterYWithSpring = reelCenterY + reelYOffset;
         const rotation = this.renderRotations[reelIndex] || 0;
         const symbolOffset = -rotation / stepAngle;
         const baseIndex = Math.floor(symbolOffset);
@@ -2963,16 +2488,16 @@ export class SlotMachine extends HTMLElement {
 
         ctx.save();
         ctx.beginPath();
-        ctx.rect(reelLeft, padY, reelWidth, contentHeight);
+        ctx.rect(reelLeft, reelAreaY, reelWidth, reelAreaHeight);
         ctx.clip();
 
         for (let row = -5; row <= 5; row++) {
           const virtualIndex = baseIndex + row;
           const normalizedIndex = ((virtualIndex % strip.length) + strip.length) % strip.length;
           const symbol = strip[normalizedIndex];
-          const centerY = (padY + (contentHeight / 2)) + ((row - fraction) * baseCellPitch);
+          const centerY = reelCenterYWithSpring + ((row - fraction) * baseCellPitch);
 
-          if (centerY < (padY - baseCellHeight) || centerY > (padY + contentHeight + baseCellHeight)) {
+          if (centerY < (reelAreaY - baseCellHeight) || centerY > (reelAreaY + reelAreaHeight + baseCellHeight)) {
             continue;
           }
 
@@ -2985,7 +2510,7 @@ export class SlotMachine extends HTMLElement {
             { x: reelCenterX - halfW, y: centerY + halfH },
           ];
 
-          const distanceFromCenter = Math.abs(centerY - (padY + (contentHeight / 2)));
+          const distanceFromCenter = Math.abs(centerY - reelCenterYWithSpring);
           const depthWeight = Math.max(0.18, 1 - (distanceFromCenter / (baseCellPitch * 4)));
 
           this.drawReelCell({
@@ -2998,14 +2523,14 @@ export class SlotMachine extends HTMLElement {
           });
         }
 
-        const flatOverlay = ctx.createLinearGradient(0, padY, 0, padY + contentHeight);
+        const flatOverlay = ctx.createLinearGradient(0, reelAreaY, 0, reelAreaY + reelAreaHeight);
         flatOverlay.addColorStop(0, 'rgba(0, 0, 0, 0.22)');
         flatOverlay.addColorStop(0.22, 'rgba(0, 0, 0, 0.04)');
         flatOverlay.addColorStop(0.5, 'rgba(255, 255, 255, 0.02)');
         flatOverlay.addColorStop(0.78, 'rgba(0, 0, 0, 0.04)');
         flatOverlay.addColorStop(1, 'rgba(0, 0, 0, 0.22)');
         ctx.fillStyle = flatOverlay;
-        ctx.fillRect(reelLeft, padY, reelWidth, contentHeight);
+        ctx.fillRect(reelLeft, reelAreaY, reelWidth, reelAreaHeight);
         ctx.restore();
       }
 
@@ -3013,10 +2538,10 @@ export class SlotMachine extends HTMLElement {
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.14)';
       ctx.lineWidth = 1;
       for (let i = 1; i < 5; i++) {
-        const x = padX + ((contentWidth / 5) * i);
+        const x = reelStartX + (reelSpacing * i);
         ctx.beginPath();
-        ctx.moveTo(x, padY);
-        ctx.lineTo(x, padY + contentHeight);
+        ctx.moveTo(x, reelAreaY);
+        ctx.lineTo(x, reelAreaY + reelAreaHeight);
         ctx.stroke();
       }
       ctx.restore();
@@ -3025,30 +2550,63 @@ export class SlotMachine extends HTMLElement {
 
     // Desandro carousel radius formula: (cellSize / 2) / tan(PI / numberOfCells)
     const radiusBase = (baseCellPitch / 2) / Math.tan(Math.PI / strip.length);
-    const radius = this.rewardMode === 2
-      ? Math.max(12, (radiusBase * 1.22) - 25)
-      : radiusBase;
-    const perspective = 1000;
-    const wheelVerticalClipPadding = this.rewardMode === 2 ? Math.max(8, baseCellHeight * 0.42) : 0;
-    const visibleMinY = padY - rowHeight - wheelVerticalClipPadding;
-    const visibleMaxY = padY + contentHeight + rowHeight + wheelVerticalClipPadding;
+    const radiusScale = this.magicOpenAiMode ? 0.78 : 1.08;
+    const radius = Math.max(12, radiusBase * radiusScale);
+    const perspective = this.magicOpenAiMode
+      ? Math.max(2400, radius * 10)
+      : 1000;
+    const wheelVerticalClipPadding = this.magicOpenAiMode
+      ? Math.max(baseCellHeight * 2.2, reelAreaHeight * 1.35)
+      : (
+        this.rewardMode === 2
+          ? Math.max(8, baseCellHeight * 0.42)
+          : 0
+      );
+    const wheelHorizontalClipPadding = this.magicOpenAiMode
+      ? Math.max(12, reelWidth * 0.45)
+      : 0;
+    const magicYawCenterCompensationX = this.magicOpenAiMode
+      ? (Math.sin(Number(this.magicCameraYawRad) || 0) * radius * 0.72)
+      : 0;
+    const reelCentersX = Array.from({ length: 5 }, (_, reelIndex) => (
+      reelStartX + (reelIndex * reelSpacing) + (reelWidth / 2) + magicYawCenterCompensationX
+    ));
+
+    if (this.magicOpenAiMode) {
+      this.drawMagicWorldReels(
+        reelStartX, reelSpacing, reelWidth, reelAreaY, reelAreaHeight,
+        reelCenterY, baseCellWidth, baseCellHeight, baseCellPitch,
+        radius, perspective, reelUnitCount, stepAngle,
+        magicSymbolPhaseOffset, strip, reelSpringOffsets,
+      );
+      return;
+    }
 
     for (let reelIndex = 0; reelIndex < 5; reelIndex++) {
-      const reelLeft = padX + (reelIndex * reelWidth);
-      const reelCenterX = reelLeft + (reelWidth / 2);
+      const reelLeft = reelStartX + (reelIndex * reelSpacing);
+      const reelCenterX = reelCentersX[reelIndex];
+      const reelYOffset = Number(reelSpringOffsets[reelIndex] || 0);
+      const reelCenterYWithSpring = reelCenterY + reelYOffset;
+      const angleSpanRad = ((Math.PI * 2) / reelUnitCount) * (this.magicOpenAiMode ? 1 : 1);
 
       ctx.save();
       ctx.beginPath();
-      ctx.rect(
-        reelLeft,
-        padY - wheelVerticalClipPadding,
-        reelWidth,
-        contentHeight + (wheelVerticalClipPadding * 2),
-      );
+      if (this.magicOpenAiMode) {
+        ctx.rect(0, 0, this.canvasWidth, this.canvasHeight);
+      } else {
+        ctx.rect(
+          reelLeft - wheelHorizontalClipPadding,
+          reelAreaY - wheelVerticalClipPadding,
+          reelWidth + (wheelHorizontalClipPadding * 2),
+          reelAreaHeight + (wheelVerticalClipPadding * 2),
+        );
+      }
       ctx.clip();
 
       const cells = [];
-      for (let idx = 0; idx < strip.length; idx++) {
+      for (let idx = 0; idx < reelUnitCount; idx++) {
+        const mappedIndex = ((idx + magicSymbolPhaseOffset) % reelUnitCount + reelUnitCount) % reelUnitCount;
+        const mappedSymbol = strip[mappedIndex];
         const angleDeg = (this.renderRotations[reelIndex] || 0) + (idx * stepAngle);
         const angleRad = angleDeg * (Math.PI / 180);
         const cosAngle = Math.cos(angleRad);
@@ -3074,56 +2632,231 @@ export class SlotMachine extends HTMLElement {
             y3d,
             z3d,
             reelCenterX,
-            reelCenterY,
+            reelCenterYWithSpring,
             perspective,
           ));
         }
 
-        const minY = Math.min(corners2d[0].y, corners2d[1].y, corners2d[2].y, corners2d[3].y);
-        const maxY = Math.max(corners2d[0].y, corners2d[1].y, corners2d[2].y, corners2d[3].y);
-        if (maxY < visibleMinY || minY > visibleMaxY) {
-          continue;
-        }
-
         const averageDepth = (cornerDepths[0] + cornerDepths[1] + cornerDepths[2] + cornerDepths[3]) / 4;
         cells.push({
+          unitIndex: idx,
           z: averageDepth,
+          curved: true,
+          angleRad,
+          angleSpanRad,
+          radius,
+          reelCenterX,
+          reelCenterY: reelCenterYWithSpring,
+          perspective,
           points: corners2d,
           baseCellWidth,
           baseCellHeight,
-          symbol: strip[idx],
-          hue: this.getSymbolHue(strip[idx], idx),
+          symbol: mappedSymbol,
+          hue: this.getSymbolHue(mappedSymbol, mappedIndex),
           depthWeight: Math.max(0, Math.min(1, 1 - (Math.abs(averageDepth) / (radius * 2.2)))),
         });
       }
 
-      cells.sort((left, right) => left.z - right.z);
+      cells.sort((left, right) => {
+        if (left.z !== right.z) return left.z - right.z;
+        return (left.unitIndex || 0) - (right.unitIndex || 0);
+      });
       for (let i = 0; i < cells.length; i++) {
         this.drawReelCell(cells[i]);
       }
 
-      const vignette = ctx.createLinearGradient(0, padY, 0, padY + contentHeight);
-      vignette.addColorStop(0, 'rgba(0, 0, 0, 0.24)');
-      vignette.addColorStop(0.2, 'rgba(0, 0, 0, 0.06)');
-      vignette.addColorStop(0.5, 'rgba(255, 255, 255, 0.03)');
-      vignette.addColorStop(0.8, 'rgba(0, 0, 0, 0.06)');
-      vignette.addColorStop(1, 'rgba(0, 0, 0, 0.24)');
-      ctx.fillStyle = vignette;
-      ctx.fillRect(reelLeft, padY, reelWidth, contentHeight);
+      if (!this.magicOpenAiMode) {
+        const vignette = ctx.createLinearGradient(0, reelAreaY, 0, reelAreaY + reelAreaHeight);
+        vignette.addColorStop(0, 'rgba(0, 0, 0, 0.24)');
+        vignette.addColorStop(0.2, 'rgba(0, 0, 0, 0.06)');
+        vignette.addColorStop(0.5, 'rgba(255, 255, 255, 0.03)');
+        vignette.addColorStop(0.8, 'rgba(0, 0, 0, 0.06)');
+        vignette.addColorStop(1, 'rgba(0, 0, 0, 0.24)');
+        ctx.fillStyle = vignette;
+        ctx.fillRect(reelLeft, reelAreaY, reelWidth, reelAreaHeight);
+      }
+
       ctx.restore();
     }
 
-    ctx.save();
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.14)';
-    ctx.lineWidth = 1;
-    for (let i = 1; i < 5; i++) {
-      const x = padX + ((contentWidth / 5) * i);
-      ctx.beginPath();
-      ctx.moveTo(x, padY);
-      ctx.lineTo(x, padY + contentHeight);
-      ctx.stroke();
+    if (!this.magicOpenAiMode) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.14)';
+      ctx.lineWidth = 1;
+      for (let i = 1; i < 5; i++) {
+        const x = reelStartX + (reelSpacing * i);
+        ctx.beginPath();
+        ctx.moveTo(x, reelAreaY);
+        ctx.lineTo(x, reelAreaY + reelAreaHeight);
+        ctx.stroke();
+      }
+      ctx.restore();
     }
-    ctx.restore();
+  }
+
+  drawMagicWorldReels(
+    reelStartX, reelSpacing, reelWidth, reelAreaY, reelAreaHeight,
+    reelCenterY, baseCellWidth, baseCellHeight, baseCellPitch,
+    radius, perspective, reelUnitCount, stepAngle,
+    magicSymbolPhaseOffset, strip, reelSpringOffsets,
+  ) {
+    const ctx = this.ctx;
+    if (!ctx) return;
+
+    const baseYaw = Number(this.magicCameraYawRad) || 0;
+    const swingRad = this.magicSwingAngleRad || 0;
+    const totalYaw = baseYaw + swingRad;
+    const pitchRad = Number(this.magicCameraPitchRad) || 0;
+    const depthOff = Number(this.magicCameraDepthOffset) || 0;
+    const angleSpanRad = (Math.PI * 2) / reelUnitCount;
+    const segments = 40;
+    const halfW = baseCellWidth / 2;
+    const yawCos = Math.cos(totalYaw);
+    const pitchCos = Math.cos(pitchRad);
+    const pitchSin = Math.sin(pitchRad);
+    const yawFacingSign = yawCos >= 0 ? 1 : -1;
+    const backFaceThreshold = 0.03;
+    const worldCells = [];
+
+    for (let reelIndex = 0; reelIndex < 5; reelIndex++) {
+      const reelCenterX = reelStartX + (reelIndex * reelSpacing) + (reelWidth / 2);
+      const reelYOffset = Number(reelSpringOffsets[reelIndex] || 0);
+      const reelCenterYWithSpring = reelCenterY + reelYOffset;
+      const reelCells = [];
+
+      // Precompute all 22 boundary polylines (shared between adjacent cells).
+      const boundaryPolylines = [];
+      for (let b = 0; b < reelUnitCount; b++) {
+        const rotDeg = this.renderRotations[reelIndex] || 0;
+        const rotRad = rotDeg * (Math.PI / 180);
+        const boundaryAngle = rotRad + ((b + 0.5) * angleSpanRad);
+
+        const bY = -radius * Math.sin(boundaryAngle);
+        const bZ = (radius * Math.cos(boundaryAngle)) - radius;
+
+        const leftPt = this.projectWorldPoint(
+          -halfW, bY, bZ,
+          reelCenterX, reelCenterYWithSpring, perspective,
+          totalYaw, pitchRad, depthOff,
+        );
+        const rightPt = this.projectWorldPoint(
+          halfW, bY, bZ,
+          reelCenterX, reelCenterYWithSpring, perspective,
+          totalYaw, pitchRad, depthOff,
+        );
+        boundaryPolylines.push({ left: leftPt, right: rightPt });
+      }
+
+      // Build cells with shared boundary edges.
+      for (let idx = 0; idx < reelUnitCount; idx++) {
+        const mappedIndex = ((idx + magicSymbolPhaseOffset) % reelUnitCount + reelUnitCount) % reelUnitCount;
+        const mappedSymbol = strip[mappedIndex];
+        const rotDeg = this.renderRotations[reelIndex] || 0;
+        const rotRad = rotDeg * (Math.PI / 180);
+        const cellAngleRad = rotRad + (idx * angleSpanRad);
+
+        // Top boundary = boundary idx, bottom boundary = boundary (idx+1) % count.
+        const topBoundary = boundaryPolylines[idx];
+        const bottomBoundary = boundaryPolylines[(idx + 1) % reelUnitCount];
+
+        // Build edge arrays: first sample is the shared top boundary,
+        // last sample is the shared bottom boundary, interior is per-cell.
+        const leftEdge = [topBoundary.left];
+        const rightEdge = [topBoundary.right];
+        const centerEdge = [{
+          x: (topBoundary.left.x + topBoundary.right.x) / 2,
+          y: (topBoundary.left.y + topBoundary.right.y) / 2,
+        }];
+
+        for (let i = 1; i < segments; i++) {
+          const t = i / segments;
+          const angle = cellAngleRad + ((0.5 - t) * angleSpanRad);
+          const sY = -radius * Math.sin(angle);
+          const sZ = (radius * Math.cos(angle)) - radius;
+
+          const left = this.projectWorldPoint(
+            -halfW, sY, sZ,
+            reelCenterX, reelCenterYWithSpring, perspective,
+            totalYaw, pitchRad, depthOff,
+          );
+          const right = this.projectWorldPoint(
+            halfW, sY, sZ,
+            reelCenterX, reelCenterYWithSpring, perspective,
+            totalYaw, pitchRad, depthOff,
+          );
+          leftEdge.push(left);
+          rightEdge.push(right);
+          centerEdge.push({
+            x: (left.x + right.x) / 2,
+            y: (left.y + right.y) / 2,
+          });
+        }
+
+        // Last sample = shared bottom boundary.
+        leftEdge.push(bottomBoundary.left);
+        rightEdge.push(bottomBoundary.right);
+        centerEdge.push({
+          x: (bottomBoundary.left.x + bottomBoundary.right.x) / 2,
+          y: (bottomBoundary.left.y + bottomBoundary.right.y) / 2,
+        });
+
+        // Compute average depth for sorting within this reel.
+        const topZ = (((topBoundary.left.viewZ || 0) + (topBoundary.right.viewZ || 0)) / 2);
+        const bottomZ = (((bottomBoundary.left.viewZ || 0) + (bottomBoundary.right.viewZ || 0)) / 2);
+        const averageDepth = (topZ + bottomZ) / 2;
+        const normalY = -Math.sin(cellAngleRad);
+        const normalZ = Math.cos(cellAngleRad);
+        const yawedNormalZ = normalZ * yawCos;
+        const pitchedNormalZ = (normalY * pitchSin) + (yawedNormalZ * pitchCos);
+        const faceTowardsCamera = pitchedNormalZ * yawFacingSign;
+        const isBackSide = faceTowardsCamera <= backFaceThreshold;
+
+        reelCells.push({
+          unitIndex: idx,
+          reelIndex,
+          z: averageDepth,
+          faceTowardsCamera,
+          isBackSide,
+          curved: true,
+          angleRad: cellAngleRad,
+          angleSpanRad,
+          radius,
+          reelCenterX,
+          reelCenterY: reelCenterYWithSpring,
+          perspective,
+          baseCellWidth,
+          baseCellHeight,
+          symbol: mappedSymbol,
+          hue: this.getSymbolHue(mappedSymbol, mappedIndex),
+          depthWeight: Math.max(0, Math.min(1, 1 - (Math.abs(averageDepth) / (radius * 2.2)))),
+          totalYawRad: totalYaw,
+          precomputedEdges: { leftEdge, rightEdge, centerEdge },
+        });
+      }
+      for (let i = 0; i < reelCells.length; i++) {
+        worldCells.push(reelCells[i]);
+      }
+    }
+
+    // Global painter's order across all reels:
+    // 1) back-facing sectors first
+    // 2) farther sectors first
+    // 3) stable tie-breakers
+    worldCells.sort((a, b) => {
+      if (a.isBackSide !== b.isBackSide) {
+        return a.isBackSide ? -1 : 1;
+      }
+      if (a.z !== b.z) return a.z - b.z;
+      if (a.faceTowardsCamera !== b.faceTowardsCamera) {
+        return a.faceTowardsCamera - b.faceTowardsCamera;
+      }
+      if (a.reelIndex !== b.reelIndex) return a.reelIndex - b.reelIndex;
+      return (a.unitIndex || 0) - (b.unitIndex || 0);
+    });
+
+    for (let i = 0; i < worldCells.length; i++) {
+      this.drawReelCell(worldCells[i]);
+    }
   }
 
   drawJokerSprite(x, y) {
@@ -3134,14 +2867,37 @@ export class SlotMachine extends HTMLElement {
     const imageHeight = this.img.height;
     if (!imageWidth || !imageHeight) return;
 
-    const scale = Math.min(
+    const baseScale = Math.min(
       (2 * this.cellHalfWidth) / imageWidth,
       (2 * this.cellHalfHeight) / imageHeight,
     );
+    // Keep joker 10% smaller while staying centered in the selected cell.
+    const scale = baseScale * 0.9;
 
     const drawX = x + ((2 * this.cellHalfWidth - (imageWidth * scale)) / 2);
     const drawY = y + ((2 * this.cellHalfHeight - (imageHeight * scale)) / 2);
     this.ctx.drawImage(this.img, drawX, drawY, imageWidth * scale, imageHeight * scale);
+  }
+
+  getCellOriginFromGridPosition(gridPos) {
+    if (!Number.isFinite(gridPos) || gridPos < 0 || gridPos > 14) {
+      return null;
+    }
+
+    const row = Math.floor(gridPos / 5);
+    const col = gridPos % 5;
+    return {
+      x: this.spinnerPaddingLeft + (this.cellHalfWidth * 2 * col),
+      y: this.spinnerPaddingTop + (this.cellHalfHeight * 2 * row),
+    };
+  }
+
+  syncJokerCanvasPositionFromSelection() {
+    if (!this.jokerPosition || this.jokerPosition <= 0) return;
+    const origin = this.getCellOriginFromGridPosition(this.jokerPosition - 1);
+    if (!origin) return;
+    this.jokerCanvasX = origin.x;
+    this.jokerCanvasY = origin.y;
   }
 
   drawJokerSelectionBoxes() {
@@ -3186,14 +2942,16 @@ export class SlotMachine extends HTMLElement {
 
     this.drawReelsCanvas();
 
-    // During spin, skip overlay drawing for better frame pacing.
-    if (!this.isSpinning) {
+    // Keep paylines as top layer in 3x5 mode during and outside spin.
+    if (!this.magicOpenAiMode) {
       this.lineCheck();
-
       if (this.jokerSelectionActive) {
         this.drawJokerSelectionBoxes();
       }
+
+      // Joker should always stay visible and top-most until explicitly removed.
       if (this.jokerPosition > 0 && (this.jokerAdded || this.jokerSelectionActive)) {
+        this.syncJokerCanvasPositionFromSelection();
         this.drawJokerSprite(this.jokerCanvasX, this.jokerCanvasY);
       }
     }
@@ -3205,15 +2963,22 @@ export class SlotMachine extends HTMLElement {
 
   createOddsTables() {
     // Use default symbols and odds for initial game type (1 = Numbers)
-    const symbols = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-    const odds = [...this.kvote];
+    const symbols = this.getSymbolSetForGameType(this.gameTypeValue || 1);
+    const odds = this.getOddsForGameType(this.gameTypeValue || 1);
     this.updateOddsTables(symbols, odds);
   }
 
   bindEvents() {
     this.shadowRoot.getElementById('startBtn').addEventListener('click', () => this.startSpin());
     this.shadowRoot.getElementById('stopBtn').addEventListener('click', () => this.stopSpin());
-    this.shadowRoot.getElementById('jokerCheckbox').addEventListener('change', (e) => this.toggleJoker(e.target.checked));
+    const jokerToggleButton = this.shadowRoot.getElementById('jokerCheckbox');
+    if (jokerToggleButton) {
+      jokerToggleButton.addEventListener('click', () => {
+        if (jokerToggleButton.disabled) return;
+        const shouldEnable = !jokerToggleButton.classList.contains('active');
+        this.toggleJoker(shouldEnable);
+      });
+    }
     this.shadowRoot.getElementById('confirmJokerBtn').addEventListener('click', () => this.confirmJoker());
     this.shadowRoot.getElementById('removeJokerBtn').addEventListener('click', () => this.removeJoker());
     this.shadowRoot.getElementById('gameTypeBtn').addEventListener('click', () => this.cycleGameType());
@@ -3250,7 +3015,122 @@ export class SlotMachine extends HTMLElement {
       void this.loadHistoryPage(page);
     });
 
+    const magicButton = this.shadowRoot.getElementById('magicOpenAiBtn');
+    if (magicButton) {
+      magicButton.addEventListener('click', () => this.toggleMagicOpenAiMode());
+    }
+    const magicBackButton = this.shadowRoot.getElementById('magicOpenAiBackBtn');
+    if (magicBackButton) {
+      magicBackButton.addEventListener('click', () => this.toggleMagicOpenAiMode(false));
+    }
+    if (this.rootElement) {
+      this.rootElement.addEventListener('click', (event) => {
+        const trigger = event.target?.closest?.('#magicOpenAiBackBtn');
+        if (!trigger) return;
+        event.preventDefault();
+        this.toggleMagicOpenAiMode(false);
+      });
+    }
+
     window.addEventListener('resize', () => this.initCanvas());
+  }
+
+  startMagicSwingAnimation() {
+    this.stopMagicSwingAnimation();
+    this.magicSwingStartTime = performance.now();
+    const loop = (now) => {
+      const elapsed = (now - this.magicSwingStartTime) / 1000;
+      const speed = Math.max(0.0001, this.magicSwingSpeedRadPerSec);
+      const quarterPeriod = Math.PI / (2 * speed);
+      const startupLeftDuration = quarterPeriod;
+      const startupRightDuration = quarterPeriod * 2;
+
+      if (elapsed <= startupLeftDuration) {
+        // 0deg -> initial left swing.
+        const t = Math.max(0, Math.min(1, elapsed / startupLeftDuration));
+        this.magicSwingAngleRad = -this.magicInitialLeftSwingRad * Math.sin((Math.PI / 2) * t);
+      } else if (elapsed <= startupLeftDuration + startupRightDuration) {
+        // Initial left swing -> full right swing, then continue steady +/-amplitude oscillation.
+        const t = (elapsed - startupLeftDuration) / startupRightDuration;
+        const from = -this.magicInitialLeftSwingRad;
+        const to = this.magicSwingAmplitudeRad;
+        const mid = (from + to) / 2;
+        const amp = (to - from) / 2;
+        this.magicSwingAngleRad = mid - (amp * Math.cos(Math.PI * t));
+      } else {
+        // Steady oscillation: +amplitude -> -amplitude -> +amplitude ...
+        const steadyElapsed = elapsed - startupLeftDuration - startupRightDuration;
+        this.magicSwingAngleRad = this.magicSwingAmplitudeRad * Math.cos(speed * steadyElapsed);
+      }
+
+      // Only call renderFrame if no spin animation is running (avoids double-render).
+      if (!this.reelAnimationFrame) {
+        this.renderFrame();
+      }
+      this.magicSwingAnimationFrame = requestAnimationFrame(loop);
+    };
+    this.magicSwingAnimationFrame = requestAnimationFrame(loop);
+  }
+
+  stopMagicSwingAnimation() {
+    if (this.magicSwingAnimationFrame) {
+      cancelAnimationFrame(this.magicSwingAnimationFrame);
+      this.magicSwingAnimationFrame = null;
+    }
+    this.magicSwingAngleRad = 0;
+  }
+
+  toggleMagicOpenAiMode(forceState = null) {
+    const isForcedState = typeof forceState === 'boolean';
+    const nextState = typeof forceState === 'boolean' ? forceState : !this.magicOpenAiMode;
+    const hadSameState = this.magicOpenAiMode === nextState;
+    if (!isForcedState && hadSameState) {
+      return;
+    }
+    const wasMagicMode = this.magicOpenAiMode;
+    this.magicOpenAiMode = nextState;
+
+    if (this.magicOpenAiMode && !wasMagicMode) {
+      this.magicOpenAiPrevView = this.activeMenuView || 'game';
+      this.magicOpenAiPrevBodyOverflow = document.body.style.overflow || '';
+      document.body.style.overflow = 'hidden';
+      this.startMagicSwingAnimation();
+    } else if (!this.magicOpenAiMode && wasMagicMode) {
+      this.stopMagicSwingAnimation();
+      document.body.style.overflow = this.magicOpenAiPrevBodyOverflow || '';
+    } else if (!this.magicOpenAiMode && hadSameState) {
+      // Forced cleanup when classes and state drift out of sync.
+      document.body.style.overflow = this.magicOpenAiPrevBodyOverflow || '';
+    }
+
+    if (this.rootElement) {
+      this.rootElement.classList.toggle('magic-openai-fullscreen', this.magicOpenAiMode);
+    }
+    const slotGame = this.shadowRoot.querySelector('.slot-game');
+    if (slotGame) {
+      slotGame.classList.toggle('magic-openai-fullscreen', this.magicOpenAiMode);
+    }
+
+    if (this.canvas) {
+      this.canvas.classList.toggle('magic-openai-active', this.magicOpenAiMode);
+    }
+
+    const magicButton = this.shadowRoot.getElementById('magicOpenAiBtn');
+    if (magicButton) {
+      magicButton.classList.toggle('active', this.magicOpenAiMode);
+      magicButton.setAttribute('aria-pressed', this.magicOpenAiMode ? 'true' : 'false');
+    }
+    const magicBackButton = this.shadowRoot.getElementById('magicOpenAiBackBtn');
+    if (magicBackButton) {
+      magicBackButton.setAttribute('aria-hidden', this.magicOpenAiMode ? 'false' : 'true');
+    }
+
+    if (this.activeMenuView !== 'game') {
+      this.setMenuView('game');
+    }
+
+    this.initCanvas();
+    this.renderFrame();
   }
 
   setMenuView(view) {
@@ -3474,7 +3354,7 @@ export class SlotMachine extends HTMLElement {
     const nextIndex = (activeIndex + 1) % controlGroups.length;
     const nextElement = controlGroups[nextIndex];
     const value = parseInt(nextElement.dataset.value);
-    const name = nextElement.querySelector('label').textContent;
+    const name = (nextElement.textContent || '').trim();
     this.selectGameType(value, name, nextElement);
   }
 
@@ -3516,12 +3396,13 @@ export class SlotMachine extends HTMLElement {
 
     // Create new bet options
     bets.forEach((bet, idx) => {
-      const div = document.createElement('div');
-      div.className = 'control-group' + (idx === 0 ? ' active' : '');
-      div.dataset.value = bet;
-      div.innerHTML = `<label>${bet} $</label>`;
-      div.addEventListener('click', () => this.selectBet(bet, div));
-      betOptions.appendChild(div);
+      const optionButton = document.createElement('button');
+      optionButton.type = 'button';
+      optionButton.className = 'control-group' + (idx === 0 ? ' active' : '');
+      optionButton.dataset.value = String(bet);
+      optionButton.textContent = `${bet} $`;
+      optionButton.addEventListener('click', () => this.selectBet(bet, optionButton));
+      betOptions.appendChild(optionButton);
     });
 
     // Set the first bet as active
@@ -3531,6 +3412,13 @@ export class SlotMachine extends HTMLElement {
 
   selectBet(bet, element) {
     this.bet = bet;
+    if (this.rewardMode === 1 && this.jokerAdded && this.jokerPosition > 0) {
+      this.jokerCost = this.bet * 5;
+      const jokerStatus = this.shadowRoot.getElementById('jokerStatus');
+      if (jokerStatus) {
+        jokerStatus.textContent = `YES (${this.jokerCost} $)`;
+      }
+    }
     element.parentElement.querySelectorAll('.control-group').forEach(el => el.classList.remove('active'));
     element.classList.add('active');
     this.updateDisplay();
@@ -3548,7 +3436,9 @@ export class SlotMachine extends HTMLElement {
     // If user switches to single-line mode, force-clear any joker state first.
     if (value === 2) {
       const jokerCheckbox = this.shadowRoot.getElementById('jokerCheckbox');
-      const hasJokerState = this.jokerAdded || this.jokerPosition > 0 || (jokerCheckbox && jokerCheckbox.checked);
+      const hasJokerState = this.jokerAdded
+        || this.jokerPosition > 0
+        || (jokerCheckbox && jokerCheckbox.classList.contains('active'));
       if (hasJokerState) {
         this.removeJoker();
       }
@@ -3614,13 +3504,13 @@ export class SlotMachine extends HTMLElement {
 
     if (activeCount === 1) {
       // Mark the last remaining active line as disabled (can't be turned off)
-      linesContainer.querySelectorAll('div.active').forEach(div => {
-        div.classList.add('last-active');
+      linesContainer.querySelectorAll('.control-group.active').forEach((lineBtn) => {
+        lineBtn.classList.add('last-active');
       });
     } else {
       // Remove last-active marker from all lines
-      linesContainer.querySelectorAll('div.last-active').forEach(div => {
-        div.classList.remove('last-active');
+      linesContainer.querySelectorAll('.control-group.last-active').forEach((lineBtn) => {
+        lineBtn.classList.remove('last-active');
       });
     }
 
@@ -3643,6 +3533,12 @@ export class SlotMachine extends HTMLElement {
   }
 
   toggleJoker(checked) {
+    const jokerButton = this.shadowRoot.getElementById('jokerCheckbox');
+    if (jokerButton) {
+      jokerButton.classList.toggle('active', !!checked);
+      jokerButton.setAttribute('aria-pressed', checked ? 'true' : 'false');
+    }
+
     if (checked) {
       // Calculate which grid positions are active based on selected lines
       this.calculateValidJokerPositions();
@@ -3667,24 +3563,49 @@ export class SlotMachine extends HTMLElement {
     this.updateDisplay();
   }
 
-  calculateValidJokerPositions() {
-    this.validJokerPositions = new Array(15).fill(0);
-
-    // Grid position mapping for each payline
-    const paylineGridPositions = [
+  getPaylineGridPositions() {
+    return [
       [5, 6, 7, 8, 9],      // Line 0: Middle row
       [0, 1, 2, 3, 4],      // Line 1: Top row
       [10, 11, 12, 13, 14], // Line 2: Bottom row
       [3, 5, 7, 9, 11],     // Line 3: Diagonal
       [1, 5, 7, 9, 13],     // Line 4: Diagonal
       [0, 4, 6, 8, 12],     // Line 5: Zigzag
-      [2, 6, 8, 10, 14]     // Line 6: Zigzag
+      [2, 6, 8, 10, 14],    // Line 6: Zigzag
     ];
+  }
 
-    for (let i = 0; i < 7; i++) {
+  getActivePaylineHighlightMap() {
+    const highlightMap = new Array(15).fill(0);
+    if (this.rewardMode !== 1) {
+      return highlightMap;
+    }
+
+    const paylineGridPositions = this.getPaylineGridPositions();
+    for (let lineIndex = 0; lineIndex < paylineGridPositions.length; lineIndex++) {
+      if (this.selectedPaylines[lineIndex] !== 1) continue;
+      const positions = paylineGridPositions[lineIndex] || [];
+      for (let posIndex = 0; posIndex < positions.length; posIndex++) {
+        const gridPosition = positions[posIndex];
+        if (!Number.isFinite(gridPosition) || gridPosition < 0 || gridPosition >= highlightMap.length) {
+          continue;
+        }
+        highlightMap[gridPosition] += 1;
+      }
+    }
+
+    return highlightMap;
+  }
+
+  calculateValidJokerPositions() {
+    this.validJokerPositions = new Array(15).fill(0);
+
+    const paylineGridPositions = this.getPaylineGridPositions();
+    for (let i = 0; i < paylineGridPositions.length; i++) {
       if (this.selectedPaylines[i] === 1) {
-        for (let j = 0; j < 5; j++) {
-          this.validJokerPositions[paylineGridPositions[i][j]] = 1;
+        const positions = paylineGridPositions[i] || [];
+        for (let j = 0; j < positions.length; j++) {
+          this.validJokerPositions[positions[j]] = 1;
         }
       }
     }
@@ -3797,7 +3718,7 @@ export class SlotMachine extends HTMLElement {
     const removeBtn = this.shadowRoot.getElementById('removeJokerBtn');
     const checkbox = this.shadowRoot.getElementById('jokerCheckbox');
 
-    if (checkbox && checkbox.checked && !this.jokerAdded) {
+    if (checkbox && checkbox.classList.contains('active') && !this.jokerAdded) {
       confirmBtn.style.display = 'block';
       removeBtn.style.display = 'none';
     }
@@ -3819,7 +3740,12 @@ export class SlotMachine extends HTMLElement {
     this.drawLines();
 
     // Disable checkbox
-    this.shadowRoot.getElementById('jokerCheckbox').disabled = true;
+    const jokerButton = this.shadowRoot.getElementById('jokerCheckbox');
+    if (jokerButton) {
+      jokerButton.disabled = true;
+      jokerButton.classList.add('active');
+      jokerButton.setAttribute('aria-pressed', 'true');
+    }
 
     // Show lines container again
     this.shadowRoot.getElementById('linesContainer').style.display = 'flex';
@@ -3844,10 +3770,13 @@ export class SlotMachine extends HTMLElement {
     this.shadowRoot.getElementById('confirmJokerBtn').style.display = 'none';
     this.shadowRoot.getElementById('removeJokerBtn').style.display = 'none';
 
-    // Re-enable and uncheck checkbox
+    // Re-enable and reset joker toggle button
     const checkbox = this.shadowRoot.getElementById('jokerCheckbox');
-    checkbox.disabled = false;
-    checkbox.checked = false;
+    if (checkbox) {
+      checkbox.disabled = false;
+      checkbox.classList.remove('active');
+      checkbox.setAttribute('aria-pressed', 'false');
+    }
 
     // If user was in joker-pick flow, ensure lines are visible again in multi-line mode
     const linesContainer = this.shadowRoot.getElementById('linesContainer');
@@ -3857,26 +3786,8 @@ export class SlotMachine extends HTMLElement {
   }
 
   updateSymbols() {
-    // Symbol sets for each game type
-    const symbolSets = {
-      1: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-      2: ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'],
-      3: ['🍏', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🥝', '🍒'],
-      4: ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐼', '🐨', '🦁', '🐯'],
-      5: ['😀', '😁', '😂', '🤣', '😅', '😎', '🤩', '😈', '🥳', '🤖']
-    };
-
-    // Odds for each game type (5 symbol-pairs × 4 matches = 20 values)
-    const oddsSets = {
-      1: [200, 100, 60, 10, 150, 80, 50, 8, 100, 50, 30, 5, 50, 30, 20, 4, 30, 20, 10, 3], // Numbers
-      2: [180, 90, 56, 8, 130, 70, 45, 7, 90, 40, 28, 4, 40, 28, 18, 3, 28, 18, 8, 2],      // Roman
-      3: [320, 180, 110, 14, 260, 140, 80, 12, 200, 100, 60, 8, 100, 60, 40, 7, 60, 40, 20, 6], // Fruits
-      4: [260, 140, 80, 12, 200, 110, 60, 10, 150, 70, 40, 7, 70, 40, 30, 6, 40, 30, 15, 5], // Animals
-      5: [220, 120, 70, 10, 170, 90, 50, 8, 120, 60, 35, 6, 60, 35, 25, 5, 35, 25, 12, 4]    // Emoji
-    };
-
-    const symbols = symbolSets[this.gameTypeValue] || symbolSets[1];
-    const odds = oddsSets[this.gameTypeValue] || oddsSets[1];
+    const symbols = this.getSymbolSetForGameType(this.gameTypeValue);
+    const odds = this.getOddsForGameType(this.gameTypeValue);
     this.symbolStrip = [...symbols];
     this.kvote = [...odds];
 
@@ -3899,7 +3810,7 @@ export class SlotMachine extends HTMLElement {
     // Clear existing tables
     container.innerHTML = '';
 
-    // Groups are rendered from highest symbol pair to lowest (e.g. 10/9 ... 2/1).
+    // Groups are rendered from highest symbol pair to lowest (e.g. 22/21 ... 2/1).
     const pairCount = Math.min(Math.floor(odds.length / 4), Math.floor(symbols.length / 2));
     const groups = [];
     for (let groupIdx = 0; groupIdx < pairCount; groupIdx++) {
@@ -3939,8 +3850,9 @@ export class SlotMachine extends HTMLElement {
     this.shadowRoot.getElementById('credits').textContent = this.credits;
     this.shadowRoot.getElementById('currentBet').textContent = this.bet;
     const activeLines = this.rewardMode === 2 ? 1 : this.selectedPaylines.filter(l => l === 1).length;
+    const jokerFee = this.rewardMode === 1 && this.jokerAdded && this.jokerPosition > 0 ? this.jokerCost : 0;
     this.shadowRoot.getElementById('lineCount').textContent = activeLines;
-    const totalBet = this.rewardMode === 2 ? this.bet : (activeLines * this.bet) + this.jokerCost;
+    const totalBet = this.rewardMode === 2 ? this.bet : (activeLines * this.bet) + jokerFee;
     this.shadowRoot.getElementById('totalBet').textContent = totalBet;
     this.shadowRoot.getElementById('spinsCount').textContent = this.spinsCount;
   }
@@ -3959,16 +3871,80 @@ export class SlotMachine extends HTMLElement {
     // Only draw lines in multi-line mode
     // In single-line mode, the canvas border itself is the highlight
     if (this.rewardMode === 1) {
+      const activeLines = [];
       for (let i = 0; i < 7; i++) {
         if (this.selectedPaylines[i] === 1) {
-          this.drawPayline(i);
+          activeLines.push(i);
         }
+      }
+      const mergeLine67Markers = this.selectedPaylines[5] === 1 && this.selectedPaylines[6] === 1;
+      for (let i = 0; i < activeLines.length; i++) {
+        this.drawPayline(activeLines[i], { drawPath: true, drawMarkers: false });
+      }
+      for (let i = 0; i < activeLines.length; i++) {
+        this.drawPayline(activeLines[i], { drawPath: false, drawMarkers: true, mergeLine67Markers });
+      }
+      if (mergeLine67Markers) {
+        this.drawMergedLine67Markers();
       }
     }
   }
 
-  drawPayline(x) {
+  createLineThumbGradient(centerX, centerY, radius) {
+    if (!this.ctx) return null;
+    const ctx = this.ctx;
+    const safeRadius = Math.max(1, Number(radius) || 1);
+
+    if (typeof ctx.createConicGradient === 'function') {
+      const gradient = ctx.createConicGradient(-Math.PI / 2, centerX, centerY);
+      gradient.addColorStop(0, 'rgba(255, 234, 164, 0.99)');
+      gradient.addColorStop(0.22, 'rgba(224, 170, 72, 0.99)');
+      gradient.addColorStop(0.5, 'rgba(247, 204, 106, 0.99)');
+      gradient.addColorStop(0.74, 'rgba(170, 118, 40, 0.99)');
+      gradient.addColorStop(1, 'rgba(255, 234, 164, 0.99)');
+      return gradient;
+    }
+
+    const linearGradient = ctx.createLinearGradient(
+      centerX - safeRadius,
+      centerY - safeRadius,
+      centerX + safeRadius,
+      centerY + safeRadius,
+    );
+    linearGradient.addColorStop(0, 'rgba(255, 234, 164, 0.99)');
+    linearGradient.addColorStop(0.5, 'rgba(247, 204, 106, 0.99)');
+    linearGradient.addColorStop(1, 'rgba(170, 118, 40, 0.99)');
+    return linearGradient;
+  }
+
+  traceRoundedRectPath(left, top, width, height, radius) {
     if (!this.ctx) return;
+    const ctx = this.ctx;
+    const safeRadius = Math.max(0, Math.min(radius, Math.min(width, height) / 2));
+    ctx.beginPath();
+
+    if (typeof ctx.roundRect === 'function') {
+      ctx.roundRect(left, top, width, height, safeRadius);
+      return;
+    }
+
+    ctx.moveTo(left + safeRadius, top);
+    ctx.lineTo(left + width - safeRadius, top);
+    ctx.quadraticCurveTo(left + width, top, left + width, top + safeRadius);
+    ctx.lineTo(left + width, top + height - safeRadius);
+    ctx.quadraticCurveTo(left + width, top + height, left + width - safeRadius, top + height);
+    ctx.lineTo(left + safeRadius, top + height);
+    ctx.quadraticCurveTo(left, top + height, left, top + height - safeRadius);
+    ctx.lineTo(left, top + safeRadius);
+    ctx.quadraticCurveTo(left, top, left + safeRadius, top);
+    ctx.closePath();
+  }
+
+  drawPayline(x, options = {}) {
+    if (!this.ctx) return;
+    const drawPath = options.drawPath !== false;
+    const drawMarkers = options.drawMarkers !== false;
+    const mergeLine67Markers = options.mergeLine67Markers === true;
 
     // Padding offsets for proper alignment with reels
     const padX = this.spinnerPaddingLeft || 0;
@@ -4018,33 +3994,130 @@ export class SlotMachine extends HTMLElement {
       ]
     ];
 
-    // Draw the line path
-    this.ctx.strokeStyle = this.lineColor;
-    this.ctx.lineWidth = 10;
-    this.ctx.beginPath();
-
-    for (let i = 0; i < path[x][0].length; i++) {
-      if (i === 0) {
-        this.ctx.moveTo(path[x][0][i][0], path[x][0][i][1]);
-      } else {
-        this.ctx.lineTo(path[x][0][i][0], path[x][0][i][1]);
+    const drawPathGeometry = () => {
+      this.ctx.beginPath();
+      for (let i = 0; i < path[x][0].length; i++) {
+        if (i === 0) {
+          this.ctx.moveTo(path[x][0][i][0], path[x][0][i][1]);
+        } else {
+          this.ctx.lineTo(path[x][0][i][0], path[x][0][i][1]);
+        }
       }
+    };
+
+    if (drawPath) {
+      this.ctx.globalAlpha = 1;
+      this.ctx.lineCap = 'round';
+      this.ctx.lineJoin = 'round';
+
+      // Dark base stroke for higher contrast.
+      this.ctx.strokeStyle = 'rgba(16, 10, 3, 0.98)';
+      this.ctx.lineWidth = 6;
+      drawPathGeometry();
+      this.ctx.stroke();
+
+      // Dark-gold visible stroke.
+      this.ctx.strokeStyle = this.lineColor || 'rgb(94, 61, 17)';
+      this.ctx.lineWidth = 4;
+      drawPathGeometry();
+      this.ctx.stroke();
     }
-    this.ctx.stroke();
 
     // Draw numbered circles on the line
-    for (let i = 0; i < path[x][1].length; i++) {
-      this.ctx.lineWidth = 1;
-      this.ctx.beginPath();
-      this.ctx.arc(path[x][1][i][0], path[x][1][i][1], 10, 0, 2 * Math.PI);
-      this.ctx.fillStyle = 'white';
-      this.ctx.fill();
-      this.ctx.stroke();
-      this.ctx.fillStyle = 'black';
-      this.ctx.fillText(x + 1, path[x][1][i][0] - 6, path[x][1][i][1] + 7);
+    if (drawMarkers) {
+      const markerRadius = 14;
+      const markerOuterRadius = 20;
+      const lineTone = this.lineColor || 'rgb(94, 61, 17)';
+
+      for (let i = 0; i < path[x][1].length; i++) {
+        if (mergeLine67Markers && (x === 5 || x === 6) && (i === 1 || i === 3)) {
+          continue;
+        }
+
+        const markerX = path[x][1][i][0];
+        const markerY = path[x][1][i][1];
+
+        // Backing circle in line color.
+        this.ctx.lineWidth = 2;
+        this.ctx.beginPath();
+        this.ctx.arc(markerX, markerY, markerOuterRadius, 0, 2 * Math.PI);
+        this.ctx.fillStyle = this.colorWithAlpha(lineTone, 0.7);
+        this.ctx.fill();
+        this.ctx.strokeStyle = this.colorWithAlpha(lineTone, 0.98);
+        this.ctx.stroke();
+
+        this.ctx.beginPath();
+        this.ctx.arc(markerX, markerY, markerRadius, 0, 2 * Math.PI);
+
+        const markerGradient = this.createLineThumbGradient(markerX, markerY, markerRadius);
+
+        this.ctx.fillStyle = markerGradient || this.colorWithAlpha(lineTone, 0.95);
+        this.ctx.fill();
+        this.ctx.strokeStyle = this.colorWithAlpha(lineTone, 0.98);
+        this.ctx.stroke();
+
+        this.ctx.font = '700 14px "Lucida Sans Unicode", "Lucida Grande", sans-serif';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillStyle = 'rgba(36, 24, 8, 0.98)';
+        this.ctx.fillText(x + 1, markerX, markerY);
+      }
     }
 
-    this.ctx.lineWidth = 10;
+    this.ctx.globalAlpha = 1;
+    this.ctx.lineWidth = 4;
+  }
+
+  drawMergedLine67Markers() {
+    if (!this.ctx) return;
+
+    const padX = this.spinnerPaddingLeft || 0;
+    const markerY = this.middleRowCenterY;
+    const markerPositions = [
+      padX + (3 * this.cellHalfWidth),
+      padX + (7 * this.cellHalfWidth),
+    ];
+    const lineTone = this.lineColor || 'rgb(94, 61, 17)';
+    const markerWidth = 56;
+    const markerHeight = 30;
+    const markerRadius = 14;
+    const innerInsetX = 4;
+    const innerInsetY = 4;
+    const lineWidth = 2;
+
+    for (let i = 0; i < markerPositions.length; i++) {
+      const markerX = markerPositions[i];
+      const left = markerX - (markerWidth / 2);
+      const top = markerY - (markerHeight / 2);
+      const innerLeft = left + innerInsetX;
+      const innerTop = top + innerInsetY;
+      const innerWidth = markerWidth - (innerInsetX * 2);
+      const innerHeight = markerHeight - (innerInsetY * 2);
+      const innerRadius = Math.max(8, markerRadius - 3);
+
+      // Backing pill in the same tone as line color.
+      this.traceRoundedRectPath(left, top, markerWidth, markerHeight, markerRadius);
+      this.ctx.fillStyle = this.colorWithAlpha(lineTone, 0.74);
+      this.ctx.fill();
+      this.ctx.lineWidth = lineWidth;
+      this.ctx.strokeStyle = this.colorWithAlpha(lineTone, 0.99);
+      this.ctx.stroke();
+
+      // Inner pill with the same conic gradient as all line thumbs.
+      this.traceRoundedRectPath(innerLeft, innerTop, innerWidth, innerHeight, innerRadius);
+      const markerGradient = this.createLineThumbGradient(markerX, markerY, Math.max(innerWidth, innerHeight) / 2);
+      this.ctx.fillStyle = markerGradient || this.colorWithAlpha(lineTone, 0.95);
+      this.ctx.fill();
+      this.ctx.lineWidth = lineWidth;
+      this.ctx.strokeStyle = this.colorWithAlpha(lineTone, 0.99);
+      this.ctx.stroke();
+
+      this.ctx.font = '700 13px "Lucida Sans Unicode", "Lucida Grande", sans-serif';
+      this.ctx.textAlign = 'center';
+      this.ctx.textBaseline = 'middle';
+      this.ctx.fillStyle = 'rgba(28, 18, 6, 0.99)';
+      this.ctx.fillText('6/7', markerX, markerY);
+    }
   }
 
   drawLines() {
@@ -4053,7 +4126,8 @@ export class SlotMachine extends HTMLElement {
 
   getTotalBet() {
     if (this.rewardMode === 2) return this.bet;
-    return this.selectedPaylines.filter(l => l === 1).length * this.bet + this.jokerCost;
+    const jokerFee = this.jokerAdded && this.jokerPosition > 0 ? this.jokerCost : 0;
+    return this.selectedPaylines.filter(l => l === 1).length * this.bet + jokerFee;
   }
 
   setButtonsEnabled(enabled) {
@@ -4089,7 +4163,7 @@ export class SlotMachine extends HTMLElement {
       // Lines container items
       const linesContainer = slotSidebar.querySelector('.lines-container');
       if (linesContainer) {
-        linesContainer.querySelectorAll('div').forEach(el => {
+        linesContainer.querySelectorAll('button').forEach(el => {
           if (enabled) {
             el.classList.remove('disabled');
           } else {
@@ -4138,18 +4212,17 @@ export class SlotMachine extends HTMLElement {
     this.credits -= totalBet;
     this.updateDisplay();
 
-    // Disable all buttons except Stop
+    // Disable all buttons while spin is preparing.
     this.setButtonsEnabled(false);
-    this.setStopButtonEnabled(true);
-
-    this.rotateReels([360, 360, 360, 360, 360]);
+    this.setStopButtonEnabled(false);
 
     try {
       const response = await this.callSpinAPI();
       this.stopArray = response;
       void this.loadSpinsCountFromHistory();
-      this.rotateReels(response, true);
-      this.startProgressTimer(response);
+      const spinDurationMs = this.rotateReels(response, true);
+      this.setStopButtonEnabled(true);
+      this.startProgressTimer(response, spinDurationMs);
     } catch (error) {
       console.error('Spin error:', error);
       this.credits += totalBet;
@@ -4162,6 +4235,7 @@ export class SlotMachine extends HTMLElement {
 
   async callSpinAPI() {
     const activeLines = this.rewardMode === 2 ? [1, 0, 0, 0, 0, 0, 0] : this.selectedPaylines;
+    const jokerEnabled = this.rewardMode === 1 && this.jokerAdded && this.jokerPosition > 0;
     const headers = { 'Content-Type': 'application/json' };
     if (this.jwtToken) {
       headers.Authorization = `Bearer ${this.jwtToken}`;
@@ -4172,8 +4246,8 @@ export class SlotMachine extends HTMLElement {
       igra: this.gameTypeValue,
       kvote: this.kvote,
       brojLinija: activeLines,
-      dzoker: this.rewardMode === 2 ? 0 : this.jokerPosition,
-      vrednostDzokera: this.rewardMode === 2 ? 0 : this.jokerCost,
+      dzoker: jokerEnabled ? this.jokerPosition : 0,
+      vrednostDzokera: jokerEnabled ? this.jokerCost : 0,
       nacin: this.rewardMode,
       brojKredita: this.credits + this.getTotalBet()
     };
@@ -4241,81 +4315,182 @@ export class SlotMachine extends HTMLElement {
 
   /**
    * Rotate reels with slot machine animation
-   * @param {Array} values - Either [360,360,360,360,360] for initial spin or actual reel values [1-10]
+   * @param {Array} values - Either [360,360,360,360,360] for initial spin or actual reel values [1-22]
    * @param {boolean} isFinalSpin - True when spinning to final position
    */
   rotateReels(values, isFinalSpin = false) {
-    if (!isFinalSpin) {
-      this.spinDirections = this.spinDirections.map(() => {
-        if (this.rewardMode === 1) {
-          return Math.random() < 0.5 ? 1 : -1;
-        }
-        return -1;
-      });
-    }
+    const reelCount = 5;
+    const safeValues = Array.isArray(values) ? values : [];
+    this.reelSpringOffsets = [0, 0, 0, 0, 0];
 
-    const transitions = new Array(5).fill(null);
+    this.spinDirections = this.spinDirections.map(() => {
+      if (this.rewardMode === 1) {
+        return Math.random() < 0.5 ? 1 : -1;
+      }
+      return -1;
+    });
 
     if (!isFinalSpin) {
-      for (let i = 0; i < 5; i++) {
-        const direction = this.spinDirections[i];
-        const currentRotation = this.currentRotations[i] || 0;
+      const transitions = new Array(reelCount).fill(null);
+      let maxDuration = 0;
+      for (let i = 0; i < reelCount; i++) {
+        const direction = this.spinDirections[i] || -1;
+        const from = this.renderRotations[i] || 0;
         const spinRotations = 360 * (Math.floor(Math.random() * 5) + 8);
-        const target = currentRotation + (direction * spinRotations);
+        const target = from + (direction * spinRotations);
+        const delay = i * 500;
+        const duration = 1000;
 
         this.currentRotations[i] = target;
         transitions[i] = {
-          from: this.renderRotations[i] || 0,
+          from,
           to: target,
-          duration: 1000,
-          delay: i * 100,
+          duration,
+          delay,
           easing: (progress) => progress,
         };
+        maxDuration = Math.max(maxDuration, delay + duration);
       }
-    } else {
-      const stepAngle = this.getReelStepAngle();
-      for (let i = 0; i < 5; i++) {
-        const direction = this.spinDirections[i] || -1;
-        const currentRotation = this.currentRotations[i] || 0;
-
-        const targetAngle = -(values[i] - 1) * stepAngle;
-        const fullRotations = 360 * (8 + Math.floor(Math.random() * 4) + i);
-        let rotation = targetAngle + (direction * fullRotations);
-
-        while (direction === -1 && rotation > currentRotation) {
-          rotation -= 360;
-        }
-        while (direction === 1 && rotation < currentRotation) {
-          rotation += 360;
-        }
-
-        this.currentRotations[i] = rotation;
-        transitions[i] = {
-          from: this.renderRotations[i] || 0,
-          to: rotation,
-          duration: (4.5 + (i * 0.3)) * 1000,
-          delay: i * 150,
-          easing: (progress) => this.easeOutSpin(progress),
-        };
-      }
+      this.animateReels(transitions);
+      this.currentSpinDurationMs = maxDuration;
+      return maxDuration;
     }
 
-    this.animateReels(transitions);
+    const totalDuration = this.animateClassicReelPhysicsStop(safeValues);
+    this.currentSpinDurationMs = totalDuration;
+    return totalDuration;
   }
 
-  startProgressTimer(data) {
-    let timeLeft = 5;
+  stopBounceEase(progress) {
+    const t = Math.max(0, Math.min(1, Number(progress) || 0));
+    const base = 1 - Math.pow(1 - t, 5);
+    const wobble = Math.sin(t * Math.PI * 4) * Math.pow(1 - t, 1.8) * 0.08;
+    return base + wobble;
+  }
+
+  animateClassicReelPhysicsStop(values) {
+    const reelCount = 5;
+    const spinDurationMs = 3000;
+    const sequentialStopDelayMs = 400;
+    const stopDurationMs = 520;
+    const stepAngle = this.getReelStepAngle();
+
+    const startAngles = new Array(reelCount).fill(0).map((_, idx) => this.renderRotations[idx] || 0);
+    const spinSpeeds = new Array(reelCount).fill(0);
+    const stopStartTimes = new Array(reelCount).fill(0);
+    const stopFromAngles = new Array(reelCount).fill(0);
+    const stopTargetAngles = new Array(reelCount).fill(0);
+    const springAmplitudePx = this.rewardMode === 2 ? 8 : 7;
+    this.reelSpringOffsets = new Array(reelCount).fill(0);
+
+    for (let i = 0; i < reelCount; i++) {
+      const direction = this.spinDirections[i] || -1;
+      const speedDegPerMs = 1.35 + (Math.random() * 0.22);
+      const stopStart = spinDurationMs + (i * sequentialStopDelayMs);
+      const angleAtStopStart = startAngles[i] + (direction * speedDegPerMs * stopStart);
+      const targetValue = Number.parseInt(String(values?.[i] ?? 1), 10) || 1;
+      const targetAngle = -(targetValue - 1) * stepAngle;
+      const extraTurns = 360 * (3 + Math.floor(Math.random() * 2));
+      let finalAngle = targetAngle + (direction * extraTurns);
+
+      while (direction === -1 && finalAngle > angleAtStopStart) {
+        finalAngle -= 360;
+      }
+      while (direction === 1 && finalAngle < angleAtStopStart) {
+        finalAngle += 360;
+      }
+
+      spinSpeeds[i] = speedDegPerMs;
+      stopStartTimes[i] = stopStart;
+      stopFromAngles[i] = angleAtStopStart;
+      stopTargetAngles[i] = finalAngle;
+      this.currentRotations[i] = finalAngle;
+    }
+
+    const totalDurationMs = spinDurationMs + ((reelCount - 1) * sequentialStopDelayMs) + stopDurationMs;
+    this.cancelReelAnimation();
+
+    const startedAt = performance.now();
+    const nextFrame = (now) => {
+      const elapsed = now - startedAt;
+      let allDone = true;
+
+      for (let i = 0; i < reelCount; i++) {
+        const direction = this.spinDirections[i] || -1;
+        const stopStart = stopStartTimes[i];
+
+        if (elapsed < stopStart) {
+          this.renderRotations[i] = startAngles[i] + (direction * spinSpeeds[i] * elapsed);
+          this.reelSpringOffsets[i] = 0;
+          allDone = false;
+          continue;
+        }
+
+        const stopElapsed = elapsed - stopStart;
+        if (stopElapsed < stopDurationMs) {
+          const progress = stopElapsed / stopDurationMs;
+          const eased = this.stopBounceEase(progress);
+          this.renderRotations[i] = stopFromAngles[i] + ((stopTargetAngles[i] - stopFromAngles[i]) * eased);
+          const spring = Math.sin(progress * Math.PI * 4.8) * Math.exp(-3.2 * progress);
+          this.reelSpringOffsets[i] = springAmplitudePx * spring;
+          allDone = false;
+          continue;
+        }
+
+        this.renderRotations[i] = stopTargetAngles[i];
+        this.reelSpringOffsets[i] = 0;
+      }
+
+      this.renderFrame();
+
+      if (!allDone) {
+        this.reelAnimationFrame = requestAnimationFrame(nextFrame);
+        return;
+      }
+      this.reelSpringOffsets = new Array(reelCount).fill(0);
+      this.reelAnimationFrame = null;
+    };
+
+    this.reelAnimationFrame = requestAnimationFrame(nextFrame);
+    return totalDurationMs;
+  }
+
+  startProgressTimer(data, durationMs = 5000) {
+    const normalizedDurationMs = Math.max(1000, Number(durationMs) || 5000);
+    const totalSeconds = Math.max(1, Math.ceil(normalizedDurationMs / 1000));
+    this.spinCountdownSeconds = totalSeconds;
+
+    if (this.progressInterval) {
+      clearInterval(this.progressInterval);
+      this.progressInterval = null;
+    }
+
+    let elapsedSeconds = 0;
     const progressBar = this.shadowRoot.getElementById('progressBar');
     const progressLabel = this.shadowRoot.getElementById('progressLabel');
+    if (progressBar) {
+      progressBar.max = totalSeconds;
+      progressBar.value = 0;
+    }
+    if (progressLabel) {
+      progressLabel.textContent = `${totalSeconds} sec`;
+    }
 
     this.progressInterval = setInterval(() => {
-      if (timeLeft <= 0) {
+      elapsedSeconds += 1;
+      const remaining = Math.max(0, totalSeconds - elapsedSeconds);
+
+      if (progressLabel) {
+        progressLabel.textContent = `${remaining} sec`;
+      }
+      if (progressBar) {
+        progressBar.value = Math.min(totalSeconds, elapsedSeconds);
+      }
+
+      if (elapsedSeconds >= totalSeconds) {
         clearInterval(this.progressInterval);
+        this.progressInterval = null;
         this.finishSpin(data);
-      } else {
-        progressLabel.textContent = `${timeLeft} sec`;
-        progressBar.value = 5 - timeLeft;
-        timeLeft--;
       }
     }, 1000);
   }
@@ -4323,10 +4498,16 @@ export class SlotMachine extends HTMLElement {
   finishSpin(data) {
     const progressLabel = this.shadowRoot.getElementById('progressLabel');
     const progressBar = this.shadowRoot.getElementById('progressBar');
-    progressLabel.textContent = '5 sec';
-    progressBar.value = 0;
+    if (progressLabel) {
+      progressLabel.textContent = `${this.spinCountdownSeconds || 5} sec`;
+    }
+    if (progressBar) {
+      progressBar.max = this.spinCountdownSeconds || 5;
+      progressBar.value = 0;
+    }
     this.cancelReelAnimation();
     this.renderRotations = [...this.currentRotations];
+    this.reelSpringOffsets = [0, 0, 0, 0, 0];
     this.drawLines();
 
     if (data[8] !== undefined) this.credits = data[8];
@@ -4410,6 +4591,7 @@ export class SlotMachine extends HTMLElement {
   stopSpin() {
     if (this.progressInterval) {
       clearInterval(this.progressInterval);
+      this.progressInterval = null;
 
       // Immediately disable stop button to prevent double-click
       this.setStopButtonEnabled(false);
@@ -4417,14 +4599,20 @@ export class SlotMachine extends HTMLElement {
       // Reset progress bar
       const progressLabel = this.shadowRoot.getElementById('progressLabel');
       const progressBar = this.shadowRoot.getElementById('progressBar');
-      progressLabel.textContent = '5 sec';
-      progressBar.value = 0;
+      if (progressLabel) {
+        progressLabel.textContent = `${this.spinCountdownSeconds || 5} sec`;
+      }
+      if (progressBar) {
+        progressBar.max = this.spinCountdownSeconds || 5;
+        progressBar.value = 0;
+      }
 
       this.cancelReelAnimation();
+      this.reelSpringOffsets = [0, 0, 0, 0, 0];
 
       const stepAngle = this.getReelStepAngle();
       for (let i = 0; i < 5; i++) {
-        const targetValue = this.stopArray[i];
+        const targetValue = Number.parseInt(String(this.stopArray?.[i] ?? 1), 10) || 1;
         const targetAngle = -(targetValue - 1) * stepAngle;
 
         this.currentRotations[i] = targetAngle;
