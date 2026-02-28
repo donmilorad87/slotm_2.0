@@ -1903,6 +1903,7 @@ export class SlotMachine {
     pitchRad,
     depthOffset,
     symbolScale = 1,
+    centerShiftMultiplier = 1,
   }) {
     const isMagic = Boolean(this.magicOpenAiMode);
     const highlightStrength = Math.max(0, Number(paylineHighlight) || 0);
@@ -1913,7 +1914,7 @@ export class SlotMachine {
     const effectiveCellHeight = baseCellHeight * symbolScale;
     const halfW = Math.max(11, effectiveCellWidth * (isMagic ? 0.42 : 0.36));
     const halfH = Math.max(10, effectiveCellHeight * (isMagic ? 0.38 : 0.36));
-    const centerShiftRad = isMagic ? (angleSpanRad * 0.08) : 0;
+    const centerShiftRad = (isMagic ? (angleSpanRad * 0.08) : 0) * centerShiftMultiplier;
     const angleOffset = (halfH / Math.max(1, effectiveCellHeight)) * angleSpanRad;
 
     const projectAtAngle = (xLocal, sampleAngle) => {
@@ -1961,7 +1962,7 @@ export class SlotMachine {
     }
   }
 
-  drawCurvedReelCell(cell) {
+  drawCurvedReelCell(cell, renderPass = 'full') {
     const ctx = this.ctx;
     if (!ctx) return;
 
@@ -1999,6 +2000,9 @@ export class SlotMachine {
     let leftEdge;
     let rightEdge;
     let centerEdge;
+    let innerLeftEdge = null;
+    let innerRightEdge = null;
+    let innerRadius = null;
 
     if (cell.precomputedEdges) {
       leftEdge = cell.precomputedEdges.leftEdge;
@@ -2056,119 +2060,226 @@ export class SlotMachine {
 
     const frontStrength = Math.max(0, Math.cos(angleRad));
     const sideBorderWidth = this.magicOpenAiMode
-      ? 1.2 + (0.55 * Math.max(0, Math.min(1, depthWeight)))
+      ? 2
       : 2.2 + ((6 - 2.2) * frontStrength);
     const topBottomBorderWidth = this.magicOpenAiMode
-      ? sideBorderWidth
+      ? 2
       : 1.1 + ((3 - 1.1) * frontStrength);
     const borderAlpha = this.magicOpenAiMode
       ? 0.96
       : 0.72 + (0.26 * frontStrength);
     const edgeColor = this.magicOpenAiMode
-      ? (this.reelBorderColor || 'rgba(219, 162, 54, 0.98)')
+      ? 'rgba(56, 36, 12, 0.96)'
       : (this.lineColor || 'rgb(94, 61, 17)');
     const lastEdgeIndex = leftEdge.length - 1;
     const panelBackgroundColor = this.reelCellFillColor || 'rgba(208, 156, 61, 0.2)';
     const itemBackground = this.magicOpenAiMode
-      ? this.colorWithAlpha(panelBackgroundColor, 0.42)
+      ? this.colorWithAlpha(panelBackgroundColor, 0.72)
       : panelBackgroundColor;
     const panelPoints = [...leftEdge, ...rightEdge.slice().reverse()];
+    const totalYaw = Number(cell.totalYawRad ?? this.magicCameraYawRad) || 0;
+    if (this.magicOpenAiMode) {
+      const ringWallThickness = Math.max(12, baseCellHeight * 0.32);
+      innerRadius = Math.max(6, radius - ringWallThickness);
+      const halfW = baseCellWidth / 2;
+      innerLeftEdge = [];
+      innerRightEdge = [];
+      for (let i = 0; i <= segments; i++) {
+        const t = i / segments;
+        const sampleAngle = angleRad + ((0.5 - t) * angleSpanRad);
+        const y = -innerRadius * Math.sin(sampleAngle);
+        const z = (innerRadius * Math.cos(sampleAngle)) - innerRadius;
+        const left = cell.precomputedEdges
+          ? this.projectWorldPoint(
+            -halfW, y, z,
+            reelCenterX, reelCenterY, perspective,
+            totalYaw,
+            Number(this.magicCameraPitchRad) || 0,
+            Number(this.magicCameraDepthOffset) || 0,
+          )
+          : this.projectPoint3D(-halfW, y, z, reelCenterX, reelCenterY, perspective);
+        const right = cell.precomputedEdges
+          ? this.projectWorldPoint(
+            halfW, y, z,
+            reelCenterX, reelCenterY, perspective,
+            totalYaw,
+            Number(this.magicCameraPitchRad) || 0,
+            Number(this.magicCameraDepthOffset) || 0,
+          )
+          : this.projectPoint3D(halfW, y, z, reelCenterX, reelCenterY, perspective);
+        innerLeftEdge.push(left);
+        innerRightEdge.push(right);
+      }
+    }
+    let faceTowardsCamera = Math.cos(angleRad);
+    if (this.magicOpenAiMode) {
+      const normal = this.transformByMagicCamera(
+        0,
+        -Math.sin(angleRad),
+        Math.cos(angleRad),
+        false,
+      );
+      const yawFacingSign = Math.cos(totalYaw) >= 0 ? 1 : -1;
+      // Render symbols/diamonds on the outer ring surface.
+      faceTowardsCamera = normal.z * yawFacingSign;
+    }
+    const isBackSide = faceTowardsCamera <= (this.magicOpenAiMode ? 0.03 : 0.02);
+    const outerStrokeVisibility = this.magicOpenAiMode
+      ? Math.max(0, Math.min(1, 0.4 + (0.6 * ((faceTowardsCamera - 0.28) / 0.52))))
+      : 1;
 
     const drawCurvedPanelPath = () => {
       this.drawPolygonPath(panelPoints);
     };
 
-    ctx.save();
-    drawCurvedPanelPath();
-    ctx.fillStyle = itemBackground;
-    ctx.fill();
-    ctx.restore();
+    if (renderPass !== 'overlay') {
+      if (this.magicOpenAiMode && innerLeftEdge && innerRightEdge) {
+        const innerPanelPoints = [...innerLeftEdge, ...innerRightEdge.slice().reverse()];
+        const innerFill = 'rgba(24, 16, 6, 0.78)';
+        const wallFill = this.colorWithAlpha(panelBackgroundColor, 0.78);
 
-    ctx.save();
-    ctx.strokeStyle = edgeColor;
-    ctx.globalAlpha = borderAlpha;
-    ctx.lineCap = 'butt';
-    ctx.lineJoin = 'miter';
-    ctx.shadowBlur = 0;
+        const fillQuad = (points, fillStyle) => {
+          ctx.save();
+          this.drawPolygonPath(points);
+          ctx.fillStyle = fillStyle;
+          ctx.fill();
+          ctx.restore();
+        };
 
-    ctx.lineWidth = sideBorderWidth;
-    ctx.beginPath();
-    ctx.moveTo(leftEdge[0].x, leftEdge[0].y);
-    for (let i = 1; i < leftEdge.length; i++) {
-      ctx.lineTo(leftEdge[i].x, leftEdge[i].y);
-    }
-    ctx.stroke();
+        if (!cell.precomputedEdges) {
+          fillQuad(innerPanelPoints, innerFill);
+          fillQuad([...leftEdge, ...innerLeftEdge.slice().reverse()], wallFill);
+          fillQuad([...rightEdge, ...innerRightEdge.slice().reverse()], wallFill);
+          fillQuad([leftEdge[0], rightEdge[0], innerRightEdge[0], innerLeftEdge[0]], wallFill);
+          fillQuad(
+            [
+              leftEdge[lastEdgeIndex],
+              rightEdge[lastEdgeIndex],
+              innerRightEdge[lastEdgeIndex],
+              innerLeftEdge[lastEdgeIndex],
+            ],
+            wallFill,
+          );
+        }
+      }
 
-    ctx.beginPath();
-    ctx.moveTo(rightEdge[0].x, rightEdge[0].y);
-    for (let i = 1; i < rightEdge.length; i++) {
-      ctx.lineTo(rightEdge[i].x, rightEdge[i].y);
-    }
-    ctx.stroke();
+      if (!(this.magicOpenAiMode && cell.precomputedEdges)) {
+        ctx.save();
+        drawCurvedPanelPath();
+        ctx.fillStyle = itemBackground;
+        ctx.fill();
+        ctx.restore();
+      }
 
-    if (!this.magicOpenAiMode) {
-      ctx.lineWidth = topBottomBorderWidth;
-      ctx.beginPath();
-      ctx.moveTo(leftEdge[0].x, leftEdge[0].y);
-      ctx.lineTo(rightEdge[0].x, rightEdge[0].y);
-      ctx.stroke();
+      ctx.save();
+      ctx.strokeStyle = edgeColor;
+      ctx.globalAlpha = borderAlpha * outerStrokeVisibility;
+      ctx.lineCap = this.magicOpenAiMode ? 'round' : 'butt';
+      ctx.lineJoin = this.magicOpenAiMode ? 'round' : 'miter';
+      ctx.shadowBlur = 0;
+      const drawCellSideBorders = !(this.magicOpenAiMode && cell.precomputedEdges);
 
-      ctx.beginPath();
-      ctx.moveTo(leftEdge[lastEdgeIndex].x, leftEdge[lastEdgeIndex].y);
-      ctx.lineTo(rightEdge[lastEdgeIndex].x, rightEdge[lastEdgeIndex].y);
-      ctx.stroke();
-    } else {
-      const drawMagicTopBottom = (leftPoint, rightPoint) => {
-        // Match ring border styling exactly: same color, width, and edge span.
-        ctx.strokeStyle = edgeColor;
-        ctx.globalAlpha = borderAlpha;
+      if (drawCellSideBorders) {
+        ctx.lineWidth = sideBorderWidth;
+        ctx.beginPath();
+        ctx.moveTo(leftEdge[0].x, leftEdge[0].y);
+        for (let i = 1; i < leftEdge.length; i++) {
+          ctx.lineTo(leftEdge[i].x, leftEdge[i].y);
+        }
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(rightEdge[0].x, rightEdge[0].y);
+        for (let i = 1; i < rightEdge.length; i++) {
+          ctx.lineTo(rightEdge[i].x, rightEdge[i].y);
+        }
+        ctx.stroke();
+      }
+
+      if (!this.magicOpenAiMode) {
         ctx.lineWidth = topBottomBorderWidth;
         ctx.beginPath();
-        ctx.moveTo(leftPoint.x, leftPoint.y);
-        ctx.lineTo(rightPoint.x, rightPoint.y);
+        ctx.moveTo(leftEdge[0].x, leftEdge[0].y);
+        ctx.lineTo(rightEdge[0].x, rightEdge[0].y);
         ctx.stroke();
-      };
 
-      // One border before and one after each rotating symbol cell.
-      drawMagicTopBottom(leftEdge[0], rightEdge[0]);
-      drawMagicTopBottom(leftEdge[lastEdgeIndex], rightEdge[lastEdgeIndex]);
+        ctx.beginPath();
+        ctx.moveTo(leftEdge[lastEdgeIndex].x, leftEdge[lastEdgeIndex].y);
+        ctx.lineTo(rightEdge[lastEdgeIndex].x, rightEdge[lastEdgeIndex].y);
+        ctx.stroke();
+      } else {
+        if (drawCellSideBorders && innerLeftEdge && innerRightEdge) {
+          // Inner ring border only (no inner seam/connector lines).
+          ctx.strokeStyle = edgeColor;
+          ctx.globalAlpha = Math.min(1, borderAlpha * 0.94);
+          ctx.lineWidth = Math.max(1.6, sideBorderWidth * 0.9);
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+
+          ctx.beginPath();
+          ctx.moveTo(innerLeftEdge[0].x, innerLeftEdge[0].y);
+          for (let i = 1; i < innerLeftEdge.length; i++) {
+            ctx.lineTo(innerLeftEdge[i].x, innerLeftEdge[i].y);
+          }
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.moveTo(innerRightEdge[0].x, innerRightEdge[0].y);
+          for (let i = 1; i < innerRightEdge.length; i++) {
+            ctx.lineTo(innerRightEdge[i].x, innerRightEdge[i].y);
+          }
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
     }
-    ctx.restore();
 
+    const symbolCellScale = (this.magicOpenAiMode && cell.precomputedEdges) ? 0.72 : 1;
     // Render curved diamond below symbol text; appears on all wheel sides.
     if (!cell.precomputedEdges) {
-      ctx.save();
-      this.drawCurvedDiamondBadge({
-        angleRad,
-        angleSpanRad,
-        radius,
-        reelCenterX,
-        reelCenterY,
-        perspective,
-        baseCellWidth,
-        baseCellHeight,
-        depthWeight,
-        paylineHighlight,
-      });
-      ctx.restore();
+      if (renderPass !== 'geometry') {
+        ctx.save();
+        this.drawCurvedDiamondBadge({
+          angleRad,
+          angleSpanRad,
+          radius,
+          reelCenterX,
+          reelCenterY,
+          perspective,
+          baseCellWidth,
+          baseCellHeight,
+          depthWeight,
+          paylineHighlight,
+        });
+        ctx.restore();
+      }
     } else {
-      const symbolCellScale = this.magicOpenAiMode ? 0.72 : 1;
-      this.drawCurvedDiamondBadgeWorld({
-        angleRad,
-        angleSpanRad,
-        radius,
-        reelCenterX,
-        reelCenterY,
-        perspective,
-        baseCellWidth,
-        baseCellHeight,
-        depthWeight,
-        paylineHighlight,
-        yawRad: Number(cell.totalYawRad ?? this.magicCameraYawRad) || 0,
-        pitchRad: Number(this.magicCameraPitchRad) || 0,
-        depthOffset: Number(this.magicCameraDepthOffset) || 0,
-        symbolScale: symbolCellScale,
-      });
+      const shouldDrawOuterDiamond = renderPass === 'full'
+        || (renderPass === 'geometry' && isBackSide)
+        || (renderPass === 'overlay' && !isBackSide);
+      if (shouldDrawOuterDiamond) {
+        this.drawCurvedDiamondBadgeWorld({
+          angleRad,
+          angleSpanRad,
+          radius,
+          reelCenterX,
+          reelCenterY,
+          perspective,
+          baseCellWidth,
+          baseCellHeight,
+          depthWeight,
+          paylineHighlight,
+          yawRad: totalYaw,
+          pitchRad: Number(this.magicCameraPitchRad) || 0,
+          depthOffset: Number(this.magicCameraDepthOffset) || 0,
+          symbolScale: symbolCellScale,
+        });
+      }
+    }
+
+    if (renderPass === 'geometry') {
+      if (cell.precomputedEdges) this.magicCameraYawRad = savedYaw;
+      return;
     }
 
     ctx.save();
@@ -2192,7 +2303,7 @@ export class SlotMachine {
         reelCenterX,
         reelCenterY,
         perspective,
-        Number(cell.totalYawRad ?? this.magicCameraYawRad) || 0,
+        totalYaw,
         Number(this.magicCameraPitchRad) || 0,
         Number(this.magicCameraDepthOffset) || 0,
       );
@@ -2200,20 +2311,6 @@ export class SlotMachine {
       symbolCenterY = shiftedCenter.y;
     }
     ctx.translate(symbolCenterX, symbolCenterY);
-    let faceTowardsCamera = Math.cos(angleRad);
-    if (this.magicOpenAiMode) {
-      const normal = this.transformByMagicCamera(
-        0,
-        -Math.sin(angleRad),
-        Math.cos(angleRad),
-        false,
-      );
-      const totalYaw = Number(cell.totalYawRad ?? this.magicCameraYawRad) || 0;
-      const yawFacingSign = Math.cos(totalYaw) >= 0 ? 1 : -1;
-      // Render symbols/diamonds on the outer ring surface.
-      faceTowardsCamera = normal.z * yawFacingSign;
-    }
-    const isBackSide = faceTowardsCamera <= (this.magicOpenAiMode ? 0.03 : 0.02);
 
     // Stable local basis for symbols/diamonds so they stay attached to the ring while
     // remaining readable at side-facing swing angles.
@@ -2297,7 +2394,6 @@ export class SlotMachine {
       textTyX *= -1;
       textTyY *= -1;
     }
-    const symbolCellScale = (this.magicOpenAiMode && cell.precomputedEdges) ? 0.72 : 1;
     const symbolCellWidth = baseCellWidth * symbolCellScale;
     const symbolCellHeight = baseCellHeight * symbolCellScale;
     if (isBackSide) {
@@ -2339,11 +2435,11 @@ export class SlotMachine {
     }
   }
 
-  drawReelCell(cell) {
+  drawReelCell(cell, renderPass = 'full') {
     const ctx = this.ctx;
     if (!ctx) return;
     if (cell?.curved) {
-      this.drawCurvedReelCell(cell);
+      this.drawCurvedReelCell(cell, renderPass);
       return;
     }
     const {
@@ -2744,7 +2840,10 @@ export class SlotMachine {
           reelCenterX, reelCenterYWithSpring, perspective,
           totalYaw, pitchRad, depthOff,
         );
-        boundaryPolylines.push({ left: leftPt, right: rightPt });
+        boundaryPolylines.push({
+          left: leftPt,
+          right: rightPt,
+        });
       }
 
       // Build cells with shared boundary edges.
@@ -2830,7 +2929,11 @@ export class SlotMachine {
           hue: this.getSymbolHue(mappedSymbol, mappedIndex),
           depthWeight: Math.max(0, Math.min(1, 1 - (Math.abs(averageDepth) / (radius * 2.2)))),
           totalYawRad: totalYaw,
-          precomputedEdges: { leftEdge, rightEdge, centerEdge },
+          precomputedEdges: {
+            leftEdge,
+            rightEdge,
+            centerEdge,
+          },
         });
       }
       for (let i = 0; i < reelCells.length; i++) {
@@ -2855,8 +2958,181 @@ export class SlotMachine {
     });
 
     for (let i = 0; i < worldCells.length; i++) {
-      this.drawReelCell(worldCells[i]);
+      this.drawReelCell(worldCells[i], 'geometry');
     }
+    for (let i = 0; i < worldCells.length; i++) {
+      this.drawReelCell(worldCells[i], 'overlay');
+    }
+
+    // Draw smooth reel contours (outer/inner, left/right) so ring silhouettes stay
+    // clean while swinging, without segmented side "scale" lines.
+    const ringWallThickness = Math.max(12, baseCellHeight * 0.32);
+    const innerRadius = Math.max(6, radius - ringWallThickness);
+    const contourSamples = 96;
+    const projectContourPoint = (
+      reelCenterX,
+      reelCenterY,
+      xLocal,
+      loopRadius,
+      angle,
+      depthAnchorRadius,
+    ) => {
+      const y = -loopRadius * Math.sin(angle);
+      const z = (loopRadius * Math.cos(angle)) - depthAnchorRadius;
+      return this.projectWorldPoint(
+        xLocal,
+        y,
+        z,
+        reelCenterX,
+        reelCenterY,
+        perspective,
+        totalYaw,
+        pitchRad,
+        depthOff,
+      );
+    };
+    const buildContourLoop = (
+      reelCenterX,
+      reelCenterY,
+      rotRad,
+      xLocal,
+      loopRadius,
+      depthAnchorRadius,
+    ) => {
+      const points = [];
+      for (let i = 0; i < contourSamples; i++) {
+        const t = i / contourSamples;
+        const angle = rotRad + (t * Math.PI * 2);
+        points.push(projectContourPoint(
+          reelCenterX,
+          reelCenterY,
+          xLocal,
+          loopRadius,
+          angle,
+          depthAnchorRadius,
+        ));
+      }
+      return points;
+    };
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(226, 178, 73, 0.98)';
+    ctx.globalAlpha = 0.98;
+    ctx.lineWidth = 1.6;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.shadowBlur = 0;
+    const contourGapFill = this.colorWithAlpha(
+      this.reelCellFillColor || 'rgba(208, 156, 61, 0.72)',
+      0.44,
+    );
+
+    const drawLoop = (points) => {
+      if (!points.length) return;
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, points[0].y);
+      for (let i = 1; i < points.length; i++) {
+        ctx.lineTo(points[i].x, points[i].y);
+      }
+      ctx.closePath();
+      ctx.stroke();
+    };
+    const drawAnnulusFill = (outerPoints, innerPoints) => {
+      if (!outerPoints.length || !innerPoints.length) return;
+      ctx.save();
+      // Keep fills behind diamonds/numbers while making ring thickness visible.
+      ctx.globalCompositeOperation = 'destination-over';
+      ctx.fillStyle = contourGapFill;
+      ctx.beginPath();
+      ctx.moveTo(outerPoints[0].x, outerPoints[0].y);
+      for (let i = 1; i < outerPoints.length; i++) {
+        ctx.lineTo(outerPoints[i].x, outerPoints[i].y);
+      }
+      ctx.closePath();
+      const innerLastIndex = innerPoints.length - 1;
+      ctx.moveTo(innerPoints[innerLastIndex].x, innerPoints[innerLastIndex].y);
+      for (let i = innerLastIndex - 1; i >= 0; i--) {
+        ctx.lineTo(innerPoints[i].x, innerPoints[i].y);
+      }
+      ctx.closePath();
+      ctx.fill('evenodd');
+      ctx.restore();
+    };
+
+    for (let reelIndex = 0; reelIndex < 5; reelIndex++) {
+      const reelCenterX = reelStartX + (reelIndex * reelSpacing) + (reelWidth / 2);
+      const reelYOffset = Number(reelSpringOffsets[reelIndex] || 0);
+      const reelCenterYWithSpring = reelCenterY + reelYOffset;
+      const rotDeg = this.renderRotations[reelIndex] || 0;
+      const rotRad = rotDeg * (Math.PI / 180);
+
+      const outerLeft = buildContourLoop(
+        reelCenterX,
+        reelCenterYWithSpring,
+        rotRad,
+        -halfW,
+        radius,
+        radius,
+      );
+      const outerRight = buildContourLoop(
+        reelCenterX,
+        reelCenterYWithSpring,
+        rotRad,
+        halfW,
+        radius,
+        radius,
+      );
+      const innerLeft = buildContourLoop(
+        reelCenterX,
+        reelCenterYWithSpring,
+        rotRad,
+        -halfW,
+        innerRadius,
+        radius,
+      );
+      const innerRight = buildContourLoop(
+        reelCenterX,
+        reelCenterYWithSpring,
+        rotRad,
+        halfW,
+        innerRadius,
+        radius,
+      );
+
+      drawAnnulusFill(outerLeft, innerLeft);
+      drawAnnulusFill(outerRight, innerRight);
+
+      drawLoop(outerLeft);
+      drawLoop(outerRight);
+      drawLoop(innerLeft);
+      drawLoop(innerRight);
+
+      // Bridge lines only between the two large outer side ellipses (top + bottom),
+      // using projected extrema so connectors stay on visible top/bottom edges.
+      const getMinYPoint = (points) => points.reduce(
+        (best, point) => (point.y < best.y ? point : best),
+        points[0],
+      );
+      const getMaxYPoint = (points) => points.reduce(
+        (best, point) => (point.y > best.y ? point : best),
+        points[0],
+      );
+      const outerLeftTop = getMinYPoint(outerLeft);
+      const outerRightTop = getMinYPoint(outerRight);
+      const outerLeftBottom = getMaxYPoint(outerLeft);
+      const outerRightBottom = getMaxYPoint(outerRight);
+
+      const drawConnector = (fromPoint, toPoint) => {
+        ctx.beginPath();
+        ctx.moveTo(fromPoint.x, fromPoint.y);
+        ctx.lineTo(toPoint.x, toPoint.y);
+        ctx.stroke();
+      };
+
+      drawConnector(outerLeftTop, outerRightTop);
+      drawConnector(outerLeftBottom, outerRightBottom);
+    }
+    ctx.restore();
   }
 
   drawJokerSprite(x, y) {
