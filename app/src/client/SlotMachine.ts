@@ -3194,6 +3194,10 @@ export class SlotMachine {
     const overlayReelOrder = faceRight
       ? [4, 3, 2, 1, 0]
       : [0, 1, 2, 3, 4];
+    const contourStrokeWidth = 2.2;
+    // Minimal-priority ellipses are partially covered by ring fills that are drawn after them.
+    // Compensate their pre-fill stroke so the visible part matches priority ellipses.
+    const minimalContourStrokeWidth = contourStrokeWidth * 2;
     for (let i = 0; i < overlayReelOrder.length; i++) {
       const reelIndex = overlayReelOrder[i];
       const reelCells = cellsByReel.get(reelIndex) || [];
@@ -3203,7 +3207,7 @@ export class SlotMachine {
       ctx.globalCompositeOperation = 'source-over';
       ctx.strokeStyle = 'rgba(22, 13, 4, 1)';
       ctx.globalAlpha = 1;
-      ctx.lineWidth = 2.2;
+      ctx.lineWidth = minimalContourStrokeWidth;
       ctx.lineJoin = 'round';
       ctx.lineCap = 'round';
       ctx.shadowBlur = 0;
@@ -3236,7 +3240,7 @@ export class SlotMachine {
       ctx.globalCompositeOperation = 'source-over';
       ctx.strokeStyle = 'rgba(22, 13, 4, 1)';
       ctx.globalAlpha = 1;
-      ctx.lineWidth = 2.2;
+      ctx.lineWidth = contourStrokeWidth;
       ctx.lineJoin = 'round';
       ctx.lineCap = 'round';
       ctx.shadowBlur = 0;
