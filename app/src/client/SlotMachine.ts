@@ -2955,12 +2955,10 @@ export class SlotMachine {
       this.magicSwingMotionDirection = -1;
     }
     this.magicLastRenderedSwingRad = swingSideValue;
-    let rotateLeft = this.magicSwingMotionDirection < 0;
-    let rotateRight = this.magicSwingMotionDirection > 0;
-    if (!rotateLeft && !rotateRight) {
-      rotateLeft = swingSideValue < -swingSideThreshold;
-      rotateRight = swingSideValue > swingSideThreshold;
-    }
+    // Spatial facing must drive painter priorities. Using motion direction here
+    // causes priority flip exactly at swing extremes when delta changes sign.
+    const faceLeft = swingSideValue < -swingSideThreshold;
+    const faceRight = swingSideValue > swingSideThreshold;
 
     // Global painter's order:
     // 1) reel stack order (depends on left/right state)
@@ -2968,8 +2966,8 @@ export class SlotMachine {
     // 3) farther sectors first
     // 4) stable tie-breakers
     worldCells.sort((a, b) => {
-      const reelRankA = rotateRight ? (4 - a.reelIndex) : a.reelIndex;
-      const reelRankB = rotateRight ? (4 - b.reelIndex) : b.reelIndex;
+      const reelRankA = faceRight ? (4 - a.reelIndex) : a.reelIndex;
+      const reelRankB = faceRight ? (4 - b.reelIndex) : b.reelIndex;
       if (reelRankA !== reelRankB) {
         return reelRankA - reelRankB;
       }
@@ -3189,7 +3187,7 @@ export class SlotMachine {
       const loops = contourLoops[i];
       loopsByReel.set(loops.reelIndex, loops);
     }
-    const overlayReelOrder = rotateRight
+    const overlayReelOrder = faceRight
       ? [4, 3, 2, 1, 0]
       : [0, 1, 2, 3, 4];
     for (let i = 0; i < overlayReelOrder.length; i++) {
@@ -3207,8 +3205,8 @@ export class SlotMachine {
       ctx.shadowBlur = 0;
 
       // Minimal-priority side (drawn first): visible only where not covered later.
-      const minimalSide = rotateRight ? 'right' : (rotateLeft ? 'left' : null);
-      const prioritySide = rotateRight ? 'left' : (rotateLeft ? 'right' : null);
+      const minimalSide = faceRight ? 'right' : (faceLeft ? 'left' : null);
+      const prioritySide = faceRight ? 'left' : (faceLeft ? 'right' : null);
       const minimalLoopKeys = minimalSide ? sideLoopKeys[minimalSide] : [];
       const priorityLoopKeys = prioritySide ? sideLoopKeys[prioritySide] : [];
       const baseLoopKeys = allLoopKeys.filter((key) => (
