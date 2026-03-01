@@ -14,6 +14,16 @@
         <a class="svemir-logo" href="/" aria-label="Blazing Sun home">
           <img style="height: 4em" src="/assets/images/blazingSun.gif" alt="Blazing Sun logo">
         </a>
+        <button
+          id="svemirControll"
+          type="button"
+          class="svemir-toggle"
+          aria-haspopup="true"
+          aria-expanded="false"
+          aria-controls="svemirDropdown"
+        >
+          Svemir Controls
+        </button>
         <span class="topbar__muted">{{user_email}}</span>
       </div>
       <nav class="topbar__right">
@@ -24,18 +34,7 @@
       </nav>
     </header>
 
-    <aside class="svemir-control" aria-label="Space controls">
-      <button
-        id="svemirControll"
-        type="button"
-        class="svemir-toggle"
-        aria-haspopup="true"
-        aria-expanded="false"
-        aria-controls="svemirDropdown"
-      >
-        Svemir Controls
-      </button>
-      <div id="svemirDropdown" class="svemir-dropdown" hidden>
+    <div id="svemirDropdown" class="svemir-dropdown svemir-control" hidden>
         <h2>Star Commands</h2>
 
         <label class="svemir-row" for="sv-control-movingStars">
@@ -111,8 +110,7 @@
         </label>
 
         <button type="button" class="svemir-reset" data-action="reset-stars">Restore default stars</button>
-      </div>
-    </aside>
+    </div>
 
     <main class="game-page">
       <p class="flash-msg">{{flash_message}}</p>

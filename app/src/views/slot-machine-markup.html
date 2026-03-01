@@ -49,7 +49,7 @@
       -webkit-user-select: none;
     }
 
-    .magic-openai-toggle {
+    .space-wheels-toggle {
       position: absolute;
       top: 0.8rem;
       right: 0.8rem;
@@ -64,135 +64,19 @@
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.03em;
+      cursor: pointer;
     }
 
-    .magic-openai-toggle:hover {
+    .space-wheels-toggle:hover {
       background: color-mix(in srgb, var(--primary-color) 60%, transparent);
       color: white;
       border-color: var(--primary-color);
     }
 
-    .magic-openai-toggle.active {
+    .space-wheels-toggle.active {
       background: color-mix(in srgb, var(--success-color) 62%, transparent);
       color: white;
       border-color: color-mix(in srgb, var(--success-color) 80%, var(--slot-border-color));
-    }
-
-    .magic-openai-back {
-      display: none;
-      align-items: center;
-      justify-content: center;
-      position: absolute;
-      top: 1rem;
-      right: 1rem;
-      z-index: 120001;
-      min-width: 164px;
-      height: 42px;
-      border: 2px solid var(--slot-border-color);
-      border-radius: 6px;
-      background: color-mix(in srgb, var(--slot-card-bg) 60%, transparent);
-      color: var(--slot-text-primary);
-      box-shadow: 0 4px rgba(0,0,0,0.3);
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.03em;
-      cursor: pointer;
-      pointer-events: auto;
-    }
-
-    .magic-openai-back:hover {
-      background: color-mix(in srgb, var(--primary-color) 60%, transparent);
-      color: white;
-      border-color: var(--primary-color);
-    }
-
-    .slot-machine-root.magic-openai-fullscreen .slot-game,
-    .slot-game.magic-openai-fullscreen {
-      position: fixed;
-      inset: 0;
-      z-index: 120000;
-      width: 100vw;
-      height: 100vh;
-      margin: 0;
-      padding: 0;
-      border: 0;
-      border-radius: 0;
-      box-shadow: none;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      overflow: hidden;
-      background: transparent;
-      backdrop-filter: blur(0);
-      -webkit-backdrop-filter: blur(0);
-    }
-
-    .slot-machine-root.magic-openai-fullscreen .magic-openai-toggle,
-    .slot-game.magic-openai-fullscreen .magic-openai-toggle {
-      display: none !important;
-    }
-
-    .slot-machine-root.magic-openai-fullscreen .slot-menu,
-    .slot-machine-root.magic-openai-fullscreen .slot-top-controls,
-    .slot-machine-root.magic-openai-fullscreen .slot-sidebar,
-    .slot-machine-root.magic-openai-fullscreen .slot-right-column,
-    .slot-machine-root.magic-openai-fullscreen .info-panel,
-    .slot-machine-root.magic-openai-fullscreen .odds-container,
-    .slot-machine-root.magic-openai-fullscreen .slot-view-rules,
-    .slot-machine-root.magic-openai-fullscreen .slot-view-history,
-    .slot-game.magic-openai-fullscreen .slot-menu,
-    .slot-game.magic-openai-fullscreen .slot-top-controls,
-    .slot-game.magic-openai-fullscreen .slot-sidebar,
-    .slot-game.magic-openai-fullscreen .slot-right-column,
-    .slot-game.magic-openai-fullscreen .info-panel,
-    .slot-game.magic-openai-fullscreen .odds-container,
-    .slot-game.magic-openai-fullscreen .slot-view-rules,
-    .slot-game.magic-openai-fullscreen .slot-view-history {
-      display: none !important;
-    }
-
-    .slot-machine-root.magic-openai-fullscreen .slot-view-game,
-    .slot-game.magic-openai-fullscreen .slot-view-game {
-      width: 100vw;
-      height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .slot-machine-root.magic-openai-fullscreen .slot-layout,
-    .slot-game.magic-openai-fullscreen .slot-layout {
-      width: 100vw;
-      height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0;
-      margin: 0;
-      gap: 0;
-    }
-
-    .slot-machine-root.magic-openai-fullscreen .slot-center,
-    .slot-game.magic-openai-fullscreen .slot-center {
-      position: relative;
-      width: 100vw;
-      height: 100vh;
-      max-width: none;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transform: none;
-      gap: 0;
-      margin: 0;
-      padding: 0;
-    }
-
-    .slot-machine-root.magic-openai-fullscreen .magic-openai-back,
-    .slot-game.magic-openai-fullscreen .magic-openai-back {
-      display: inline-flex;
-      position: fixed;
-      top: 1rem;
-      right: 1rem;
     }
 
     .slot-menu {
@@ -828,15 +712,7 @@
       cursor: pointer;
     }
 
-    .spinners.magic-openai-active {
-      width: 100vw;
-      max-width: none;
-      height: 100vh;
-      max-height: none;
-      transform: none;
-      border-radius: 0;
-      border: 0;
-      box-shadow: none;
+    .spinners.space-wheels-active {
       background: transparent;
     }
 
@@ -1632,7 +1508,7 @@
   </style>
 
   <div class="slot-game" data-inspiration="https://3dtransforms.desandro.com/carousel">
-    <button class="magic-openai-toggle" id="magicOpenAiBtn" type="button" aria-pressed="false">Magic of OpenAI</button>
+    <button class="space-wheels-toggle" id="spaceWheelsBtn" type="button" aria-pressed="false">Space Wheels</button>
     <div class="slot-menu" role="tablist" aria-label="Slot menu tabs">
       <button class="slot-menu-tab active" id="slotMenuGame" type="button" role="tab" aria-selected="true" aria-controls="slotViewGame"><h1>Slot Machine</h1></button>
       <button class="slot-menu-tab" id="slotMenuRules" type="button" role="tab" aria-selected="false" aria-controls="slotViewRules">Game Rules</button>
@@ -1677,7 +1553,6 @@
         <!-- Center: Reels -->
         <div class="slot-center">
           <canvas class="spinners single-line-mode" id="spinners"></canvas>
-          <button class="magic-openai-back" id="magicOpenAiBackBtn" type="button" aria-hidden="true">Back to Slot</button>
 
           <!-- Info Panel -->
           <div class="info-panel">

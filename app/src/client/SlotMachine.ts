@@ -724,8 +724,6 @@ export class SlotMachine {
     this.historyLoading = false;
     this.isMounted = false;
     this.magicOpenAiMode = false;
-    this.magicOpenAiPrevView = 'game';
-    this.magicOpenAiPrevBodyOverflow = '';
     // Start magic mode facing the user (0deg yaw), then swing left/right.
     this.magicCameraYawRad = 0;
     this.magicCameraPitchRad = -0.08;
@@ -775,6 +773,18 @@ export class SlotMachine {
     this.cellHalfHeight = 0;
     this.middleRowCenterY = 0;
     this.bottomRowCenterY = 0;
+
+    // Debug swing controls
+    this.debugSwingPaused = false;
+    this.debugSavedSwingRad = 0;
+
+    // Canvas-drawn debug UI hit regions (populated each frame)
+    this.debugSwingBtnRect = null;
+    this.debugSwingSliderRect = null;
+    this.debugSpaceSliderRect = null;
+    this.debugSwingSliderValue = 0;
+    this.debugSpaceSliderValue = 30; // default magicRingSeparationPx
+    this.debugDragging = null; // 'swing' | 'space' | null
   }
 
   mount() {
@@ -1138,6 +1148,29 @@ export class SlotMachine {
     if (!this.reelAnimationFrame) return;
     cancelAnimationFrame(this.reelAnimationFrame);
     this.reelAnimationFrame = null;
+  }
+
+  debugPauseSwing() {
+    this.debugSwingPaused = true;
+    this.debugSavedSwingRad = this.magicSwingAngleRad || 0;
+
+    if (this.magicSwingAnimationFrame) {
+      cancelAnimationFrame(this.magicSwingAnimationFrame);
+      this.magicSwingAnimationFrame = null;
+    }
+    this.debugSwingSliderValue = (this.debugSavedSwingRad * 180) / Math.PI;
+    this.renderFrame();
+  }
+
+  debugResumeSwing() {
+    this.debugSwingPaused = false;
+    this.debugSavedSwingRad = 0;
+    this.debugSwingSliderValue = 0;
+
+    if (this.magicOpenAiMode) {
+      this.startMagicSwingAnimation();
+    }
+    this.renderFrame();
   }
 
   easeOutSpin(progress) {
@@ -1808,8 +1841,8 @@ export class SlotMachine {
     const highlightScaleBoost = highlightStrength > 0
       ? Math.min(0.28, 0.12 + (highlightStrength * 0.07))
       : 0;
-    const halfW = Math.max(11, baseCellWidth * (isMagic ? 0.42 : 0.36));
-    const halfH = Math.max(10, baseCellHeight * (isMagic ? 0.38 : 0.36));
+    const halfW = baseCellWidth * (isMagic ? 0.42 : 0.36);
+    const halfH = baseCellHeight * (isMagic ? 0.38 : 0.36);
     const centerLiftY = isMagic ? (baseCellHeight * 0.08) : 0;
     const diamondCenterY = centerY - centerLiftY;
     const basePoints = [
@@ -1855,8 +1888,8 @@ export class SlotMachine {
     const highlightScaleBoost = highlightStrength > 0
       ? Math.min(0.28, 0.12 + (highlightStrength * 0.07))
       : 0;
-    const halfW = Math.max(11, baseCellWidth * (isMagic ? 0.42 : 0.36));
-    const halfH = Math.max(10, baseCellHeight * (isMagic ? 0.38 : 0.36));
+    const halfW = baseCellWidth * (isMagic ? 0.42 : 0.36);
+    const halfH = baseCellHeight * (isMagic ? 0.38 : 0.36);
     const centerShiftRad = isMagic ? (angleSpanRad * 0.08) : 0;
     const angleOffset = (halfH / Math.max(1, baseCellHeight)) * angleSpanRad;
     const projectAtAngle = (xLocal, sampleAngle) => {
@@ -1915,8 +1948,8 @@ export class SlotMachine {
       : 0;
     const effectiveCellWidth = baseCellWidth * symbolScale;
     const effectiveCellHeight = baseCellHeight * symbolScale;
-    const halfW = Math.max(11, effectiveCellWidth * (isMagic ? 0.42 : 0.36));
-    const halfH = Math.max(10, effectiveCellHeight * (isMagic ? 0.38 : 0.36));
+    const halfW = effectiveCellWidth * (isMagic ? 0.42 : 0.36);
+    const halfH = effectiveCellHeight * (isMagic ? 0.38 : 0.36);
     const centerShiftRad = (isMagic ? (angleSpanRad * 0.08) : 0) * centerShiftMultiplier;
     const angleOffset = (halfH / Math.max(1, effectiveCellHeight)) * angleSpanRad;
 
@@ -2077,7 +2110,7 @@ export class SlotMachine {
     const lastEdgeIndex = leftEdge.length - 1;
     const panelBackgroundColor = this.reelCellFillColor || 'rgba(208, 156, 61, 0.2)';
     const itemBackground = this.magicOpenAiMode
-      ? this.colorWithAlpha(panelBackgroundColor, cell.precomputedEdges ? 1 : 0.72)
+      ? this.colorWithAlpha(panelBackgroundColor, 0.7)
       : panelBackgroundColor;
     const panelPoints = [...leftEdge, ...rightEdge.slice().reverse()];
     const totalYaw = Number(cell.totalYawRad ?? this.magicCameraYawRad) || 0;
@@ -2127,6 +2160,9 @@ export class SlotMachine {
       faceTowardsCamera = normal.z * yawFacingSign;
     }
     const isBackSide = faceTowardsCamera <= (this.magicOpenAiMode ? 0.03 : 0.02);
+    // Face content (diamonds, separators, text) should hide at a higher threshold
+    // than the cell geometry itself, so edge-on views show only the ring wall.
+    const isFaceContentHidden = this.magicOpenAiMode && faceTowardsCamera < 0.15;
     const outerStrokeVisibility = this.magicOpenAiMode
       ? Math.max(0, Math.min(1, 0.4 + (0.6 * ((faceTowardsCamera - 0.28) / 0.52))))
       : 1;
@@ -2138,8 +2174,9 @@ export class SlotMachine {
     if (renderPass !== 'overlay') {
       if (this.magicOpenAiMode && innerLeftEdge && innerRightEdge) {
         const innerPanelPoints = [...innerLeftEdge, ...innerRightEdge.slice().reverse()];
-        const innerFill = 'rgba(24, 16, 6, 0.78)';
-        const wallFill = this.colorWithAlpha(panelBackgroundColor, 0.78);
+        const ringPartFill = this.colorWithAlpha(panelBackgroundColor, 0.7);
+        const innerFill = ringPartFill;
+        const wallFill = ringPartFill;
 
         const fillQuad = (points, fillStyle) => {
           ctx.save();
@@ -2209,6 +2246,15 @@ export class SlotMachine {
         ctx.lineTo(rightEdge[lastEdgeIndex].x, rightEdge[lastEdgeIndex].y);
         ctx.stroke();
       } else {
+        // Thin separator lines between cells on the outer ring surface.
+        if (!isBackSide && !isFaceContentHidden && cell.precomputedEdges) {
+          ctx.lineWidth = 1;
+          ctx.globalAlpha = borderAlpha * 0.5;
+          ctx.beginPath();
+          ctx.moveTo(leftEdge[0].x, leftEdge[0].y);
+          ctx.lineTo(rightEdge[0].x, rightEdge[0].y);
+          ctx.stroke();
+        }
         if (drawCellSideBorders && innerLeftEdge && innerRightEdge) {
           // Inner ring border only (no inner seam/connector lines).
           ctx.strokeStyle = edgeColor;
@@ -2236,9 +2282,9 @@ export class SlotMachine {
     }
 
     const symbolCellScale = (this.magicOpenAiMode && cell.precomputedEdges) ? 0.72 : 1;
-    // Render curved diamond below symbol text; appears on all wheel sides.
+    // Render curved diamond below symbol text; skip back-facing / edge-on cells.
     if (!cell.precomputedEdges) {
-      if (renderPass !== 'geometry') {
+      if (renderPass !== 'geometry' && !isBackSide && !isFaceContentHidden) {
         ctx.save();
         this.drawCurvedDiamondBadge({
           angleRad,
@@ -2255,7 +2301,7 @@ export class SlotMachine {
         ctx.restore();
       }
     } else {
-      const shouldDrawOuterDiamond = !isBackSide
+      const shouldDrawOuterDiamond = !isBackSide && !isFaceContentHidden
         && (renderPass === 'overlay' || renderPass === 'full');
       if (shouldDrawOuterDiamond) {
         this.drawCurvedDiamondBadgeWorld({
@@ -2396,7 +2442,7 @@ export class SlotMachine {
     }
     const symbolCellWidth = baseCellWidth * symbolCellScale;
     const symbolCellHeight = baseCellHeight * symbolCellScale;
-    if (isBackSide) {
+    if (isBackSide || isFaceContentHidden) {
       // Keep numbers on outer-facing side only; diamonds are already drawn for all sectors.
       ctx.restore();
       if (cell.precomputedEdges) this.magicCameraYawRad = savedYaw;
@@ -2508,9 +2554,9 @@ export class SlotMachine {
     ctx.stroke();
     ctx.restore();
 
-    // Diamond background below the symbol.
+    // Diamond background below the symbol — scale to projected size.
     ctx.save();
-    this.drawFlatDiamondBadge(centerX, centerY, baseCellWidth, baseCellHeight, depthWeight, paylineHighlight);
+    this.drawFlatDiamondBadge(centerX, centerY, projectedWidth, projectedHeight, depthWeight, paylineHighlight);
     ctx.restore();
 
     ctx.save();
@@ -2545,7 +2591,7 @@ export class SlotMachine {
     const reelAreaHeight = Math.max(1, contentHeight * magicRenderScale);
     const reelAreaY = padY + ((contentHeight - reelAreaHeight) / 2);
     const baseReelWidth = reelAreaWidth / 5;
-    const magicRingSeparationPx = 30;
+    const magicRingSeparationPx = this.debugSpaceSliderValue ?? 30;
     const reelSpacing = this.magicOpenAiMode
       ? (baseReelWidth + magicRingSeparationPx)
       : baseReelWidth;
@@ -2706,6 +2752,8 @@ export class SlotMachine {
         const angleDeg = (this.renderRotations[reelIndex] || 0) + (idx * stepAngle);
         const angleRad = angleDeg * (Math.PI / 180);
         const cosAngle = Math.cos(angleRad);
+        // Back-face culling: skip cells facing away from the viewer.
+        if (cosAngle < 0.05) continue;
         const sinAngle = Math.sin(angleRad);
         const halfW = baseCellWidth / 2;
         const halfH = baseCellHeight / 2;
@@ -2959,10 +3007,14 @@ export class SlotMachine {
     const isNeutralInstant = crossedNeutralThisFrame
       || (Math.abs(swingSideValue) <= neutralInstantEpsilon);
     this.magicLastRenderedSwingRad = swingSideValue;
-    // Spatial facing must drive painter priorities. Using motion direction here
-    // causes priority flip exactly at swing extremes when delta changes sign.
-    const faceLeft = !isNeutralInstant && swingSideValue < 0;
-    const faceRight = !isNeutralInstant && swingSideValue > 0;
+    // Spatial facing drives reel stacking order. Near neutral, pick a default
+    // direction so the facing path is always used (never the old neutral path).
+    // A separate flag forces both side ellipses to draw symmetrically near zero.
+    const neutralZoneRad = 0.02;
+    const symmetricEllipses = isNeutralInstant
+      || (Math.abs(swingSideValue) < neutralZoneRad);
+    const faceLeft = symmetricEllipses || swingSideValue < 0;
+    const faceRight = !faceLeft && swingSideValue > 0;
 
     // Global painter's order:
     // 1) reel stack order (depends on left/right state)
@@ -3213,8 +3265,9 @@ export class SlotMachine {
       ctx.shadowBlur = 0;
 
       // Minimal-priority side (drawn first): visible only where not covered later.
-      const minimalSide = faceRight ? 'right' : (faceLeft ? 'left' : null);
-      const prioritySide = faceRight ? 'left' : (faceLeft ? 'right' : null);
+      // When symmetricEllipses is set, skip the split so both sides draw equally.
+      const minimalSide = symmetricEllipses ? null : (faceRight ? 'right' : (faceLeft ? 'left' : null));
+      const prioritySide = symmetricEllipses ? null : (faceRight ? 'left' : (faceLeft ? 'right' : null));
       const minimalLoopKeys = minimalSide ? sideLoopKeys[minimalSide] : [];
       const priorityLoopKeys = prioritySide ? sideLoopKeys[prioritySide] : [];
       const baseLoopKeys = allLoopKeys.filter((key) => (
@@ -3248,7 +3301,6 @@ export class SlotMachine {
         drawNamedLoops(loops, baseLoopKeys);
       }
       drawConnector(loops.outerLeftTop, loops.outerRightTop);
-      drawConnector(loops.outerLeftBottom, loops.outerRightBottom);
 
       if (prioritySide) {
         drawNamedLoops(loops, priorityLoopKeys);
@@ -3338,6 +3390,114 @@ export class SlotMachine {
     this.ctx.restore();
   }
 
+  drawDebugControls() {
+    if (!this.magicOpenAiMode || !this.ctx) return;
+    const ctx = this.ctx;
+    const cw = this.canvasWidth;
+    const ch = this.canvasHeight;
+    const margin = 8;
+    const btnH = 22;
+    const btnW = 90;
+    const sliderW = 130;
+    const sliderH = 6;
+    const thumbR = 7;
+    const gap = 8;
+    const fontSize = 10;
+    const labelW = 34;
+
+    ctx.save();
+
+    const drawBtn = (bx, by, w, h, label, paused) => {
+      ctx.fillStyle = paused ? 'rgba(239, 68, 68, 0.7)' : 'rgba(60, 60, 60, 0.7)';
+      ctx.strokeStyle = paused ? 'rgba(239, 68, 68, 0.9)' : 'rgba(180, 180, 180, 0.5)';
+      ctx.lineWidth = 1;
+      const r = 4;
+      ctx.beginPath();
+      ctx.moveTo(bx + r, by);
+      ctx.lineTo(bx + w - r, by);
+      ctx.quadraticCurveTo(bx + w, by, bx + w, by + r);
+      ctx.lineTo(bx + w, by + h - r);
+      ctx.quadraticCurveTo(bx + w, by + h, bx + w - r, by + h);
+      ctx.lineTo(bx + r, by + h);
+      ctx.quadraticCurveTo(bx, by + h, bx, by + h - r);
+      ctx.lineTo(bx, by + r);
+      ctx.quadraticCurveTo(bx, by, bx + r, by);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#fff';
+      ctx.font = `600 ${fontSize}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, bx + w / 2, by + h / 2);
+      return { x: bx, y: by, w, h };
+    };
+
+    const drawSlider = (sx, sy, sw, sh, value, min, max, unit) => {
+      const rect = { x: sx, y: sy - thumbR, w: sw, h: thumbR * 2 + sh };
+      const trackY = sy + sh / 2;
+      ctx.fillStyle = 'rgba(80, 80, 80, 0.6)';
+      ctx.beginPath();
+      ctx.roundRect(sx, sy, sw, sh, sh / 2);
+      ctx.fill();
+      const t = Math.max(0, Math.min(1, (value - min) / (max - min)));
+      const thumbX = sx + t * sw;
+      ctx.fillStyle = 'rgba(59, 130, 246, 0.9)';
+      ctx.beginPath();
+      ctx.arc(thumbX, trackY, thumbR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      const valNum = Math.abs(value) < 10 ? value.toFixed(1) : Math.round(value);
+      const valText = valNum + (unit || '\u00B0');
+      ctx.fillStyle = 'rgba(255,255,255,0.8)';
+      ctx.font = '600 8px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(valText, thumbX, sy - 2);
+      return rect;
+    };
+
+    const drawLabel = (lx, ly, h, text) => {
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.font = '600 8px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, lx, ly + h / 2);
+    };
+
+    // Layout: 2 rows — [Button][Slider][Label] for swing, [Label][Slider][Label] for space
+    const rowH = btnH + 4;
+    const panelH = rowH * 2;
+    const rowW = btnW + gap + sliderW + gap + labelW;
+    const panelX = (cw - rowW) / 2;
+    const panelY = ch - margin - panelH;
+
+    // Row 1: Swing (-360 to 360)
+    let y = panelY;
+    const swingLabel = this.debugSwingPaused ? 'Resume Swing' : 'Pause Swing';
+    this.debugSwingBtnRect = drawBtn(panelX, y, btnW, btnH, swingLabel, this.debugSwingPaused);
+    if (this.debugSwingPaused) {
+      this.debugSwingSliderRect = drawSlider(
+        panelX + btnW + gap, y + (btnH - sliderH) / 2, sliderW, sliderH,
+        this.debugSwingSliderValue, -360, 360, '\u00B0');
+      drawLabel(panelX + btnW + gap + sliderW + gap + labelW / 2, y, btnH, 'Swing');
+    } else {
+      this.debugSwingSliderRect = null;
+    }
+
+    // Row 2: Space (0 to 200)
+    y += rowH;
+    drawLabel(panelX + btnW / 2, y, btnH, 'Ring Gap');
+    this.debugSpaceSliderRect = drawSlider(
+      panelX + btnW + gap, y + (btnH - sliderH) / 2, sliderW, sliderH,
+      this.debugSpaceSliderValue, 0, 200, 'px');
+    drawLabel(panelX + btnW + gap + sliderW + gap + labelW / 2, y, btnH, 'Space');
+
+    ctx.restore();
+  }
+
   renderFrame() {
     if (!this.ctx || !this.canvas) return;
     this.ctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
@@ -3357,6 +3517,8 @@ export class SlotMachine {
         this.drawJokerSprite(this.jokerCanvasX, this.jokerCanvasY);
       }
     }
+
+    this.drawDebugControls();
 
     if (this.webglEnabled) {
       this.presentWebGLFrame();
@@ -3417,24 +3579,80 @@ export class SlotMachine {
       void this.loadHistoryPage(page);
     });
 
-    const magicButton = this.shadowRoot.getElementById('magicOpenAiBtn');
-    if (magicButton) {
-      magicButton.addEventListener('click', () => this.toggleMagicOpenAiMode());
-    }
-    const magicBackButton = this.shadowRoot.getElementById('magicOpenAiBackBtn');
-    if (magicBackButton) {
-      magicBackButton.addEventListener('click', () => this.toggleMagicOpenAiMode(false));
-    }
-    if (this.rootElement) {
-      this.rootElement.addEventListener('click', (event) => {
-        const trigger = event.target?.closest?.('#magicOpenAiBackBtn');
-        if (!trigger) return;
-        event.preventDefault();
-        this.toggleMagicOpenAiMode(false);
-      });
+    const spaceWheelsBtn = this.shadowRoot.getElementById('spaceWheelsBtn');
+    if (spaceWheelsBtn) {
+      spaceWheelsBtn.addEventListener('click', () => this.toggleMagicOpenAiMode());
     }
 
     window.addEventListener('resize', () => this.initCanvas());
+
+    // Canvas-based debug controls (mouse + touch)
+    const getCanvasXY = (event) => {
+      if (!this.canvas) return null;
+      const rect = this.canvas.getBoundingClientRect();
+      const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+      const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+      return { x: clientX - rect.left, y: clientY - rect.top };
+    };
+
+    const hitRect = (pt, r) => r && pt.x >= r.x && pt.x <= r.x + r.w && pt.y >= r.y && pt.y <= r.y + r.h;
+
+    const sliderFromX = (pt, sliderRect, min, max) => {
+      const t = Math.max(0, Math.min(1, (pt.x - sliderRect.x) / sliderRect.w));
+      return min + t * (max - min);
+    };
+
+    const handleDown = (event) => {
+      if (!this.magicOpenAiMode) return;
+      const pt = getCanvasXY(event);
+      if (!pt) return;
+
+      if (hitRect(pt, this.debugSwingBtnRect)) {
+        event.preventDefault();
+        if (this.debugSwingPaused) { this.debugResumeSwing(); } else { this.debugPauseSwing(); }
+        return;
+      }
+      if (this.debugSwingPaused && hitRect(pt, this.debugSwingSliderRect)) {
+        event.preventDefault();
+        this.debugDragging = 'swing';
+        this.debugSwingSliderValue = sliderFromX(pt, this.debugSwingSliderRect, -360, 360);
+        this.magicSwingAngleRad = (this.debugSwingSliderValue * Math.PI) / 180;
+        if (!this.reelAnimationFrame) this.renderFrame();
+        return;
+      }
+      if (hitRect(pt, this.debugSpaceSliderRect)) {
+        event.preventDefault();
+        this.debugDragging = 'space';
+        this.debugSpaceSliderValue = sliderFromX(pt, this.debugSpaceSliderRect, 0, 200);
+        this.renderFrame();
+        return;
+      }
+    };
+
+    const handleMove = (event) => {
+      if (!this.debugDragging) return;
+      const pt = getCanvasXY(event);
+      if (!pt) return;
+      event.preventDefault();
+
+      if (this.debugDragging === 'swing' && this.debugSwingSliderRect) {
+        this.debugSwingSliderValue = sliderFromX(pt, this.debugSwingSliderRect, -360, 360);
+        this.magicSwingAngleRad = (this.debugSwingSliderValue * Math.PI) / 180;
+        if (!this.reelAnimationFrame) this.renderFrame();
+      } else if (this.debugDragging === 'space' && this.debugSpaceSliderRect) {
+        this.debugSpaceSliderValue = sliderFromX(pt, this.debugSpaceSliderRect, 0, 200);
+        this.renderFrame();
+      }
+    };
+
+    const handleUp = () => { this.debugDragging = null; };
+
+    this.canvas.addEventListener('mousedown', handleDown);
+    this.canvas.addEventListener('touchstart', handleDown, { passive: false });
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('touchmove', handleMove, { passive: false });
+    window.addEventListener('mouseup', handleUp);
+    window.addEventListener('touchend', handleUp);
   }
 
   startMagicSwingAnimation() {
@@ -3505,52 +3723,24 @@ export class SlotMachine {
   }
 
   toggleMagicOpenAiMode(forceState = null) {
-    const isForcedState = typeof forceState === 'boolean';
     const nextState = typeof forceState === 'boolean' ? forceState : !this.magicOpenAiMode;
-    const hadSameState = this.magicOpenAiMode === nextState;
-    if (!isForcedState && hadSameState) {
-      return;
-    }
     const wasMagicMode = this.magicOpenAiMode;
     this.magicOpenAiMode = nextState;
 
     if (this.magicOpenAiMode && !wasMagicMode) {
-      this.magicOpenAiPrevView = this.activeMenuView || 'game';
-      this.magicOpenAiPrevBodyOverflow = document.body.style.overflow || '';
-      document.body.style.overflow = 'hidden';
       this.startMagicSwingAnimation();
     } else if (!this.magicOpenAiMode && wasMagicMode) {
       this.stopMagicSwingAnimation();
-      document.body.style.overflow = this.magicOpenAiPrevBodyOverflow || '';
-    } else if (!this.magicOpenAiMode && hadSameState) {
-      // Forced cleanup when classes and state drift out of sync.
-      document.body.style.overflow = this.magicOpenAiPrevBodyOverflow || '';
-    }
-
-    if (this.rootElement) {
-      this.rootElement.classList.toggle('magic-openai-fullscreen', this.magicOpenAiMode);
-    }
-    const slotGame = this.shadowRoot.querySelector('.slot-game');
-    if (slotGame) {
-      slotGame.classList.toggle('magic-openai-fullscreen', this.magicOpenAiMode);
     }
 
     if (this.canvas) {
-      this.canvas.classList.toggle('magic-openai-active', this.magicOpenAiMode);
+      this.canvas.classList.toggle('space-wheels-active', this.magicOpenAiMode);
     }
 
-    const magicButton = this.shadowRoot.getElementById('magicOpenAiBtn');
-    if (magicButton) {
-      magicButton.classList.toggle('active', this.magicOpenAiMode);
-      magicButton.setAttribute('aria-pressed', this.magicOpenAiMode ? 'true' : 'false');
-    }
-    const magicBackButton = this.shadowRoot.getElementById('magicOpenAiBackBtn');
-    if (magicBackButton) {
-      magicBackButton.setAttribute('aria-hidden', this.magicOpenAiMode ? 'false' : 'true');
-    }
-
-    if (this.activeMenuView !== 'game') {
-      this.setMenuView('game');
+    const spaceWheelsBtn = this.shadowRoot.getElementById('spaceWheelsBtn');
+    if (spaceWheelsBtn) {
+      spaceWheelsBtn.classList.toggle('active', this.magicOpenAiMode);
+      spaceWheelsBtn.setAttribute('aria-pressed', this.magicOpenAiMode ? 'true' : 'false');
     }
 
     this.initCanvas();

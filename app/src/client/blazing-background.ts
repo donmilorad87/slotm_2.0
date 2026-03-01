@@ -41,95 +41,92 @@ const PARALLAX_MOVING_FACTOR = 0.2;
 const PARALLAX_SMOOTHING = 0.16;
 const STAR_SETTINGS_STORAGE_KEY = "slotm.space.settings.v1";
 
-const SVEMIR_PANEL_TEMPLATE = `
-  <button
-    id="svemirControll"
-    type="button"
-    class="svemir-toggle"
-    aria-haspopup="true"
-    aria-expanded="false"
-    aria-controls="svemirDropdown"
-  >
-    Svemir Controls
-  </button>
-  <div id="svemirDropdown" class="svemir-dropdown" hidden>
-    <h2>Star Commands</h2>
+const SVEMIR_BUTTON_TEMPLATE = `<button
+  id="svemirControll"
+  type="button"
+  class="svemir-toggle"
+  aria-haspopup="true"
+  aria-expanded="false"
+  aria-controls="svemirDropdown"
+>Svemir Controls</button>`;
 
-    <label class="svemir-row" for="sv-control-movingStars">
-      <span>Moving stars</span>
-      <input id="sv-control-movingStars" type="range" min="0" max="500000" step="100" value="1400" data-output="sv-output-movingStars">
-      <strong id="sv-output-movingStars" class="svemir-value">1400</strong>
-    </label>
+const SVEMIR_DROPDOWN_TEMPLATE = `<div id="svemirDropdown" class="svemir-dropdown svemir-control" hidden>
+  <h2>Star Commands</h2>
 
-    <label class="svemir-row" for="sv-control-staticStars">
-      <span>Static stars</span>
-      <input id="sv-control-staticStars" type="range" min="0" max="500000" step="50" value="700" data-output="sv-output-staticStars">
-      <strong id="sv-output-staticStars" class="svemir-value">700</strong>
-    </label>
+  <label class="svemir-row" for="sv-control-movingStars">
+    <span>Moving stars</span>
+    <input id="sv-control-movingStars" type="range" min="0" max="500000" step="100" value="1400" data-output="sv-output-movingStars">
+    <strong id="sv-output-movingStars" class="svemir-value">1400</strong>
+  </label>
 
-    <label class="svemir-row" for="sv-control-staticRadius">
-      <span>Background radius</span>
-      <input id="sv-control-staticRadius" type="range" min="0" max="4" step="0.05" value="1" data-output="sv-output-staticRadius">
-      <strong id="sv-output-staticRadius" class="svemir-value">1.00</strong>
-    </label>
+  <label class="svemir-row" for="sv-control-staticStars">
+    <span>Static stars</span>
+    <input id="sv-control-staticStars" type="range" min="0" max="500000" step="50" value="700" data-output="sv-output-staticStars">
+    <strong id="sv-output-staticStars" class="svemir-value">700</strong>
+  </label>
 
-    <label class="svemir-row svemir-row--toggle" for="sv-control-staticGlow">
-      <span>Static illumination</span>
-      <input id="sv-control-staticGlow" type="checkbox" checked data-output="sv-output-staticGlow">
-      <strong id="sv-output-staticGlow" class="svemir-value">ON</strong>
-    </label>
+  <label class="svemir-row" for="sv-control-staticRadius">
+    <span>Background radius</span>
+    <input id="sv-control-staticRadius" type="range" min="0" max="4" step="0.05" value="1" data-output="sv-output-staticRadius">
+    <strong id="sv-output-staticRadius" class="svemir-value">1.00</strong>
+  </label>
 
-    <label class="svemir-row" for="sv-control-starRadius">
-      <span>Star radius</span>
-      <input id="sv-control-starRadius" type="range" min="0" max="3.6" step="0.05" value="1.25" data-output="sv-output-starRadius">
-      <strong id="sv-output-starRadius" class="svemir-value">1.25</strong>
-    </label>
+  <label class="svemir-row svemir-row--toggle" for="sv-control-staticGlow">
+    <span>Static illumination</span>
+    <input id="sv-control-staticGlow" type="checkbox" checked data-output="sv-output-staticGlow">
+    <strong id="sv-output-staticGlow" class="svemir-value">ON</strong>
+  </label>
 
-    <label class="svemir-row" for="sv-control-farness">
-      <span>Farness</span>
-      <input id="sv-control-farness" type="range" min="0" max="3.5" step="0.1" value="1" data-output="sv-output-farness">
-      <strong id="sv-output-farness" class="svemir-value">1.0</strong>
-    </label>
+  <label class="svemir-row" for="sv-control-starRadius">
+    <span>Star radius</span>
+    <input id="sv-control-starRadius" type="range" min="0" max="3.6" step="0.05" value="1.25" data-output="sv-output-starRadius">
+    <strong id="sv-output-starRadius" class="svemir-value">1.25</strong>
+  </label>
 
-    <label class="svemir-row" for="sv-control-brightness">
-      <span>Brightness</span>
-      <input id="sv-control-brightness" type="range" min="0" max="2.4" step="0.05" value="1" data-output="sv-output-brightness">
-      <strong id="sv-output-brightness" class="svemir-value">1.0</strong>
-    </label>
+  <label class="svemir-row" for="sv-control-farness">
+    <span>Farness</span>
+    <input id="sv-control-farness" type="range" min="0" max="3.5" step="0.1" value="1" data-output="sv-output-farness">
+    <strong id="sv-output-farness" class="svemir-value">1.0</strong>
+  </label>
 
-    <label class="svemir-row" for="sv-control-speed">
-      <span>Movement speed</span>
-      <input id="sv-control-speed" type="range" min="0" max="4" step="0.05" value="0.05" data-output="sv-output-speed">
-      <strong id="sv-output-speed" class="svemir-value">0.05</strong>
-    </label>
+  <label class="svemir-row" for="sv-control-brightness">
+    <span>Brightness</span>
+    <input id="sv-control-brightness" type="range" min="0" max="2.4" step="0.05" value="1" data-output="sv-output-brightness">
+    <strong id="sv-output-brightness" class="svemir-value">1.0</strong>
+  </label>
 
-    <label class="svemir-row" for="sv-control-focalLength">
-      <span>Perspective</span>
-      <input id="sv-control-focalLength" type="range" min="0" max="260" step="2" value="120" data-output="sv-output-focalLength">
-      <strong id="sv-output-focalLength" class="svemir-value">120</strong>
-    </label>
+  <label class="svemir-row" for="sv-control-speed">
+    <span>Movement speed</span>
+    <input id="sv-control-speed" type="range" min="0" max="4" step="0.05" value="0.05" data-output="sv-output-speed">
+    <strong id="sv-output-speed" class="svemir-value">0.05</strong>
+  </label>
 
-    <label class="svemir-row" for="sv-control-gravity">
-      <span>Gravity pull</span>
-      <input id="sv-control-gravity" type="range" min="0" max="2.5" step="0.05" value="0.6" data-output="sv-output-gravity">
-      <strong id="sv-output-gravity" class="svemir-value">0.6</strong>
-    </label>
+  <label class="svemir-row" for="sv-control-focalLength">
+    <span>Perspective</span>
+    <input id="sv-control-focalLength" type="range" min="0" max="260" step="2" value="120" data-output="sv-output-focalLength">
+    <strong id="sv-output-focalLength" class="svemir-value">120</strong>
+  </label>
 
-    <label class="svemir-row" for="sv-control-drift">
-      <span>Drift</span>
-      <input id="sv-control-drift" type="range" min="0" max="3.5" step="0.05" value="0.8" data-output="sv-output-drift">
-      <strong id="sv-output-drift" class="svemir-value">0.8</strong>
-    </label>
+  <label class="svemir-row" for="sv-control-gravity">
+    <span>Gravity pull</span>
+    <input id="sv-control-gravity" type="range" min="0" max="2.5" step="0.05" value="0.6" data-output="sv-output-gravity">
+    <strong id="sv-output-gravity" class="svemir-value">0.6</strong>
+  </label>
 
-    <label class="svemir-row" for="sv-control-turbulence">
-      <span>Turbulence</span>
-      <input id="sv-control-turbulence" type="range" min="0" max="3.5" step="0.05" value="0.15" data-output="sv-output-turbulence">
-      <strong id="sv-output-turbulence" class="svemir-value">0.15</strong>
-    </label>
+  <label class="svemir-row" for="sv-control-drift">
+    <span>Drift</span>
+    <input id="sv-control-drift" type="range" min="0" max="3.5" step="0.05" value="0.8" data-output="sv-output-drift">
+    <strong id="sv-output-drift" class="svemir-value">0.8</strong>
+  </label>
 
-    <button type="button" class="svemir-reset" data-action="reset-stars">Restore default stars</button>
-  </div>
-`;
+  <label class="svemir-row" for="sv-control-turbulence">
+    <span>Turbulence</span>
+    <input id="sv-control-turbulence" type="range" min="0" max="3.5" step="0.05" value="0.15" data-output="sv-output-turbulence">
+    <strong id="sv-output-turbulence" class="svemir-value">0.15</strong>
+  </label>
+
+  <button type="button" class="svemir-reset" data-action="reset-stars">Restore default stars</button>
+</div>`;
 
 const MOVING_VERTEX_SHADER = `
 attribute vec3 a_world;
@@ -973,15 +970,22 @@ function ensureSvemirControlPanel() {
     return;
   }
 
-  let controlRoot = document.querySelector(".svemir-control");
-  if (!(controlRoot instanceof HTMLElement)) {
-    controlRoot = document.createElement("aside");
-    controlRoot.className = "svemir-control";
-    controlRoot.setAttribute("aria-label", "Space controls");
-    document.body.appendChild(controlRoot);
+  // Place button in topbar next to logo
+  if (!hasButton) {
+    const logo = document.querySelector(".svemir-logo");
+    if (logo && logo.parentElement) {
+      const temp = document.createElement("template");
+      temp.innerHTML = SVEMIR_BUTTON_TEMPLATE;
+      logo.after(temp.content.firstElementChild);
+    }
   }
 
-  controlRoot.innerHTML = SVEMIR_PANEL_TEMPLATE;
+  // Place dropdown panel at body level
+  if (!hasDropdown) {
+    const temp = document.createElement("template");
+    temp.innerHTML = SVEMIR_DROPDOWN_TEMPLATE;
+    document.body.appendChild(temp.content.firstElementChild);
+  }
 }
 
 function bindSvemirControlPanel(starfield) {
