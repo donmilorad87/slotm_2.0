@@ -736,6 +736,9 @@ export class SlotMachine {
     this.magicSwingSpeedRadPerSec = 0.3;
     this.magicSwingAnimationFrame = null;
     this.magicSwingStartTime = 0;
+    this.magicSwingDebugState = null;
+    this.magicLastRenderedSwingRad = null;
+    this.magicSwingMotionDirection = 0;
     this.currentSpinDurationMs = 5000;
     this.spinCountdownSeconds = 5;
 
@@ -2074,7 +2077,7 @@ export class SlotMachine {
     const lastEdgeIndex = leftEdge.length - 1;
     const panelBackgroundColor = this.reelCellFillColor || 'rgba(208, 156, 61, 0.2)';
     const itemBackground = this.magicOpenAiMode
-      ? this.colorWithAlpha(panelBackgroundColor, 0.72)
+      ? this.colorWithAlpha(panelBackgroundColor, cell.precomputedEdges ? 1 : 0.72)
       : panelBackgroundColor;
     const panelPoints = [...leftEdge, ...rightEdge.slice().reverse()];
     const totalYaw = Number(cell.totalYawRad ?? this.magicCameraYawRad) || 0;
@@ -2163,13 +2166,11 @@ export class SlotMachine {
         }
       }
 
-      if (!(this.magicOpenAiMode && cell.precomputedEdges)) {
-        ctx.save();
-        drawCurvedPanelPath();
-        ctx.fillStyle = itemBackground;
-        ctx.fill();
-        ctx.restore();
-      }
+      ctx.save();
+      drawCurvedPanelPath();
+      ctx.fillStyle = itemBackground;
+      ctx.fill();
+      ctx.restore();
 
       ctx.save();
       ctx.strokeStyle = edgeColor;
@@ -2254,9 +2255,8 @@ export class SlotMachine {
         ctx.restore();
       }
     } else {
-      const shouldDrawOuterDiamond = renderPass === 'full'
-        || (renderPass === 'geometry' && isBackSide)
-        || (renderPass === 'overlay' && !isBackSide);
+      const shouldDrawOuterDiamond = !isBackSide
+        && (renderPass === 'overlay' || renderPass === 'full');
       if (shouldDrawOuterDiamond) {
         this.drawCurvedDiamondBadgeWorld({
           angleRad,
@@ -2404,8 +2404,8 @@ export class SlotMachine {
     }
     ctx.transform(textTxX, textTxY, textTyX, textTyY, 0, 0);
     if (this.magicOpenAiMode) {
+      ctx.rotate(Math.PI);
       if (!cell.precomputedEdges) {
-        ctx.rotate(Math.PI);
         const symbolCenterY = (topCenter.y + bottomCenter.y) / 2;
         const rowsAboveCenter = Math.max(0, (reelCenterY - symbolCenterY) / Math.max(1, baseCellHeight));
         const rotationBands = Math.floor(rowsAboveCenter + 0.05);
@@ -2941,11 +2941,38 @@ export class SlotMachine {
       }
     }
 
-    // Global painter's order across all reels:
-    // 1) back-facing sectors first
-    // 2) farther sectors first
-    // 3) stable tie-breakers
+    // Rotation state from motion direction (delta swing per frame),
+    // with angle fallback near startup/static frames.
+    const swingSideValue = Number(swingRad) || 0;
+    const swingSideThreshold = 0.045;
+    const prevSwing = Number(this.magicLastRenderedSwingRad);
+    const hasPrevSwing = Number.isFinite(prevSwing);
+    const swingDelta = hasPrevSwing ? (swingSideValue - prevSwing) : 0;
+    const motionThreshold = 0.0006;
+    if (swingDelta > motionThreshold) {
+      this.magicSwingMotionDirection = 1;
+    } else if (swingDelta < -motionThreshold) {
+      this.magicSwingMotionDirection = -1;
+    }
+    this.magicLastRenderedSwingRad = swingSideValue;
+    let rotateLeft = this.magicSwingMotionDirection < 0;
+    let rotateRight = this.magicSwingMotionDirection > 0;
+    if (!rotateLeft && !rotateRight) {
+      rotateLeft = swingSideValue < -swingSideThreshold;
+      rotateRight = swingSideValue > swingSideThreshold;
+    }
+
+    // Global painter's order:
+    // 1) reel stack order (depends on left/right state)
+    // 2) back-facing sectors first within each reel
+    // 3) farther sectors first
+    // 4) stable tie-breakers
     worldCells.sort((a, b) => {
+      const reelRankA = rotateRight ? (4 - a.reelIndex) : a.reelIndex;
+      const reelRankB = rotateRight ? (4 - b.reelIndex) : b.reelIndex;
+      if (reelRankA !== reelRankB) {
+        return reelRankA - reelRankB;
+      }
       if (a.isBackSide !== b.isBackSide) {
         return a.isBackSide ? -1 : 1;
       }
@@ -2957,18 +2984,13 @@ export class SlotMachine {
       return (a.unitIndex || 0) - (b.unitIndex || 0);
     });
 
-    for (let i = 0; i < worldCells.length; i++) {
-      this.drawReelCell(worldCells[i], 'geometry');
-    }
-    for (let i = 0; i < worldCells.length; i++) {
-      this.drawReelCell(worldCells[i], 'overlay');
-    }
-
-    // Draw smooth reel contours (outer/inner, left/right) so ring silhouettes stay
-    // clean while swinging, without segmented side "scale" lines.
+    // Draw smooth reel contours first; ring faces are drawn afterward so lines that
+    // are spatially behind the ring surface stay hidden.
+    // Outer/inner, left/right contours keep ring silhouettes clean while swinging.
     const ringWallThickness = Math.max(12, baseCellHeight * 0.32);
     const innerRadius = Math.max(6, radius - ringWallThickness);
     const contourSamples = 96;
+    const contourLoops = [];
     const projectContourPoint = (
       reelCenterX,
       reelCenterY,
@@ -3003,45 +3025,49 @@ export class SlotMachine {
       for (let i = 0; i < contourSamples; i++) {
         const t = i / contourSamples;
         const angle = rotRad + (t * Math.PI * 2);
-        points.push(projectContourPoint(
+        const point = projectContourPoint(
           reelCenterX,
           reelCenterY,
           xLocal,
           loopRadius,
           angle,
           depthAnchorRadius,
-        ));
+        );
+        const normalY = -Math.sin(angle);
+        const normalZ = Math.cos(angle);
+        const yawedNormalZ = normalZ * yawCos;
+        const pitchedNormalZ = (normalY * pitchSin) + (yawedNormalZ * pitchCos);
+        points.push({
+          ...point,
+          normalViewZ: pitchedNormalZ,
+        });
       }
       return points;
     };
 
-    ctx.save();
-    ctx.strokeStyle = 'rgba(226, 178, 73, 0.98)';
-    ctx.globalAlpha = 0.98;
-    ctx.lineWidth = 1.6;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    ctx.shadowBlur = 0;
     const contourGapFill = this.colorWithAlpha(
-      this.reelCellFillColor || 'rgba(208, 156, 61, 0.72)',
-      0.44,
+      this.reelCellFillColor || 'rgba(208, 156, 61, 1)',
+      1,
     );
 
-    const drawLoop = (points) => {
+    const drawLoopSegments = (points) => {
       if (!points.length) return;
       ctx.beginPath();
       ctx.moveTo(points[0].x, points[0].y);
       for (let i = 1; i < points.length; i++) {
-        ctx.lineTo(points[i].x, points[i].y);
+        const point = points[i];
+        ctx.lineTo(point.x, point.y);
       }
       ctx.closePath();
       ctx.stroke();
     };
+    const drawLoop = (points) => {
+      drawLoopSegments(points);
+    };
     const drawAnnulusFill = (outerPoints, innerPoints) => {
       if (!outerPoints.length || !innerPoints.length) return;
       ctx.save();
-      // Keep fills behind diamonds/numbers while making ring thickness visible.
-      ctx.globalCompositeOperation = 'destination-over';
+      ctx.globalCompositeOperation = 'source-over';
       ctx.fillStyle = contourGapFill;
       ctx.beginPath();
       ctx.moveTo(outerPoints[0].x, outerPoints[0].y);
@@ -3099,15 +3125,7 @@ export class SlotMachine {
         radius,
       );
 
-      drawAnnulusFill(outerLeft, innerLeft);
-      drawAnnulusFill(outerRight, innerRight);
-
-      drawLoop(outerLeft);
-      drawLoop(outerRight);
-      drawLoop(innerLeft);
-      drawLoop(innerRight);
-
-      // Bridge lines only between the two large outer side ellipses (top + bottom),
+      // Bridge points between the two large outer side ellipses (top + bottom),
       // using projected extrema so connectors stay on visible top/bottom edges.
       const getMinYPoint = (points) => points.reduce(
         (best, point) => (point.y < best.y ? point : best),
@@ -3122,17 +3140,119 @@ export class SlotMachine {
       const outerLeftBottom = getMaxYPoint(outerLeft);
       const outerRightBottom = getMaxYPoint(outerRight);
 
-      const drawConnector = (fromPoint, toPoint) => {
-        ctx.beginPath();
-        ctx.moveTo(fromPoint.x, fromPoint.y);
-        ctx.lineTo(toPoint.x, toPoint.y);
-        ctx.stroke();
-      };
-
-      drawConnector(outerLeftTop, outerRightTop);
-      drawConnector(outerLeftBottom, outerRightBottom);
+      contourLoops.push({
+        reelIndex,
+        reelCenterX,
+        outerLeft,
+        outerRight,
+        innerLeft,
+        innerRight,
+        outerLeftTop,
+        outerRightTop,
+        outerLeftBottom,
+        outerRightBottom,
+      });
     }
-    ctx.restore();
+
+    // Draw per-reel (back -> front): low-priority full side ellipses first,
+    // then ring surfaces, then high-priority side ellipses last.
+    const sideLoopKeys = {
+      left: ['outerLeft', 'innerLeft'],
+      right: ['outerRight', 'innerRight'],
+    };
+    const allLoopKeys = ['outerLeft', 'outerRight', 'innerLeft', 'innerRight'];
+    const drawNamedLoops = (loops, keys) => {
+      for (let j = 0; j < keys.length; j++) {
+        const loop = loops[keys[j]];
+        if (!Array.isArray(loop) || !loop.length) continue;
+        drawLoop(loop);
+      }
+    };
+    const drawConnector = (fromPoint, toPoint) => {
+      if (!fromPoint || !toPoint) return;
+      ctx.beginPath();
+      ctx.moveTo(fromPoint.x, fromPoint.y);
+      ctx.lineTo(toPoint.x, toPoint.y);
+      ctx.stroke();
+    };
+
+    const cellsByReel = new Map();
+    for (let i = 0; i < worldCells.length; i++) {
+      const cell = worldCells[i];
+      if (!cellsByReel.has(cell.reelIndex)) {
+        cellsByReel.set(cell.reelIndex, []);
+      }
+      cellsByReel.get(cell.reelIndex).push(cell);
+    }
+    const loopsByReel = new Map();
+    for (let i = 0; i < contourLoops.length; i++) {
+      const loops = contourLoops[i];
+      loopsByReel.set(loops.reelIndex, loops);
+    }
+    const overlayReelOrder = rotateRight
+      ? [4, 3, 2, 1, 0]
+      : [0, 1, 2, 3, 4];
+    for (let i = 0; i < overlayReelOrder.length; i++) {
+      const reelIndex = overlayReelOrder[i];
+      const reelCells = cellsByReel.get(reelIndex) || [];
+      const loops = loopsByReel.get(reelIndex);
+      if (!loops) continue;
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.strokeStyle = 'rgba(22, 13, 4, 1)';
+      ctx.globalAlpha = 1;
+      ctx.lineWidth = 2.2;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.shadowBlur = 0;
+
+      // Minimal-priority side (drawn first): visible only where not covered later.
+      const minimalSide = rotateRight ? 'right' : (rotateLeft ? 'left' : null);
+      const prioritySide = rotateRight ? 'left' : (rotateLeft ? 'right' : null);
+      const minimalLoopKeys = minimalSide ? sideLoopKeys[minimalSide] : [];
+      const priorityLoopKeys = prioritySide ? sideLoopKeys[prioritySide] : [];
+      const baseLoopKeys = allLoopKeys.filter((key) => (
+        !minimalLoopKeys.includes(key) && !priorityLoopKeys.includes(key)
+      ));
+      if (minimalSide) {
+        drawNamedLoops(loops, minimalLoopKeys);
+      }
+      ctx.restore();
+
+      // Fill side/gap surfaces after minimal lines, so minimal side truly stays behind.
+      drawAnnulusFill(loops.outerLeft, loops.innerLeft);
+      drawAnnulusFill(loops.outerRight, loops.innerRight);
+
+      for (let cellIndex = 0; cellIndex < reelCells.length; cellIndex++) {
+        this.drawReelCell(reelCells[cellIndex], 'geometry');
+      }
+      for (let cellIndex = 0; cellIndex < reelCells.length; cellIndex++) {
+        this.drawReelCell(reelCells[cellIndex], 'overlay');
+      }
+
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.strokeStyle = 'rgba(22, 13, 4, 1)';
+      ctx.globalAlpha = 1;
+      ctx.lineWidth = 2.2;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.shadowBlur = 0;
+      if (prioritySide) {
+        drawNamedLoops(loops, baseLoopKeys);
+      }
+      drawConnector(loops.outerLeftTop, loops.outerRightTop);
+      drawConnector(loops.outerLeftBottom, loops.outerRightBottom);
+
+      if (prioritySide) {
+        drawNamedLoops(loops, priorityLoopKeys);
+      } else {
+        // Neutral: all side ellipses are drawn last with total priority.
+        drawNamedLoops(loops, allLoopKeys);
+      }
+      ctx.restore();
+    }
+
   }
 
   drawJokerSprite(x, y) {
@@ -3314,6 +3434,9 @@ export class SlotMachine {
   startMagicSwingAnimation() {
     this.stopMagicSwingAnimation();
     this.magicSwingStartTime = performance.now();
+    this.magicSwingDebugState = null;
+    this.magicLastRenderedSwingRad = null;
+    this.magicSwingMotionDirection = 0;
     const loop = (now) => {
       const elapsed = (now - this.magicSwingStartTime) / 1000;
       const speed = Math.max(0.0001, this.magicSwingSpeedRadPerSec);
@@ -3339,6 +3462,22 @@ export class SlotMachine {
         this.magicSwingAngleRad = this.magicSwingAmplitudeRad * Math.cos(speed * steadyElapsed);
       }
 
+      const swingStateThreshold = 0.045;
+      let swingState = 'neutral';
+      if (this.magicSwingAngleRad < -swingStateThreshold) {
+        swingState = 'left';
+      } else if (this.magicSwingAngleRad > swingStateThreshold) {
+        swingState = 'right';
+      }
+      if (swingState !== this.magicSwingDebugState) {
+        const swingDeg = (this.magicSwingAngleRad * 180) / Math.PI;
+        console.log(
+          `[magic-swing] state=${swingState} angleDeg=${swingDeg.toFixed(2)} `
+          + `(left=negative angle, right=positive angle)`,
+        );
+        this.magicSwingDebugState = swingState;
+      }
+
       // Only call renderFrame if no spin animation is running (avoids double-render).
       if (!this.reelAnimationFrame) {
         this.renderFrame();
@@ -3354,6 +3493,9 @@ export class SlotMachine {
       this.magicSwingAnimationFrame = null;
     }
     this.magicSwingAngleRad = 0;
+    this.magicSwingDebugState = null;
+    this.magicLastRenderedSwingRad = null;
+    this.magicSwingMotionDirection = 0;
   }
 
   toggleMagicOpenAiMode(forceState = null) {
