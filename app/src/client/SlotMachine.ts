@@ -2944,7 +2944,6 @@ export class SlotMachine {
     // Rotation state from motion direction (delta swing per frame),
     // with angle fallback near startup/static frames.
     const swingSideValue = Number(swingRad) || 0;
-    const swingSideThreshold = 0.045;
     const prevSwing = Number(this.magicLastRenderedSwingRad);
     const hasPrevSwing = Number.isFinite(prevSwing);
     const swingDelta = hasPrevSwing ? (swingSideValue - prevSwing) : 0;
@@ -2954,11 +2953,16 @@ export class SlotMachine {
     } else if (swingDelta < -motionThreshold) {
       this.magicSwingMotionDirection = -1;
     }
+    const crossedNeutralThisFrame = hasPrevSwing
+      && ((prevSwing < 0 && swingSideValue > 0) || (prevSwing > 0 && swingSideValue < 0));
+    const neutralInstantEpsilon = 0.000001;
+    const isNeutralInstant = crossedNeutralThisFrame
+      || (Math.abs(swingSideValue) <= neutralInstantEpsilon);
     this.magicLastRenderedSwingRad = swingSideValue;
     // Spatial facing must drive painter priorities. Using motion direction here
     // causes priority flip exactly at swing extremes when delta changes sign.
-    const faceLeft = swingSideValue < -swingSideThreshold;
-    const faceRight = swingSideValue > swingSideThreshold;
+    const faceLeft = !isNeutralInstant && swingSideValue < 0;
+    const faceRight = !isNeutralInstant && swingSideValue > 0;
 
     // Global painter's order:
     // 1) reel stack order (depends on left/right state)
@@ -3460,7 +3464,7 @@ export class SlotMachine {
         this.magicSwingAngleRad = this.magicSwingAmplitudeRad * Math.cos(speed * steadyElapsed);
       }
 
-      const swingStateThreshold = 0.045;
+      const swingStateThreshold = 0.000001;
       let swingState = 'neutral';
       if (this.magicSwingAngleRad < -swingStateThreshold) {
         swingState = 'left';
