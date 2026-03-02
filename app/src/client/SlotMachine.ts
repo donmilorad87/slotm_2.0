@@ -2159,10 +2159,12 @@ export class SlotMachine {
       // Render symbols/diamonds on the outer ring surface.
       faceTowardsCamera = normal.z * yawFacingSign;
     }
-    const isBackSide = faceTowardsCamera <= (this.magicOpenAiMode ? 0.03 : 0.02);
-    // Face content (diamonds, separators, text) should hide at a higher threshold
-    // than the cell geometry itself, so edge-on views show only the ring wall.
-    const isFaceContentHidden = this.magicOpenAiMode && faceTowardsCamera < 0.15;
+    const isBackSide = this.magicOpenAiMode
+      ? false                                          // full-ring: render all faces
+      : (faceTowardsCamera <= 0.02);
+    // In magic mode all faces render content (full-ring view).
+    // In normal mode, isFaceContentHidden is always false (no threshold needed).
+    const isFaceContentHidden = false;
     const outerStrokeVisibility = this.magicOpenAiMode
       ? Math.max(0, Math.min(1, 0.4 + (0.6 * ((faceTowardsCamera - 0.28) / 0.52))))
       : 1;
