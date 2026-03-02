@@ -2,25 +2,38 @@
   box-sizing: border-box;
 }
 
-* {
+*, html, body {
   scrollbar-width: thin;
-  scrollbar-color: rgba(245, 218, 118, 0.45) transparent;
+  scrollbar-color: rgba(245, 218, 118, 0.55) transparent;
 }
 
-*::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+*::-webkit-scrollbar,
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
 }
 
-*::-webkit-scrollbar-track {
+*::-webkit-scrollbar-track,
+html::-webkit-scrollbar-track,
+body::-webkit-scrollbar-track {
   background: transparent;
 }
 
-*::-webkit-scrollbar-thumb {
-  background: rgba(245, 218, 118, 0.45);
+*::-webkit-scrollbar-thumb,
+html::-webkit-scrollbar-thumb,
+body::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #f5d060 0%, #c8a020 40%, #f5d060 60%, #a88418 100%);
   border-radius: 10px;
-  border: 2px solid transparent;
+  border: 2px solid rgba(100, 70, 10, 0.5);
   background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover,
+html::-webkit-scrollbar-thumb:hover,
+body::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #ffe080 0%, #d4a828 40%, #ffe080 60%, #b8921c 100%);
+  border-color: rgba(100, 70, 10, 0.7);
 }
 
 :root {
@@ -284,6 +297,7 @@ a {
 }
 
 .svemir-dropdown {
+  position: relative;
   width: min(92vw, 360px);
   border: 1px solid var(--c-border);
   border-radius: 0.85rem;
@@ -293,6 +307,29 @@ a {
   padding: 0.85rem;
   display: grid;
   gap: 0.55rem;
+}
+
+.svemir-close {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.08);
+  color: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.svemir-close:hover {
+  background: rgba(0, 0, 0, 0.16);
 }
 
 .svemir-dropdown[hidden] {

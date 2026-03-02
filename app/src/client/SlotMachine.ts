@@ -784,7 +784,26 @@ export class SlotMachine {
     this.debugSpaceSliderRect = null;
     this.debugSwingSliderValue = 0;
     this.debugSpaceSliderValue = 30; // default magicRingSeparationPx
-    this.debugDragging = null; // 'swing' | 'space' | null
+    this.debugDragging = null; // 'swing' | 'space' | 'zoom' | null
+
+    // Arrow buttons for fine swing control
+    this.debugSwingLeftArrowRect = null;
+    this.debugSwingRightArrowRect = null;
+
+    // Zoom slider
+    this.debugZoomSliderValue = 1.0; // range 0.3–3.0
+    this.debugZoomSliderRect = null;
+
+    // Fullscreen state
+    this.isFullscreen = false;
+    this.debugFullscreenBtnRect = null;
+    this.preFullscreenCanvasStyle = '';
+    this.preFullscreenCanvasParent = null;
+    this.preFullscreenCanvasNext = null;
+    this.fullscreenStyleEl = null;
+    this.fullscreenEscHandler = null;
+    this.fsHitRects = {};
+    this.fsHoverKey = null;
   }
 
   mount() {
@@ -2160,7 +2179,7 @@ export class SlotMachine {
       faceTowardsCamera = normal.z * yawFacingSign;
     }
     const isBackSide = this.magicOpenAiMode
-      ? false                                          // full-ring: render all faces
+      ? (cell.precomputedEdges ? (cell.isBackSide === true) : false) // world cells use actual backface flag
       : (faceTowardsCamera <= 0.02);
     // In magic mode all faces render content (full-ring view).
     // In normal mode, isFaceContentHidden is always false (no threshold needed).
@@ -2249,7 +2268,7 @@ export class SlotMachine {
         ctx.stroke();
       } else {
         // Thin separator lines between cells on the outer ring surface.
-        if (!isBackSide && !isFaceContentHidden && cell.precomputedEdges) {
+        if (!isFaceContentHidden && cell.precomputedEdges) {
           ctx.lineWidth = 1;
           ctx.globalAlpha = borderAlpha * 0.5;
           ctx.beginPath();
@@ -2303,7 +2322,7 @@ export class SlotMachine {
         ctx.restore();
       }
     } else {
-      const shouldDrawOuterDiamond = !isBackSide && !isFaceContentHidden
+      const shouldDrawOuterDiamond = !isFaceContentHidden
         && (renderPass === 'overlay' || renderPass === 'full');
       if (shouldDrawOuterDiamond) {
         this.drawCurvedDiamondBadgeWorld({
@@ -2588,7 +2607,9 @@ export class SlotMachine {
     const padY = this.spinnerPaddingTop || 0;
     const contentWidth = Math.max(1, this.canvasWidth - (padX * 2));
     const contentHeight = Math.max(1, this.canvasHeight - (padY * 2));
-    const magicRenderScale = this.magicOpenAiMode ? 0.26 : 1;
+    const baseScale = this.magicOpenAiMode ? 0.26 : 1;
+    const zoomFactor = this.magicOpenAiMode ? (this.debugZoomSliderValue || 1.0) : 1;
+    const magicRenderScale = baseScale * zoomFactor;
     const reelAreaWidth = Math.max(1, contentWidth * magicRenderScale);
     const reelAreaHeight = Math.max(1, contentHeight * magicRenderScale);
     const reelAreaY = padY + ((contentHeight - reelAreaHeight) / 2);
@@ -3393,13 +3414,23 @@ export class SlotMachine {
   }
 
   drawDebugControls() {
-    if (!this.magicOpenAiMode || !this.ctx) return;
+    // Sliders only visible in fullscreen + magic mode
+    if (!this.magicOpenAiMode || !this.ctx || !this.isFullscreen) {
+      this.debugSwingBtnRect = null;
+      this.debugSwingSliderRect = null;
+      this.debugSwingLeftArrowRect = null;
+      this.debugSwingRightArrowRect = null;
+      this.debugSpaceSliderRect = null;
+      this.debugZoomSliderRect = null;
+      return;
+    }
     const ctx = this.ctx;
     const cw = this.canvasWidth;
     const ch = this.canvasHeight;
     const margin = 8;
     const btnH = 22;
     const btnW = 90;
+    const arrowSize = btnH; // square arrow buttons
     const sliderW = 130;
     const sliderH = 6;
     const thumbR = 7;
@@ -3435,21 +3466,76 @@ export class SlotMachine {
       return { x: bx, y: by, w, h };
     };
 
+    const drawArrowBtn = (ax, ay, size, direction) => {
+      // direction: 'left' or 'right'
+      ctx.fillStyle = 'rgba(60, 60, 60, 0.7)';
+      ctx.strokeStyle = 'rgba(180, 180, 180, 0.5)';
+      ctx.lineWidth = 1;
+      const r = 4;
+      ctx.beginPath();
+      ctx.moveTo(ax + r, ay);
+      ctx.lineTo(ax + size - r, ay);
+      ctx.quadraticCurveTo(ax + size, ay, ax + size, ay + r);
+      ctx.lineTo(ax + size, ay + size - r);
+      ctx.quadraticCurveTo(ax + size, ay + size, ax + size - r, ay + size);
+      ctx.lineTo(ax + r, ay + size);
+      ctx.quadraticCurveTo(ax, ay + size, ax, ay + size - r);
+      ctx.lineTo(ax, ay + r);
+      ctx.quadraticCurveTo(ax, ay, ax + r, ay);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      // Draw triangle glyph
+      const cx = ax + size / 2;
+      const cy = ay + size / 2;
+      const tri = size * 0.3;
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      if (direction === 'left') {
+        ctx.moveTo(cx - tri * 0.6, cy);
+        ctx.lineTo(cx + tri * 0.4, cy - tri);
+        ctx.lineTo(cx + tri * 0.4, cy + tri);
+      } else {
+        ctx.moveTo(cx + tri * 0.6, cy);
+        ctx.lineTo(cx - tri * 0.4, cy - tri);
+        ctx.lineTo(cx - tri * 0.4, cy + tri);
+      }
+      ctx.closePath();
+      ctx.fill();
+      return { x: ax, y: ay, w: size, h: size };
+    };
+
     const drawSlider = (sx, sy, sw, sh, value, min, max, unit) => {
       const rect = { x: sx, y: sy - thumbR, w: sw, h: thumbR * 2 + sh };
       const trackY = sy + sh / 2;
-      ctx.fillStyle = 'rgba(80, 80, 80, 0.6)';
+      // Golden track background
+      const trkGrad = ctx.createLinearGradient(sx, sy, sx, sy + sh);
+      trkGrad.addColorStop(0, 'rgba(180, 140, 50, 0.5)');
+      trkGrad.addColorStop(0.5, 'rgba(218, 175, 75, 0.6)');
+      trkGrad.addColorStop(1, 'rgba(150, 110, 30, 0.5)');
+      ctx.fillStyle = trkGrad;
       ctx.beginPath();
       ctx.roundRect(sx, sy, sw, sh, sh / 2);
       ctx.fill();
+      ctx.strokeStyle = 'rgba(120, 85, 20, 0.7)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.roundRect(sx, sy, sw, sh, sh / 2); ctx.stroke();
       const t = Math.max(0, Math.min(1, (value - min) / (max - min)));
       const thumbX = sx + t * sw;
-      ctx.fillStyle = 'rgba(59, 130, 246, 0.9)';
+      // Golden thumb with conic gradient + dark bold border
+      const cg = ctx.createConicGradient(0, thumbX, trackY);
+      cg.addColorStop(0, '#f5d060');
+      cg.addColorStop(0.25, '#c8a020');
+      cg.addColorStop(0.5, '#f5d060');
+      cg.addColorStop(0.75, '#c8a020');
+      cg.addColorStop(1, '#f5d060');
+      ctx.fillStyle = cg;
       ctx.beginPath();
       ctx.arc(thumbX, trackY, thumbR, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = 'rgba(100, 70, 10, 0.9)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(thumbX, trackY, thumbR, 0, Math.PI * 2);
       ctx.stroke();
       const valNum = Math.abs(value) < 10 ? value.toFixed(1) : Math.round(value);
       const valText = valNum + (unit || '\u00B0');
@@ -3469,42 +3555,170 @@ export class SlotMachine {
       ctx.fillText(text, lx, ly + h / 2);
     };
 
-    // Layout: 2 rows — [Button][Slider][Label] for swing, [Label][Slider][Label] for space
+    // Layout: 3 rows — [Btn][◀][Slider][▶][Label] for swing, [Label][Slider][Label] for space, [Label][Slider][Label] for zoom
     const rowH = btnH + 4;
-    const panelH = rowH * 2;
-    const rowW = btnW + gap + sliderW + gap + labelW;
-    const panelX = (cw - rowW) / 2;
-    const panelY = ch - margin - panelH;
+    const panelH = rowH * 3;
+    const rowW = btnW + gap + arrowSize + gap + sliderW + gap + arrowSize + gap + labelW;
+    // Position at top-right of header area
+    const fsFramePad = 10;
+    const fsPad = 8;
+    const fsTopH = 96 + fsPad * 2;
+    const headerRight = cw - fsFramePad;
+    const panelX = headerRight - rowW - fsPad;
+    const panelY = fsFramePad + (fsTopH - panelH) / 2;
 
     // Row 1: Swing (-360 to 360)
     let y = panelY;
     const swingLabel = this.debugSwingPaused ? 'Resume Swing' : 'Pause Swing';
     this.debugSwingBtnRect = drawBtn(panelX, y, btnW, btnH, swingLabel, this.debugSwingPaused);
     if (this.debugSwingPaused) {
+      let sliderX = panelX + btnW + gap;
+      this.debugSwingLeftArrowRect = drawArrowBtn(sliderX, y, arrowSize, 'left');
+      sliderX += arrowSize + gap;
       this.debugSwingSliderRect = drawSlider(
-        panelX + btnW + gap, y + (btnH - sliderH) / 2, sliderW, sliderH,
+        sliderX, y + (btnH - sliderH) / 2, sliderW, sliderH,
         this.debugSwingSliderValue, -360, 360, '\u00B0');
-      drawLabel(panelX + btnW + gap + sliderW + gap + labelW / 2, y, btnH, 'Swing');
+      sliderX += sliderW + gap;
+      this.debugSwingRightArrowRect = drawArrowBtn(sliderX, y, arrowSize, 'right');
+      sliderX += arrowSize + gap;
+      drawLabel(sliderX + labelW / 2, y, btnH, 'Swing');
     } else {
       this.debugSwingSliderRect = null;
+      this.debugSwingLeftArrowRect = null;
+      this.debugSwingRightArrowRect = null;
     }
 
     // Row 2: Space (0 to 200)
     y += rowH;
     drawLabel(panelX + btnW / 2, y, btnH, 'Ring Gap');
     this.debugSpaceSliderRect = drawSlider(
-      panelX + btnW + gap, y + (btnH - sliderH) / 2, sliderW, sliderH,
+      panelX + btnW + gap + arrowSize + gap, y + (btnH - sliderH) / 2, sliderW, sliderH,
       this.debugSpaceSliderValue, 0, 200, 'px');
-    drawLabel(panelX + btnW + gap + sliderW + gap + labelW / 2, y, btnH, 'Space');
+    drawLabel(panelX + btnW + gap + arrowSize + gap + sliderW + gap + arrowSize + gap + labelW / 2, y, btnH, 'Space');
+
+    // Row 3: Zoom (0.3 to 3.0)
+    y += rowH;
+    drawLabel(panelX + btnW / 2, y, btnH, 'Zoom');
+    this.debugZoomSliderRect = drawSlider(
+      panelX + btnW + gap + arrowSize + gap, y + (btnH - sliderH) / 2, sliderW, sliderH,
+      this.debugZoomSliderValue, 0.3, 3.0, 'x');
+    const zoomDisplayVal = this.debugZoomSliderValue.toFixed(1) + 'x';
+    drawLabel(panelX + btnW + gap + arrowSize + gap + sliderW + gap + arrowSize + gap + labelW / 2, y, btnH, zoomDisplayVal);
 
     ctx.restore();
+  }
+
+  drawFullscreenButton() {
+    if (!this.magicOpenAiMode || !this.ctx) {
+      this.debugFullscreenBtnRect = null;
+      return;
+    }
+    const ctx = this.ctx;
+    const size = 28;
+    const margin = 10;
+    let bx, by;
+    if (this.isFullscreen) {
+      // Bottom-right of the window space
+      const fsFramePad = 10;
+      const fsPad = 8;
+      const fsTopH = 96 + fsPad * 2;
+      const fsFooterH = 56;
+      const fsGap = 10;
+      const fsRightW = 180;
+      const fsSideBottom = this.canvasHeight - fsFramePad - fsFooterH - fsGap;
+      const winRight = this.canvasWidth - fsFramePad - fsRightW - fsGap;
+      const winBottom = fsSideBottom;
+      bx = winRight - size - 8;
+      by = winBottom - size - 8;
+    } else {
+      bx = this.canvasWidth - margin - size;
+      by = this.canvasHeight - margin - size - 10;
+    }
+
+    ctx.save();
+    if (this.isFullscreen) {
+      // Themed style matching slot-controls-wrapper
+      const rootStyle = getComputedStyle(this.rootElement);
+      const cardBg = rootStyle.getPropertyValue('--slot-card-bg').trim() || '#ffffff';
+      const borderCol = rootStyle.getPropertyValue('--slot-border-color').trim() || '#e0e0e0';
+      const textCol = rootStyle.getPropertyValue('--slot-text-secondary').trim() || '#555555';
+      ctx.shadowColor = 'rgba(0,0,0,0.3)';
+      ctx.shadowOffsetY = 4;
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 0.6;
+      ctx.fillStyle = cardBg;
+      ctx.beginPath();
+      ctx.roundRect(bx, by, size, size, 6);
+      ctx.fill();
+      ctx.globalAlpha = 1.0;
+      ctx.shadowColor = 'transparent';
+      ctx.strokeStyle = borderCol;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.strokeStyle = textCol;
+    } else {
+      ctx.fillStyle = 'rgba(40, 40, 40, 0.6)';
+      ctx.strokeStyle = 'rgba(180, 180, 180, 0.5)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(bx, by, size, size, 4);
+      ctx.fill();
+      ctx.stroke();
+      ctx.strokeStyle = '#fff';
+    }
+    ctx.lineWidth = 1.5;
+    const cx = bx + size / 2;
+    const cy = by + size / 2;
+    const a = 5; // arrow half-length
+    if (!this.isFullscreen) {
+      // Expand icon: 4 outward arrows from center
+      const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+      for (const [dx, dy] of corners) {
+        ctx.beginPath();
+        ctx.moveTo(cx + dx * 2, cy + dy * 2);
+        ctx.lineTo(cx + dx * a, cy + dy * a);
+        ctx.stroke();
+      }
+    } else {
+      // Compress icon: 4 inward arrows toward center
+      const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+      for (const [dx, dy] of corners) {
+        ctx.beginPath();
+        ctx.moveTo(cx + dx * a, cy + dy * a);
+        ctx.lineTo(cx + dx * 2, cy + dy * 2);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+    this.debugFullscreenBtnRect = { x: bx, y: by, w: size, h: size };
   }
 
   renderFrame() {
     if (!this.ctx || !this.canvas) return;
     this.ctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
 
+    // In fullscreen, clip reels to the window area so rings stay behind the overlay
+    if (this.isFullscreen && this.magicOpenAiMode) {
+      const fp = 10, pd = 8, sw = 180, rw = 180, gp = 10;
+      const th = 96 + pd * 2, bh = 56;
+      const cw = this.canvasWidth, ch = this.canvasHeight;
+      const st = fp + th + gp;
+      const sb = ch - fp - bh - gp;
+      const wx = fp + sw + gp;
+      const ww = cw - fp * 2 - sw - rw - gp * 2;
+      const wh = sb - st;
+      this.ctx.save();
+      this.ctx.beginPath();
+      this.ctx.roundRect(wx, st, ww, wh, 6);
+      this.ctx.clip();
+    }
+
     this.drawReelsCanvas();
+
+    // Restore clip if applied
+    if (this.isFullscreen && this.magicOpenAiMode) {
+      this.ctx.restore();
+    }
 
     // Keep paylines as top layer in 3x5 mode during and outside spin.
     if (!this.magicOpenAiMode) {
@@ -3520,6 +3734,8 @@ export class SlotMachine {
       }
     }
 
+    this.drawFullscreenButton();
+    this.drawFullscreenUI();
     this.drawDebugControls();
 
     if (this.webglEnabled) {
@@ -3528,9 +3744,12 @@ export class SlotMachine {
   }
 
   createOddsTables() {
-    // Use default symbols and odds for initial game type (1 = Numbers)
-    const symbols = this.getSymbolSetForGameType(this.gameTypeValue || 1);
-    const odds = this.getOddsForGameType(this.gameTypeValue || 1);
+    // Default odds (game type 1 = Numbers) are server-side rendered in the HTML.
+    // Only rebuild if the initial game type differs from the default.
+    const gameType = this.gameTypeValue || 1;
+    if (gameType === 1) return;
+    const symbols = this.getSymbolSetForGameType(gameType);
+    const odds = this.getOddsForGameType(gameType);
     this.updateOddsTables(symbols, odds);
   }
 
@@ -3604,16 +3823,50 @@ export class SlotMachine {
       return min + t * (max - min);
     };
 
+    const adjustSwing = (delta) => {
+      this.debugSwingSliderValue = Math.max(-360, Math.min(360, this.debugSwingSliderValue + delta));
+      this.magicSwingAngleRad = (this.debugSwingSliderValue * Math.PI) / 180;
+      if (!this.reelAnimationFrame) this.renderFrame();
+    };
+
     const handleDown = (event) => {
       if (!this.magicOpenAiMode) return;
       const pt = getCanvasXY(event);
       if (!pt) return;
 
+      // Fullscreen button (always visible in magic mode)
+      if (hitRect(pt, this.debugFullscreenBtnRect)) {
+        event.preventDefault();
+        this.toggleFullscreen();
+        return;
+      }
+
+      // Fullscreen canvas UI (bet, lines, start, stop, etc.)
+      if (this.isFullscreen && this.handleFullscreenUIClick(pt)) {
+        event.preventDefault();
+        return;
+      }
+
+      // Swing pause/resume button
       if (hitRect(pt, this.debugSwingBtnRect)) {
         event.preventDefault();
         if (this.debugSwingPaused) { this.debugResumeSwing(); } else { this.debugPauseSwing(); }
         return;
       }
+
+      // Arrow buttons for fine swing adjustment
+      if (this.debugSwingPaused && hitRect(pt, this.debugSwingLeftArrowRect)) {
+        event.preventDefault();
+        adjustSwing(-0.2);
+        return;
+      }
+      if (this.debugSwingPaused && hitRect(pt, this.debugSwingRightArrowRect)) {
+        event.preventDefault();
+        adjustSwing(0.2);
+        return;
+      }
+
+      // Swing slider drag
       if (this.debugSwingPaused && hitRect(pt, this.debugSwingSliderRect)) {
         event.preventDefault();
         this.debugDragging = 'swing';
@@ -3622,6 +3875,8 @@ export class SlotMachine {
         if (!this.reelAnimationFrame) this.renderFrame();
         return;
       }
+
+      // Space slider drag
       if (hitRect(pt, this.debugSpaceSliderRect)) {
         event.preventDefault();
         this.debugDragging = 'space';
@@ -3629,21 +3884,77 @@ export class SlotMachine {
         this.renderFrame();
         return;
       }
+
+      // Zoom slider drag
+      if (hitRect(pt, this.debugZoomSliderRect)) {
+        event.preventDefault();
+        this.debugDragging = 'zoom';
+        this.debugZoomSliderValue = sliderFromX(pt, this.debugZoomSliderRect, 0.3, 3.0);
+        this.renderFrame();
+        return;
+      }
     };
 
     const handleMove = (event) => {
-      if (!this.debugDragging) return;
       const pt = getCanvasXY(event);
-      if (!pt) return;
-      event.preventDefault();
 
-      if (this.debugDragging === 'swing' && this.debugSwingSliderRect) {
-        this.debugSwingSliderValue = sliderFromX(pt, this.debugSwingSliderRect, -360, 360);
-        this.magicSwingAngleRad = (this.debugSwingSliderValue * Math.PI) / 180;
-        if (!this.reelAnimationFrame) this.renderFrame();
-      } else if (this.debugDragging === 'space' && this.debugSpaceSliderRect) {
-        this.debugSpaceSliderValue = sliderFromX(pt, this.debugSpaceSliderRect, 0, 200);
-        this.renderFrame();
+      if (this.debugDragging) {
+        if (!pt) return;
+        event.preventDefault();
+        if (this.debugDragging === 'swing' && this.debugSwingSliderRect) {
+          this.debugSwingSliderValue = sliderFromX(pt, this.debugSwingSliderRect, -360, 360);
+          this.magicSwingAngleRad = (this.debugSwingSliderValue * Math.PI) / 180;
+          if (!this.reelAnimationFrame) this.renderFrame();
+        } else if (this.debugDragging === 'space' && this.debugSpaceSliderRect) {
+          this.debugSpaceSliderValue = sliderFromX(pt, this.debugSpaceSliderRect, 0, 200);
+          this.renderFrame();
+        } else if (this.debugDragging === 'zoom' && this.debugZoomSliderRect) {
+          this.debugZoomSliderValue = sliderFromX(pt, this.debugZoomSliderRect, 0.3, 3.0);
+          this.renderFrame();
+        }
+        return;
+      }
+
+      // Hover tracking for fullscreen UI
+      if (this.isFullscreen && pt && this.fsHitRects) {
+        let newHover = null;
+        const rects = this.fsHitRects;
+        const testKeys = ['start', 'stop', 'joker', 'svemir', 'betCycle', 'gtCycle'];
+        for (let k = 0; k < testKeys.length; k++) {
+          const r = rects[testKeys[k]];
+          if (r && pt.x >= r.x && pt.x <= r.x + r.w && pt.y >= r.y && pt.y <= r.y + r.h) {
+            newHover = testKeys[k]; break;
+          }
+        }
+        if (!newHover && rects.bets) {
+          for (let i = 0; i < rects.bets.length; i++) {
+            const r = rects.bets[i];
+            if (pt.x >= r.x && pt.x <= r.x + r.w && pt.y >= r.y && pt.y <= r.y + r.h) {
+              newHover = 'bet_' + i; break;
+            }
+          }
+        }
+        if (!newHover && rects.gameTypes) {
+          for (let i = 0; i < rects.gameTypes.length; i++) {
+            const r = rects.gameTypes[i];
+            if (pt.x >= r.x && pt.x <= r.x + r.w && pt.y >= r.y && pt.y <= r.y + r.h) {
+              newHover = 'gt_' + i; break;
+            }
+          }
+        }
+        if (!newHover && rects.lines) {
+          for (let i = 0; i < rects.lines.length; i++) {
+            const r = rects.lines[i];
+            if (pt.x >= r.x && pt.x <= r.x + r.w && pt.y >= r.y && pt.y <= r.y + r.h) {
+              newHover = 'line_' + i; break;
+            }
+          }
+        }
+        if (newHover !== this.fsHoverKey) {
+          this.fsHoverKey = newHover;
+          this.canvas.style.cursor = newHover ? 'pointer' : '';
+          if (!this.reelAnimationFrame) this.renderFrame();
+        }
       }
     };
 
@@ -3655,6 +3966,18 @@ export class SlotMachine {
     window.addEventListener('touchmove', handleMove, { passive: false });
     window.addEventListener('mouseup', handleUp);
     window.addEventListener('touchend', handleUp);
+
+    // Keyboard listener for fine swing control
+    this.canvas.addEventListener('keydown', (event) => {
+      if (!this.magicOpenAiMode || !this.debugSwingPaused) return;
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        adjustSwing(-0.2);
+      } else if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        adjustSwing(0.2);
+      }
+    });
   }
 
   startMagicSwingAnimation() {
@@ -3724,9 +4047,636 @@ export class SlotMachine {
     this.magicSwingMotionDirection = 0;
   }
 
+  toggleFullscreen() {
+    if (this.isFullscreen) {
+      this.exitFullscreen();
+    } else {
+      this.enterFullscreen();
+    }
+  }
+
+  enterFullscreen() {
+    if (this.isFullscreen || !this.canvas) return;
+    this.isFullscreen = true;
+
+    // Save current canvas style
+    this.preFullscreenCanvasStyle = this.canvas.style.cssText;
+
+    // Inject style to hide page elements
+    this.fullscreenStyleEl = document.createElement('style');
+    this.fullscreenStyleEl.textContent = `
+      body.slot-canvas-fullscreen .topbar,
+      body.slot-canvas-fullscreen .game-page,
+      body.slot-canvas-fullscreen .footer,
+      body.slot-canvas-fullscreen .svemir-control:not(#svemirDropdown) {
+        visibility: hidden !important;
+      }
+      body.slot-canvas-fullscreen #svemirDropdown {
+        z-index: 10000 !important;
+      }
+      body.slot-canvas-fullscreen .space-wheels-toggle {
+        display: none !important;
+      }
+      body.svemir-focus-mode.slot-canvas-fullscreen > canvas {
+        opacity: 1 !important;
+        visibility: visible !important;
+        pointer-events: auto !important;
+      }
+      html, body {
+        scrollbar-width: none !important;
+        overflow-y: scroll !important;
+      }
+      ::-webkit-scrollbar {
+        display: none !important;
+        width: 0 !important;
+      }
+    `;
+    document.head.appendChild(this.fullscreenStyleEl);
+    document.body.classList.add('slot-canvas-fullscreen');
+
+    // Reparent canvas to body so it escapes all ancestor transforms
+    this.preFullscreenCanvasParent = this.canvas.parentNode;
+    this.preFullscreenCanvasNext = this.canvas.nextSibling;
+    document.body.appendChild(this.canvas);
+
+    // Canvas fills viewport
+    this.canvas.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:9998;border-radius:0;border:none;background:transparent;';
+
+    // Resize canvas
+    this.initCanvas();
+
+    // Escape key handler
+    this.fullscreenEscHandler = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        this.exitFullscreen();
+      }
+    };
+    document.addEventListener('keydown', this.fullscreenEscHandler);
+
+    this.canvas.focus();
+    this.renderFrame();
+  }
+
+  exitFullscreen() {
+    if (!this.isFullscreen) return;
+    this.isFullscreen = false;
+
+    // Clear canvas UI hit rects
+    this.fsHitRects = {};
+
+    // Remove injected style
+    if (this.fullscreenStyleEl) {
+      this.fullscreenStyleEl.remove();
+      this.fullscreenStyleEl = null;
+    }
+    document.body.classList.remove('slot-canvas-fullscreen');
+
+    // Restore canvas to original DOM position
+    if (this.canvas && this.preFullscreenCanvasParent) {
+      if (this.preFullscreenCanvasNext && this.preFullscreenCanvasNext.parentNode === this.preFullscreenCanvasParent) {
+        this.preFullscreenCanvasParent.insertBefore(this.canvas, this.preFullscreenCanvasNext);
+      } else {
+        this.preFullscreenCanvasParent.appendChild(this.canvas);
+      }
+    }
+    this.preFullscreenCanvasParent = null;
+    this.preFullscreenCanvasNext = null;
+
+    // Restore canvas style
+    if (this.canvas) {
+      this.canvas.style.cssText = this.preFullscreenCanvasStyle;
+    }
+    this.preFullscreenCanvasStyle = '';
+
+    // Remove escape handler
+    if (this.fullscreenEscHandler) {
+      document.removeEventListener('keydown', this.fullscreenEscHandler);
+      this.fullscreenEscHandler = null;
+    }
+
+    // Resize canvas to normal
+    this.initCanvas();
+    this.renderFrame();
+  }
+
+  // ─── Canvas-rendered fullscreen UI ───────────────────────────────────
+  // Single unified overlay frame in front of the rings, matching HTML styles.
+
+  drawFullscreenUI() {
+    if (!this.isFullscreen || !this.magicOpenAiMode || !this.ctx) return;
+    const ctx = this.ctx;
+    const cw = this.canvasWidth;
+    const ch = this.canvasHeight;
+    if (!this.fsHitRects) this.fsHitRects = {};
+
+    // ── Read theme colors from slot-machine-root ──
+    const rs = getComputedStyle(this.rootElement);
+    const v = (name, fb) => rs.getPropertyValue(name).trim() || fb;
+    const cardBg = v('--slot-card-bg', '#ffffff');
+    const border = v('--slot-border-color', '#e0e0e0');
+    const txtP = v('--slot-text-primary', '#333333');
+    const txtS = v('--slot-text-secondary', '#555555');
+    const success = v('--success-color', '#10b981');
+    const F = '"Lucida Sans Unicode","Lucida Grande",sans-serif';
+    const hover = this.fsHoverKey;
+
+    ctx.save();
+
+    // ── Layout constants ──
+    const framePad = 10;
+    const pad = 8;
+    const sideW = 180;
+    const rightW = 180;
+    const topH = 96 + pad * 2;
+    const bottomH = 56;
+    const ctrlH = 34;
+    const navBtnH = 80;
+    const gap = 10;
+    const btnR = 6;
+
+    // ── Derived layout positions ──
+    const headerX = framePad;
+    const headerY = framePad;
+    const headerW = cw - framePad * 2;
+    const headerH = topH;
+    const footerH = bottomH;
+    const footerX = framePad;
+    const footerY = ch - framePad - footerH;
+    const footerW = cw - framePad * 2;
+    const sideTop = headerY + headerH + gap;
+    const sideBottom = footerY - gap;
+    const sideH = sideBottom - sideTop;
+    const lsX = framePad;
+    const rsX = cw - framePad - rightW;
+    const winX = framePad + sideW + gap;
+    const winY = sideTop;
+    const winW = cw - framePad * 2 - sideW - rightW - gap * 2;
+    const winH = sideH;
+    const winR = 6;
+
+    // ── Helpers ──
+    const panel = (x, y, w, h) => {
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.3)';
+      ctx.shadowOffsetY = 4;
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 0.6;
+      ctx.fillStyle = cardBg;
+      ctx.beginPath(); ctx.roundRect(x, y, w, h, btnR); ctx.fill();
+      ctx.globalAlpha = 1.0;
+      ctx.shadowColor = 'transparent';
+      ctx.strokeStyle = border; ctx.lineWidth = 2; ctx.stroke();
+      ctx.restore();
+    };
+
+    const hoverBg = 'rgba(220, 220, 225, 1)';
+    const btn = (x, y, w, h, label, isActive, key) => {
+      const isHover = key && hover === key;
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.3)';
+      ctx.shadowOffsetY = isHover ? 2 : 4;
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = isHover ? 0.75 : 0.6;
+      ctx.fillStyle = isActive ? success : (isHover ? hoverBg : cardBg);
+      ctx.beginPath(); ctx.roundRect(x, y, w, h, btnR); ctx.fill();
+      ctx.globalAlpha = 1.0;
+      ctx.shadowColor = 'transparent';
+      ctx.strokeStyle = isActive ? success : (isHover ? txtS : border);
+      ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = isActive ? '#fff' : txtS;
+      ctx.font = `500 15px ${F}`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(label, x + w / 2, y + h / 2);
+      ctx.restore();
+      const rect = { x, y, w, h };
+      if (key) this.fsHitRects[key] = rect;
+      return rect;
+    };
+
+    const ctrlBtn = (x, y, w, label, isActive, hoverKey) => {
+      const isHover = hoverKey && hover === hoverKey;
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.3)';
+      ctx.shadowOffsetY = isHover ? 2 : 4;
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = isHover ? 0.75 : 0.6;
+      ctx.fillStyle = isActive ? success : (isHover ? hoverBg : cardBg);
+      ctx.beginPath(); ctx.roundRect(x, y, w, ctrlH, btnR); ctx.fill();
+      ctx.globalAlpha = 1.0;
+      ctx.shadowColor = 'transparent';
+      ctx.strokeStyle = isActive ? success : (isHover ? txtS : border);
+      ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = isActive ? '#fff' : txtS;
+      ctx.font = `500 13px arial, helvetica, sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(label, x + w / 2, y + ctrlH / 2);
+      ctx.restore();
+      const rect = { x, y, w, h: ctrlH };
+      return rect;
+    };
+
+    // ════════════════════════════════════════════════════════════════
+    // BACKGROUND FRAME WITH WINDOW CUTOUT (padding all around)
+    // ════════════════════════════════════════════════════════════════
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.3)';
+    ctx.shadowOffsetY = 4;
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 0.6;
+    ctx.fillStyle = cardBg;
+    ctx.beginPath();
+    ctx.rect(0, 0, cw, ch);
+    ctx.roundRect(winX, winY, winW, winH, winR);
+    ctx.fill('evenodd');
+    ctx.globalAlpha = 1.0;
+    ctx.shadowColor = 'transparent';
+    ctx.strokeStyle = border;
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(winX, winY, winW, winH, winR); ctx.stroke();
+    ctx.restore();
+
+    // ════════════════════════════════════════════════════════════════
+    // HEADER (full width with margins)
+    // ════════════════════════════════════════════════════════════════
+    panel(headerX, headerY, headerW, headerH);
+
+    const topInner = headerY + pad;
+    const startW = 100;
+    const stopW = 100;
+    const progW = 200;
+    const totalControlsW = startW + gap + progW + gap + stopW;
+    const controlsStartX = headerX + (headerW - totalControlsW) / 2;
+
+    // Start Game button
+    btn(controlsStartX, topInner, startW, 96,
+      this.isSpinning ? 'Spinning...' : 'Start Game', false, 'start');
+
+    // Progress container
+    const progX = controlsStartX + startW + gap;
+    panel(progX, topInner, progW, 96);
+    ctx.fillStyle = txtS;
+    ctx.font = `bold 12px ${F}`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(`Spins played: ${this.spinsCount}`, progX + progW / 2, topInner + 22);
+
+    // Read progress from DOM
+    const progBarEl = this.shadowRoot.getElementById('progressBar');
+    const progMax = progBarEl ? (Number(progBarEl.max) || 5) : 5;
+    const progVal = progBarEl ? (Number(progBarEl.value) || 0) : 0;
+    const remaining = Math.max(0, progMax - progVal);
+    ctx.fillStyle = txtS;
+    ctx.font = `500 12px ${F}`;
+    ctx.fillText(`${remaining} sec`, progX + progW / 2, topInner + 42);
+
+    // Golden progress bar
+    const barX = progX + 20;
+    const barY = topInner + 56;
+    const barW = progW - 40;
+    const barH = 25;
+    ctx.save();
+    // Golden track background
+    const trackGrad = ctx.createLinearGradient(barX, barY, barX, barY + barH);
+    trackGrad.addColorStop(0, 'rgba(180, 140, 50, 0.5)');
+    trackGrad.addColorStop(0.5, 'rgba(218, 175, 75, 0.6)');
+    trackGrad.addColorStop(1, 'rgba(150, 110, 30, 0.5)');
+    ctx.fillStyle = trackGrad;
+    ctx.beginPath(); ctx.roundRect(barX, barY, barW, barH, 12); ctx.fill();
+    ctx.strokeStyle = 'rgba(120, 85, 20, 0.7)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.roundRect(barX, barY, barW, barH, 12); ctx.stroke();
+    // Golden fill
+    if (progMax > 0 && progVal > 0) {
+      const fillW = Math.max(0, (progVal / progMax) * barW);
+      const fillGrad = ctx.createLinearGradient(barX, barY, barX, barY + barH);
+      fillGrad.addColorStop(0, 'rgba(255, 215, 80, 0.8)');
+      fillGrad.addColorStop(0.5, 'rgba(240, 195, 50, 0.9)');
+      fillGrad.addColorStop(1, 'rgba(200, 160, 30, 0.8)');
+      ctx.fillStyle = fillGrad;
+      ctx.beginPath(); ctx.roundRect(barX, barY, fillW, barH, 12); ctx.fill();
+    }
+    // Golden thumb with conic gradient
+    const thumbT = progMax > 0 ? Math.max(0, Math.min(1, progVal / progMax)) : 0;
+    const thumbX = barX + thumbT * barW;
+    const thumbY = barY + barH / 2;
+    const thumbR = barH / 2 + 2;
+    const conicGrad = ctx.createConicGradient(0, thumbX, thumbY);
+    conicGrad.addColorStop(0, '#f5d060');
+    conicGrad.addColorStop(0.25, '#c8a020');
+    conicGrad.addColorStop(0.5, '#f5d060');
+    conicGrad.addColorStop(0.75, '#c8a020');
+    conicGrad.addColorStop(1, '#f5d060');
+    ctx.fillStyle = conicGrad;
+    ctx.beginPath(); ctx.arc(thumbX, thumbY, thumbR, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(100, 70, 10, 0.9)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(thumbX, thumbY, thumbR, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+
+    // Stop button
+    btn(controlsStartX + startW + gap + progW + gap, topInner, stopW, 96, 'Stop', false, 'stop');
+
+    // ════════════════════════════════════════════════════════════════
+    // LEFT SIDEBAR (single container, between header and footer)
+    // ════════════════════════════════════════════════════════════════
+    panel(lsX, sideTop, sideW, sideH);
+
+    let ly = sideTop + pad;
+    const lBtnW = sideW - pad * 2;
+    const bx = lsX + pad;
+    const spinning = this.isSpinning;
+
+    // Bet button (click to cycle to next bet)
+    const betCycleKey = spinning ? null : 'betCycle';
+    btn(bx, ly, lBtnW, navBtnH, 'Bet', false, betCycleKey);
+    if (spinning) {
+      ctx.save(); ctx.globalAlpha = 0.35; ctx.fillStyle = '#000';
+      ctx.beginPath(); ctx.roundRect(bx, ly, lBtnW, navBtnH, btnR); ctx.fill();
+      ctx.restore();
+    }
+    this.fsHitRects.betCycle = { x: bx, y: ly, w: lBtnW, h: navBtnH };
+    ly += navBtnH + gap;
+
+    // Bet option buttons
+    const betArrays = { 1: [2,3,4,5,6], 2: [1,2,3,4,5], 3: [5,6,7,8,9], 4: [4,5,6,7,8], 5: [3,4,5,6,7] };
+    const bets = betArrays[this.gameTypeValue] || betArrays[1];
+    this.fsHitRects.bets = [];
+    for (let i = 0; i < bets.length; i++) {
+      const isActive = this.bet === bets[i];
+      const key = spinning ? null : ('bet_' + i);
+      ctrlBtn(bx, ly, lBtnW, `${bets[i]} $`, isActive, key);
+      if (spinning) {
+        ctx.save(); ctx.globalAlpha = 0.35; ctx.fillStyle = '#000';
+        ctx.beginPath(); ctx.roundRect(bx, ly, lBtnW, ctrlH, btnR); ctx.fill();
+        ctx.restore();
+      }
+      this.fsHitRects.bets.push({ x: bx, y: ly, w: lBtnW, h: ctrlH, value: bets[i] });
+      ly += ctrlH + gap;
+    }
+
+    // Joker (only in reward mode 1)
+    if (this.rewardMode === 1) {
+      ly += 4;
+      const jokerLabel = this.jokerAdded ? 'Joker ON' : 'Buy Joker';
+      ctrlBtn(bx, ly, lBtnW, jokerLabel, this.jokerAdded, spinning ? null : 'joker');
+      if (spinning) {
+        ctx.save(); ctx.globalAlpha = 0.35; ctx.fillStyle = '#000';
+        ctx.beginPath(); ctx.roundRect(bx, ly, lBtnW, ctrlH, btnR); ctx.fill();
+        ctx.restore();
+      }
+      this.fsHitRects.joker = { x: bx, y: ly, w: lBtnW, h: ctrlH };
+      ly += ctrlH + 2;
+      ctx.fillStyle = txtS;
+      ctx.font = `500 9px ${F}`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('Joker costs 5x bet.', bx + lBtnW / 2, ly + 5);
+      ly += 14;
+    }
+
+    // Lines (only in reward mode 1)
+    if (this.rewardMode === 1) {
+      this.fsHitRects.lines = [];
+      for (let i = 0; i < 7; i++) {
+        const isActive = this.selectedPaylines[i] === 1;
+        const lkey = spinning ? null : ('line_' + i);
+        ctrlBtn(bx, ly, lBtnW, `Line ${i + 1}`, isActive, lkey);
+        if (spinning) {
+          ctx.save(); ctx.globalAlpha = 0.35; ctx.fillStyle = '#000';
+          ctx.beginPath(); ctx.roundRect(bx, ly, lBtnW, ctrlH, btnR); ctx.fill();
+          ctx.restore();
+        }
+        this.fsHitRects.lines.push({ x: bx, y: ly, w: lBtnW, h: ctrlH, index: i });
+        ly += ctrlH + gap;
+      }
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // RIGHT SIDEBAR (single container, between header and footer)
+    // ════════════════════════════════════════════════════════════════
+    panel(rsX, sideTop, rightW, sideH);
+
+    let ry = sideTop + pad;
+    const rBtnW = rightW - pad * 2;
+    const rbx = rsX + pad;
+
+    // Game Type button (click to cycle to next game type)
+    const gtCycleKey = spinning ? null : 'gtCycle';
+    btn(rbx, ry, rBtnW, navBtnH, 'Game Type', false, gtCycleKey);
+    if (spinning) {
+      ctx.save(); ctx.globalAlpha = 0.35; ctx.fillStyle = '#000';
+      ctx.beginPath(); ctx.roundRect(rbx, ry, rBtnW, navBtnH, btnR); ctx.fill();
+      ctx.restore();
+    }
+    this.fsHitRects.gtCycle = { x: rbx, y: ry, w: rBtnW, h: navBtnH };
+    ry += navBtnH + gap;
+
+    // Game type options
+    const gameTypes = ['Numbers', 'Roman', 'Fruits', 'Animals', 'Emoji'];
+    this.fsHitRects.gameTypes = [];
+    for (let i = 0; i < gameTypes.length; i++) {
+      const isActive = this.gameTypeValue === (i + 1);
+      const key = spinning ? null : ('gt_' + i);
+      ctrlBtn(rbx, ry, rBtnW, gameTypes[i], isActive, key);
+      if (spinning) {
+        ctx.save(); ctx.globalAlpha = 0.35; ctx.fillStyle = '#000';
+        ctx.beginPath(); ctx.roundRect(rbx, ry, rBtnW, ctrlH, btnR); ctx.fill();
+        ctx.restore();
+      }
+      this.fsHitRects.gameTypes.push({ x: rbx, y: ry, w: rBtnW, h: ctrlH, value: i + 1, name: gameTypes[i] });
+      ry += ctrlH + gap;
+    }
+
+    // Space Configuration button (two rows)
+    ry += 4;
+    const scH = navBtnH;
+    const svemirHover = hover === 'svemir';
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.3)';
+    ctx.shadowOffsetY = svemirHover ? 2 : 4;
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = svemirHover ? 0.75 : 0.6;
+    ctx.fillStyle = svemirHover ? hoverBg : cardBg;
+    ctx.beginPath(); ctx.roundRect(rbx, ry, rBtnW, scH, btnR); ctx.fill();
+    ctx.globalAlpha = 1.0;
+    ctx.shadowColor = 'transparent';
+    ctx.strokeStyle = svemirHover ? txtS : border;
+    ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = txtS;
+    ctx.font = `500 15px ${F}`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('Space', rbx + rBtnW / 2, ry + scH / 2 - 10);
+    ctx.fillText('Configuration', rbx + rBtnW / 2, ry + scH / 2 + 10);
+    ctx.restore();
+    this.fsHitRects.svemir = { x: rbx, y: ry, w: rBtnW, h: scH };
+
+    // ════════════════════════════════════════════════════════════════
+    // FOOTER (full width with margins + padding)
+    // ════════════════════════════════════════════════════════════════
+    panel(footerX, footerY, footerW, footerH);
+
+    const activeLines = this.rewardMode === 2 ? 1 : this.selectedPaylines.filter(l => l === 1).length;
+    const jokerFee = (this.rewardMode === 1 && this.jokerAdded && this.jokerPosition > 0) ? (this.bet * 5) : 0;
+    const totalBet = this.rewardMode === 2 ? this.bet : (activeLines * this.bet) + jokerFee;
+    const gameTypeNames = ['', 'Numbers', 'Roman', 'Fruits', 'Animals', 'Emoji'];
+
+    const infoItems = [
+      `Bet: ${this.bet} $`,
+      `Type: ${gameTypeNames[this.gameTypeValue] || 'Numbers'}`,
+      `Joker: ${this.jokerAdded ? 'YES' : 'NO'}`,
+      `Lines: ${activeLines}`,
+      `Total: ${totalBet} $`,
+      `Credits: ${this.credits} $`,
+    ];
+    const infoPad = pad;
+    const infoGap = 6;
+    const infoCount = infoItems.length;
+    const infoTotalW = footerW - infoPad * 2;
+    const infoBtnW = (infoTotalW - infoGap * (infoCount - 1)) / infoCount;
+    const infoBtnH = footerH - pad * 2;
+    const infoBtnY = footerY + pad;
+
+    for (let i = 0; i < infoCount; i++) {
+      const ix = footerX + infoPad + i * (infoBtnW + infoGap);
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.3)';
+      ctx.shadowOffsetY = 4;
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 0.6;
+      ctx.fillStyle = cardBg;
+      ctx.beginPath(); ctx.roundRect(ix, infoBtnY, infoBtnW, infoBtnH, btnR); ctx.fill();
+      ctx.globalAlpha = 1.0;
+      ctx.shadowColor = 'transparent';
+      ctx.strokeStyle = border; ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = txtP;
+      ctx.font = `500 13px ${F}`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(infoItems[i], ix + infoBtnW / 2, infoBtnY + infoBtnH / 2);
+      ctx.restore();
+    }
+
+    ctx.restore();
+  }
+
+  handleFullscreenUIClick(pt) {
+    if (!this.isFullscreen || !this.fsHitRects) return false;
+    const hit = (r) => r && pt.x >= r.x && pt.x <= r.x + r.w && pt.y >= r.y && pt.y <= r.y + r.h;
+
+    // Start
+    if (hit(this.fsHitRects.start) && !this.isSpinning) {
+      this.startSpin();
+      return true;
+    }
+
+    // Stop
+    if (hit(this.fsHitRects.stop)) {
+      this.stopSpin();
+      return true;
+    }
+
+    // Bet cycle header button (disabled during spin)
+    if (this.fsHitRects.betCycle && !this.isSpinning && hit(this.fsHitRects.betCycle)) {
+      this.cycleBet();
+      this.renderFrame();
+      return true;
+    }
+
+    // Bet options (disabled during spin)
+    if (this.fsHitRects.bets && !this.isSpinning) {
+      for (const betRect of this.fsHitRects.bets) {
+        if (hit(betRect)) {
+          const betOptions = this.shadowRoot.getElementById('betOptions');
+          if (betOptions) {
+            const btns = betOptions.querySelectorAll('button');
+            for (const btn of btns) {
+              if (Number(btn.dataset.value) === betRect.value) {
+                btn.click();
+                break;
+              }
+            }
+          }
+          this.renderFrame();
+          return true;
+        }
+      }
+    }
+
+    // Joker toggle (disabled during spin)
+    if (!this.isSpinning && hit(this.fsHitRects.joker)) {
+      const jokerCheckbox = this.shadowRoot.getElementById('jokerCheckbox');
+      if (jokerCheckbox) jokerCheckbox.click();
+      this.renderFrame();
+      return true;
+    }
+
+    // Line buttons (disabled during spin)
+    if (this.fsHitRects.lines && !this.isSpinning) {
+      for (const lineRect of this.fsHitRects.lines) {
+        if (hit(lineRect)) {
+          const linesContainer = this.shadowRoot.getElementById('linesContainer');
+          if (linesContainer) {
+            const btns = linesContainer.querySelectorAll('button');
+            if (btns[lineRect.index]) btns[lineRect.index].click();
+          }
+          this.renderFrame();
+          return true;
+        }
+      }
+    }
+
+    // Game type cycle header button (disabled during spin)
+    if (this.fsHitRects.gtCycle && !this.isSpinning && hit(this.fsHitRects.gtCycle)) {
+      this.cycleGameType();
+      this.renderFrame();
+      return true;
+    }
+
+    // Game type buttons (disabled during spin)
+    if (this.fsHitRects.gameTypes && !this.isSpinning) {
+      for (const gtRect of this.fsHitRects.gameTypes) {
+        if (hit(gtRect)) {
+          const gameTypeOptions = this.shadowRoot.getElementById('gameTypeOptions');
+          if (gameTypeOptions) {
+            const btns = gameTypeOptions.querySelectorAll('button');
+            if (btns[gtRect.value - 1]) btns[gtRect.value - 1].click();
+          }
+          this.renderFrame();
+          return true;
+        }
+      }
+    }
+
+    // Space Configuration
+    if (hit(this.fsHitRects.svemir)) {
+      const dropdown = document.getElementById('svemirDropdown');
+      const svemirBtn = document.getElementById('svemirControll');
+      if (dropdown) {
+        const willOpen = dropdown.hidden;
+        dropdown.hidden = !willOpen;
+        if (svemirBtn) svemirBtn.setAttribute('aria-expanded', String(willOpen));
+        document.body.classList.toggle('svemir-focus-mode', willOpen);
+        // Block the next document click so it doesn't immediately close
+        if (willOpen) {
+          const blocker = (e) => {
+            e.stopImmediatePropagation();
+            document.removeEventListener('click', blocker, true);
+          };
+          document.addEventListener('click', blocker, true);
+        }
+      }
+      return true;
+    }
+
+    return false;
+  }
+
   toggleMagicOpenAiMode(forceState = null) {
     const nextState = typeof forceState === 'boolean' ? forceState : !this.magicOpenAiMode;
     const wasMagicMode = this.magicOpenAiMode;
+
+    // Auto-exit fullscreen when leaving magic mode
+    if (!nextState && this.isFullscreen) {
+      this.exitFullscreen();
+    }
+
     this.magicOpenAiMode = nextState;
 
     if (this.magicOpenAiMode && !wasMagicMode) {
@@ -4068,6 +5018,10 @@ export class SlotMachine {
 
     if (value === 1) {
       // Multi-line mode: show full 3x5 with lines and joker controls
+      // 3x5 is a digital slot — disable Space Wheels if active
+      if (this.magicOpenAiMode) {
+        this.toggleMagicOpenAiMode(false);
+      }
       this.shadowRoot.getElementById('linesContainer').style.display = 'flex';
       this.shadowRoot.getElementById('jokerContainer').style.display = 'block';
       infoPanelEl.style.marginTop = '0';
@@ -4996,7 +5950,9 @@ export class SlotMachine {
     const stopStartTimes = new Array(reelCount).fill(0);
     const stopFromAngles = new Array(reelCount).fill(0);
     const stopTargetAngles = new Array(reelCount).fill(0);
-    const springAmplitudePx = this.rewardMode === 2 ? 8 : 7;
+    // 3x5 (rewardMode 1) = digital slot, no elastic bounce
+    // 1x5 (rewardMode 2) = mechanical slot, elastic spring
+    const springAmplitudeDeg = this.rewardMode === 2 ? 6 : 0;
     this.reelSpringOffsets = new Array(reelCount).fill(0);
 
     for (let i = 0; i < reelCount; i++) {
@@ -5045,10 +6001,19 @@ export class SlotMachine {
         const stopElapsed = elapsed - stopStart;
         if (stopElapsed < stopDurationMs) {
           const progress = stopElapsed / stopDurationMs;
-          const eased = this.stopBounceEase(progress);
-          this.renderRotations[i] = stopFromAngles[i] + ((stopTargetAngles[i] - stopFromAngles[i]) * eased);
-          const spring = Math.sin(progress * Math.PI * 4.8) * Math.exp(-3.2 * progress);
-          this.reelSpringOffsets[i] = springAmplitudePx * spring;
+          if (springAmplitudeDeg > 0) {
+            // 1x5 mechanical: bounce ease + rotational spring
+            const eased = this.stopBounceEase(progress);
+            const spring = Math.sin(progress * Math.PI * 4.8) * Math.exp(-3.2 * progress);
+            const springAngle = springAmplitudeDeg * spring;
+            this.renderRotations[i] = stopFromAngles[i] + ((stopTargetAngles[i] - stopFromAngles[i]) * eased) + springAngle;
+          } else {
+            // 3x5 digital: clean ease-out, no bounce
+            const t = Math.max(0, Math.min(1, progress));
+            const eased = 1 - Math.pow(1 - t, 3);
+            this.renderRotations[i] = stopFromAngles[i] + ((stopTargetAngles[i] - stopFromAngles[i]) * eased);
+          }
+          this.reelSpringOffsets[i] = 0;
           allDone = false;
           continue;
         }

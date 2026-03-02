@@ -51,6 +51,7 @@ const SVEMIR_BUTTON_TEMPLATE = `<button
 >Svemir Controls</button>`;
 
 const SVEMIR_DROPDOWN_TEMPLATE = `<div id="svemirDropdown" class="svemir-dropdown svemir-control" hidden>
+  <button type="button" class="svemir-close" data-action="close-panel" aria-label="Close">\u2715</button>
   <h2>Star Commands</h2>
 
   <label class="svemir-row" for="sv-control-movingStars">
@@ -1180,6 +1181,14 @@ function bindSvemirControlPanel(starfield) {
       setPanelOpen(false);
     }
   });
+
+  const closeButton = dropdown.querySelector("[data-action='close-panel']");
+  if (closeButton instanceof HTMLButtonElement) {
+    closeButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      setPanelOpen(false);
+    });
+  }
 
   const resetButton = dropdown.querySelector("[data-action='reset-stars']");
   if (resetButton instanceof HTMLButtonElement) {
