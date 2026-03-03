@@ -1,6 +1,8 @@
-const CANVAS_ID = "canvasss";
-const CONTROL_BUTTON_ID = "svemirControll";
+const CANVAS_ID = "space";
+const CONTROL_BUTTON_ID = "spaceControll";
 const CONTROL_PANEL_ID = "svemirDropdown";
+const WIN_BUTTON_ID = "winControll";
+const WIN_PANEL_ID = "winDropdown";
 
 const DEFAULT_STAR_SETTINGS = Object.freeze({
   movingStars: 1400,
@@ -41,16 +43,70 @@ const PARALLAX_MOVING_FACTOR = 0.2;
 const PARALLAX_SMOOTHING = 0.16;
 const STAR_SETTINGS_STORAGE_KEY = "slotm.space.settings.v1";
 
-const SVEMIR_BUTTON_TEMPLATE = `<button
-  id="svemirControll"
+const WIN_SETTINGS_STORAGE_KEY = "slotm.win.settings.v1";
+
+const DEFAULT_WIN_SETTINGS = Object.freeze({
+  mode: "magic_stars",
+  msCount: 1000,
+  msSpeed: 2.5,
+  msDrift: 2.8,
+  msTurbulence: 1.5,
+  msSize: 1.8,
+  msBrightness: 1.6,
+  msDuration: 20,
+  msHueSpeed: 0.18,
+  msFocalLength: 120,
+  msGravity: 0.3,
+  mcCount: 5000,
+  mcSpeed: 4.5,
+  mcDrift: 0.35,
+  mcTurbulence: 0.015,
+  mcSize: 18,
+  mcBrightness: 1.0,
+  mcDuration: 20,
+  mcDamping: 0.994,
+});
+
+const WIN_CONTROL_BINDINGS = [
+  { id: "sv-win-msCount", setting: "msCount", type: "integer" },
+  { id: "sv-win-msSpeed", setting: "msSpeed", type: "float" },
+  { id: "sv-win-msDrift", setting: "msDrift", type: "float" },
+  { id: "sv-win-msTurbulence", setting: "msTurbulence", type: "float" },
+  { id: "sv-win-msSize", setting: "msSize", type: "float" },
+  { id: "sv-win-msBrightness", setting: "msBrightness", type: "float" },
+  { id: "sv-win-msDuration", setting: "msDuration", type: "float" },
+  { id: "sv-win-msHueSpeed", setting: "msHueSpeed", type: "float" },
+  { id: "sv-win-msFocalLength", setting: "msFocalLength", type: "integer" },
+  { id: "sv-win-msGravity", setting: "msGravity", type: "float" },
+  { id: "sv-win-mcCount", setting: "mcCount", type: "integer" },
+  { id: "sv-win-mcSpeed", setting: "mcSpeed", type: "float" },
+  { id: "sv-win-mcDrift", setting: "mcDrift", type: "float" },
+  { id: "sv-win-mcTurbulence", setting: "mcTurbulence", type: "float" },
+  { id: "sv-win-mcSize", setting: "mcSize", type: "float" },
+  { id: "sv-win-mcBrightness", setting: "mcBrightness", type: "float" },
+  { id: "sv-win-mcDuration", setting: "mcDuration", type: "float" },
+  { id: "sv-win-mcDamping", setting: "mcDamping", type: "float" },
+];
+
+const SPACE_BUTTON_TEMPLATE = `<button
+  id="spaceControll"
   type="button"
   class="svemir-toggle"
   aria-haspopup="true"
   aria-expanded="false"
   aria-controls="svemirDropdown"
->Svemir Controls</button>`;
+>Space Controlls</button>`;
 
-const SVEMIR_DROPDOWN_TEMPLATE = `<div id="svemirDropdown" class="svemir-dropdown svemir-control" hidden>
+const WIN_BUTTON_TEMPLATE = `<button
+  id="winControll"
+  type="button"
+  class="svemir-toggle"
+  aria-haspopup="true"
+  aria-expanded="false"
+  aria-controls="winDropdown"
+>Win Animation</button>`;
+
+const SVEMIR_DROPDOWN_TEMPLATE = `<div id="svemirDropdown" class="space-configuration svemir-control" hidden>
   <button type="button" class="svemir-close" data-action="close-panel" aria-label="Close">\u2715</button>
   <h2>Star Commands</h2>
 
@@ -127,6 +183,137 @@ const SVEMIR_DROPDOWN_TEMPLATE = `<div id="svemirDropdown" class="svemir-dropdow
   </label>
 
   <button type="button" class="svemir-reset" data-action="reset-stars">Restore default stars</button>
+</div>`;
+
+const WIN_DROPDOWN_TEMPLATE = `<div id="winDropdown" class="space-configuration svemir-control" hidden>
+  <button type="button" class="svemir-close" data-action="close-win-panel" aria-label="Close">\u2715</button>
+  <h2>Win Animation</h2>
+
+  <label class="svemir-row" for="sv-win-mode">
+    <span>Mode</span>
+    <select id="sv-win-mode" class="svemir-select">
+      <option value="magic_stars">Magic Stars</option>
+      <option value="magic_confetti">Magic Confetti</option>
+    </select>
+  </label>
+
+  <div id="sv-win-ms-group" class="svemir-group">
+    <label class="svemir-row" for="sv-win-msCount">
+      <span>Count</span>
+      <input id="sv-win-msCount" type="range" min="100" max="1000000" step="100" value="1000" data-output="sv-wout-msCount">
+      <strong id="sv-wout-msCount" class="svemir-value">1000</strong>
+    </label>
+
+    <label class="svemir-row" for="sv-win-msSpeed">
+      <span>Speed</span>
+      <input id="sv-win-msSpeed" type="range" min="0.1" max="8" step="0.1" value="2.5" data-output="sv-wout-msSpeed">
+      <strong id="sv-wout-msSpeed" class="svemir-value">2.5</strong>
+    </label>
+
+    <label class="svemir-row" for="sv-win-msDrift">
+      <span>Drift</span>
+      <input id="sv-win-msDrift" type="range" min="0" max="6" step="0.1" value="2.8" data-output="sv-wout-msDrift">
+      <strong id="sv-wout-msDrift" class="svemir-value">2.8</strong>
+    </label>
+
+    <label class="svemir-row" for="sv-win-msTurbulence">
+      <span>Turbulence</span>
+      <input id="sv-win-msTurbulence" type="range" min="0" max="5" step="0.1" value="1.5" data-output="sv-wout-msTurbulence">
+      <strong id="sv-wout-msTurbulence" class="svemir-value">1.5</strong>
+    </label>
+
+    <label class="svemir-row" for="sv-win-msSize">
+      <span>Size</span>
+      <input id="sv-win-msSize" type="range" min="0.2" max="5" step="0.1" value="1.8" data-output="sv-wout-msSize">
+      <strong id="sv-wout-msSize" class="svemir-value">1.8</strong>
+    </label>
+
+    <label class="svemir-row" for="sv-win-msBrightness">
+      <span>Brightness</span>
+      <input id="sv-win-msBrightness" type="range" min="0.1" max="3" step="0.05" value="1.6" data-output="sv-wout-msBrightness">
+      <strong id="sv-wout-msBrightness" class="svemir-value">1.60</strong>
+    </label>
+
+    <label class="svemir-row" for="sv-win-msDuration">
+      <span>Duration</span>
+      <input id="sv-win-msDuration" type="range" min="2" max="60" step="1" value="20" data-output="sv-wout-msDuration">
+      <strong id="sv-wout-msDuration" class="svemir-value">20</strong>
+    </label>
+
+    <label class="svemir-row" for="sv-win-msHueSpeed">
+      <span>Hue Speed</span>
+      <input id="sv-win-msHueSpeed" type="range" min="0" max="1" step="0.01" value="0.18" data-output="sv-wout-msHueSpeed">
+      <strong id="sv-wout-msHueSpeed" class="svemir-value">0.18</strong>
+    </label>
+
+    <label class="svemir-row" for="sv-win-msFocalLength">
+      <span>Perspective</span>
+      <input id="sv-win-msFocalLength" type="range" min="10" max="400" step="2" value="120" data-output="sv-wout-msFocalLength">
+      <strong id="sv-wout-msFocalLength" class="svemir-value">120</strong>
+    </label>
+
+    <label class="svemir-row" for="sv-win-msGravity">
+      <span>Gravity</span>
+      <input id="sv-win-msGravity" type="range" min="0" max="2" step="0.05" value="0.3" data-output="sv-wout-msGravity">
+      <strong id="sv-wout-msGravity" class="svemir-value">0.30</strong>
+    </label>
+  </div>
+
+  <div id="sv-win-mc-group" class="svemir-group" hidden>
+    <label class="svemir-row" for="sv-win-mcCount">
+      <span>Count</span>
+      <input id="sv-win-mcCount" type="range" min="100" max="20000" step="100" value="5000" data-output="sv-wout-mcCount">
+      <strong id="sv-wout-mcCount" class="svemir-value">5000</strong>
+    </label>
+
+    <label class="svemir-row" for="sv-win-mcSpeed">
+      <span>Burst Speed</span>
+      <input id="sv-win-mcSpeed" type="range" min="0.5" max="12" step="0.1" value="4.5" data-output="sv-wout-mcSpeed">
+      <strong id="sv-wout-mcSpeed" class="svemir-value">4.5</strong>
+    </label>
+
+    <label class="svemir-row" for="sv-win-mcDrift">
+      <span>Drift</span>
+      <input id="sv-win-mcDrift" type="range" min="0" max="2" step="0.01" value="0.35" data-output="sv-wout-mcDrift">
+      <strong id="sv-wout-mcDrift" class="svemir-value">0.35</strong>
+    </label>
+
+    <label class="svemir-row" for="sv-win-mcTurbulence">
+      <span>Gravity</span>
+      <input id="sv-win-mcTurbulence" type="range" min="0" max="0.2" step="0.001" value="0.015" data-output="sv-wout-mcTurbulence">
+      <strong id="sv-wout-mcTurbulence" class="svemir-value">0.015</strong>
+    </label>
+
+    <label class="svemir-row" for="sv-win-mcSize">
+      <span>Size</span>
+      <input id="sv-win-mcSize" type="range" min="4" max="50" step="1" value="18" data-output="sv-wout-mcSize">
+      <strong id="sv-wout-mcSize" class="svemir-value">18</strong>
+    </label>
+
+    <label class="svemir-row" for="sv-win-mcBrightness">
+      <span>Brightness</span>
+      <input id="sv-win-mcBrightness" type="range" min="0.1" max="2" step="0.05" value="1.0" data-output="sv-wout-mcBrightness">
+      <strong id="sv-wout-mcBrightness" class="svemir-value">1.00</strong>
+    </label>
+
+    <label class="svemir-row" for="sv-win-mcDuration">
+      <span>Duration</span>
+      <input id="sv-win-mcDuration" type="range" min="2" max="60" step="1" value="20" data-output="sv-wout-mcDuration">
+      <strong id="sv-wout-mcDuration" class="svemir-value">20</strong>
+    </label>
+
+    <label class="svemir-row" for="sv-win-mcDamping">
+      <span>Damping</span>
+      <input id="sv-win-mcDamping" type="range" min="0.95" max="1" step="0.001" value="0.994" data-output="sv-wout-mcDamping">
+      <strong id="sv-wout-mcDamping" class="svemir-value">0.994</strong>
+    </label>
+  </div>
+
+  <button type="button" class="svemir-reset" data-action="reset-win">Restore default win</button>
+  <div class="svemir-row" style="gap:0.4rem;grid-template-columns:1fr 1fr;margin-top:0.3rem">
+    <button type="button" class="svemir-action" data-action="preview-win">Preview</button>
+    <button type="button" class="svemir-action" data-action="stop-win">Stop</button>
+  </div>
 </div>`;
 
 const MOVING_VERTEX_SHADER = `
@@ -254,6 +441,169 @@ void main() {
 }
 `;
 
+const CELEBRATION_VERTEX_SHADER = `
+attribute vec2 a_position;
+attribute float a_size;
+attribute float a_rotation;
+attribute float a_shape;
+attribute float a_hue_phase;
+attribute float a_alpha;
+uniform vec2 u_resolution;
+uniform float u_time;
+varying float v_rotation;
+varying float v_shape;
+varying float v_hue;
+varying float v_alpha;
+
+void main() {
+  vec2 clip = vec2(
+    (a_position.x / u_resolution.x) * 2.0 - 1.0,
+    1.0 - (a_position.y / u_resolution.y) * 2.0
+  );
+  gl_Position = vec4(clip, 0.0, 1.0);
+  gl_PointSize = a_size;
+  v_rotation = a_rotation;
+  v_shape = a_shape;
+  v_hue = fract(a_hue_phase + u_time * 0.15);
+  v_alpha = a_alpha;
+}
+`;
+
+const CELEBRATION_FRAGMENT_SHADER = `
+precision mediump float;
+varying float v_rotation;
+varying float v_shape;
+varying float v_hue;
+varying float v_alpha;
+
+vec3 hsv2rgb(float h, float s, float v) {
+  vec3 c = vec3(h * 6.0, s, v);
+  vec3 rgb = clamp(
+    abs(mod(c.x + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0,
+    0.0, 1.0
+  );
+  return c.z * mix(vec3(1.0), rgb, c.y);
+}
+
+void main() {
+  vec2 uv = gl_PointCoord - vec2(0.5);
+  float cs = cos(v_rotation);
+  float sn = sin(v_rotation);
+  vec2 ruv = vec2(uv.x * cs - uv.y * sn, uv.x * sn + uv.y * cs);
+
+  float a = 0.0;
+
+  if (v_shape < 0.5) {
+    // Rectangle confetti piece
+    float rx = 1.0 - smoothstep(0.35, 0.42, abs(ruv.x));
+    float ry = 1.0 - smoothstep(0.16, 0.22, abs(ruv.y));
+    a = rx * ry;
+  } else if (v_shape < 1.5) {
+    // Thin ribbon strip
+    float rx = 1.0 - smoothstep(0.38, 0.44, abs(ruv.x));
+    float ry = 1.0 - smoothstep(0.08, 0.13, abs(ruv.y));
+    a = rx * ry;
+  } else {
+    // Sparkle — cross with glow
+    float cr = min(abs(ruv.x), abs(ruv.y));
+    float spark = smoothstep(0.10, 0.0, cr) * (1.0 - smoothstep(0.38, 0.46, length(ruv)));
+    float glow = smoothstep(0.44, 0.0, length(ruv)) * 0.35;
+    a = max(spark, glow);
+  }
+
+  if (a < 0.01) discard;
+
+  vec3 color = hsv2rgb(v_hue, 0.8, 1.0);
+  float shine = smoothstep(0.28, 0.0, length(ruv - vec2(0.1, 0.07)));
+  color = mix(color, vec3(1.0), shine * 0.55);
+
+  gl_FragColor = vec4(color, v_alpha * a);
+}
+`;
+
+const MAGIC_STARS_VERTEX_SHADER = `
+attribute vec3 a_world;
+attribute float a_base_size;
+attribute float a_phase;
+attribute float a_hue;
+uniform vec2 u_resolution;
+uniform vec2 u_center;
+uniform float u_focal;
+uniform float u_max_depth;
+uniform float u_radius_scale;
+uniform float u_brightness;
+uniform float u_time;
+uniform float u_hue_speed;
+uniform float u_fade_alpha;
+varying float v_alpha;
+varying float v_hue;
+varying float v_phase;
+
+void main() {
+  float depth = max(a_world.z, 1.0);
+  float scale = u_focal / depth;
+  vec2 px = (a_world.xy - u_center) * scale + u_center;
+  vec2 clip = vec2(
+    (px.x / u_resolution.x) * 2.0 - 1.0,
+    1.0 - (px.y / u_resolution.y) * 2.0
+  );
+
+  gl_Position = vec4(clip, 0.0, 1.0);
+  gl_PointSize = max(1.0, a_base_size * scale * u_radius_scale * 3.5);
+
+  float depthBrightness = 0.18 + (1.0 - depth / max(u_max_depth, 1.0)) * 1.15;
+  float twinkle = 0.7 + sin(a_phase + u_time * 3.5) * 0.3;
+  v_alpha = clamp(depthBrightness * twinkle * u_brightness * u_fade_alpha, 0.04, 1.0);
+  v_hue = fract(a_hue + u_time * u_hue_speed);
+  v_phase = a_phase;
+}
+`;
+
+const MAGIC_STARS_FRAGMENT_SHADER = `
+precision mediump float;
+varying float v_alpha;
+varying float v_hue;
+varying float v_phase;
+
+vec3 hsv2rgb(float h, float s, float v) {
+  vec3 c = vec3(h * 6.0, s, v);
+  vec3 rgb = clamp(
+    abs(mod(c.x + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0,
+    0.0, 1.0
+  );
+  return c.z * mix(vec3(1.0), rgb, c.y);
+}
+
+void main() {
+  vec2 uv = gl_PointCoord - vec2(0.5);
+  float dist = length(uv);
+  if (dist > 0.5) discard;
+
+  // Soft outer halo
+  float halo = smoothstep(0.5, 0.08, dist);
+
+  // 4-pointed light rays (rotated per-particle)
+  float angle = atan(uv.y, uv.x) + v_phase;
+  float rays = pow(max(0.0, cos(angle * 2.0)), 12.0);
+  float rayMask = smoothstep(0.48, 0.05, dist);
+  float rayGlow = rays * rayMask * 0.6;
+
+  // Bright inner core
+  float core = smoothstep(0.14, 0.0, dist);
+
+  // Combine illumination layers
+  float intensity = halo + rayGlow + core * 1.4;
+
+  vec3 starColor = hsv2rgb(v_hue, 0.8, 1.0);
+  // Core burns white-hot, edges keep color
+  vec3 color = mix(starColor, vec3(1.0), core * 0.85 + rayGlow * 0.3);
+  // Outer halo is softer/lighter
+  color = mix(color, starColor * 1.2, smoothstep(0.0, 0.4, dist) * 0.4);
+
+  gl_FragColor = vec4(color, v_alpha * min(intensity, 1.0));
+}
+`;
+
 function createShader(gl, type, source) {
   const shader = gl.createShader(type);
   if (!shader) {
@@ -350,6 +700,30 @@ class BlazingStarfield {
     this.scrollRenderY = this.scrollTargetY;
     this.staticMinY = 0;
     this.staticSpanY = 1;
+
+    this.winSettings = { ...DEFAULT_WIN_SETTINGS };
+    this.winActive = false;
+    this.winStartTime = 0;
+    this.winMode = "magic_stars";
+
+    this.magicStarsProgram = null;
+    this.magicStarsBuffer = null;
+    this.magicStarsLocations = null;
+    this.winStarsCount = 0;
+    this.winStarsRenderData = new Float32Array(0);
+    this.winStarsDriftX = new Float32Array(0);
+    this.winStarsDriftY = new Float32Array(0);
+    this.winStarsVelocity = new Float32Array(0);
+
+    this.magicConfettiProgram = null;
+    this.magicConfettiBuffer = null;
+    this.magicConfettiLocations = null;
+    this.confettiCount = 0;
+    this.confettiRenderData = new Float32Array(0);
+    this.confettiVx = new Float32Array(0);
+    this.confettiVy = new Float32Array(0);
+    this.confettiRotSpeed = new Float32Array(0);
+    this.confettiAlpha = new Float32Array(0);
 
     this.handleResize = this.handleResize.bind(this);
     this.handleScroll = this.handleScroll.bind(this);
@@ -449,6 +823,69 @@ class BlazingStarfield {
     };
   }
 
+  normalizeWinSettings(nextSettings = {}) {
+    const merged = { ...this.winSettings, ...nextSettings };
+    const mode = merged.mode === "magic_confetti" ? "magic_confetti" : "magic_stars";
+
+    return {
+      mode,
+      msCount: Math.round(
+        this.clamp(this.numberOrDefault(merged.msCount, DEFAULT_WIN_SETTINGS.msCount), 100, 10000),
+      ),
+      msSpeed: this.clamp(
+        this.numberOrDefault(merged.msSpeed, DEFAULT_WIN_SETTINGS.msSpeed), 0.1, 8,
+      ),
+      msDrift: this.clamp(
+        this.numberOrDefault(merged.msDrift, DEFAULT_WIN_SETTINGS.msDrift), 0, 6,
+      ),
+      msTurbulence: this.clamp(
+        this.numberOrDefault(merged.msTurbulence, DEFAULT_WIN_SETTINGS.msTurbulence), 0, 5,
+      ),
+      msSize: this.clamp(
+        this.numberOrDefault(merged.msSize, DEFAULT_WIN_SETTINGS.msSize), 0.2, 5,
+      ),
+      msBrightness: this.clamp(
+        this.numberOrDefault(merged.msBrightness, DEFAULT_WIN_SETTINGS.msBrightness), 0.1, 3,
+      ),
+      msDuration: this.clamp(
+        this.numberOrDefault(merged.msDuration, DEFAULT_WIN_SETTINGS.msDuration), 2, 60,
+      ),
+      msHueSpeed: this.clamp(
+        this.numberOrDefault(merged.msHueSpeed, DEFAULT_WIN_SETTINGS.msHueSpeed), 0, 1,
+      ),
+      msFocalLength: Math.round(
+        this.clamp(this.numberOrDefault(merged.msFocalLength, DEFAULT_WIN_SETTINGS.msFocalLength), 10, 400),
+      ),
+      msGravity: this.clamp(
+        this.numberOrDefault(merged.msGravity, DEFAULT_WIN_SETTINGS.msGravity), 0, 2,
+      ),
+      mcCount: Math.round(
+        this.clamp(this.numberOrDefault(merged.mcCount, DEFAULT_WIN_SETTINGS.mcCount), 100, 20000),
+      ),
+      mcSpeed: this.clamp(
+        this.numberOrDefault(merged.mcSpeed, DEFAULT_WIN_SETTINGS.mcSpeed), 0.5, 12,
+      ),
+      mcDrift: this.clamp(
+        this.numberOrDefault(merged.mcDrift, DEFAULT_WIN_SETTINGS.mcDrift), 0, 2,
+      ),
+      mcTurbulence: this.clamp(
+        this.numberOrDefault(merged.mcTurbulence, DEFAULT_WIN_SETTINGS.mcTurbulence), 0, 0.2,
+      ),
+      mcSize: this.clamp(
+        this.numberOrDefault(merged.mcSize, DEFAULT_WIN_SETTINGS.mcSize), 4, 50,
+      ),
+      mcBrightness: this.clamp(
+        this.numberOrDefault(merged.mcBrightness, DEFAULT_WIN_SETTINGS.mcBrightness), 0.1, 2,
+      ),
+      mcDuration: this.clamp(
+        this.numberOrDefault(merged.mcDuration, DEFAULT_WIN_SETTINGS.mcDuration), 2, 60,
+      ),
+      mcDamping: this.clamp(
+        this.numberOrDefault(merged.mcDamping, DEFAULT_WIN_SETTINGS.mcDamping), 0.95, 1,
+      ),
+    };
+  }
+
   computeMaxDepth() {
     const depthScale = Math.max(0.05, this.settings.farness);
     return Math.max(60, this.canvas.width * depthScale);
@@ -513,6 +950,51 @@ class BlazingStarfield {
     this.movingBuffer = gl.createBuffer();
     this.staticBuffer = gl.createBuffer();
 
+    const magicStarsProgram = createProgram(
+      gl,
+      MAGIC_STARS_VERTEX_SHADER,
+      MAGIC_STARS_FRAGMENT_SHADER,
+    );
+    if (magicStarsProgram) {
+      this.magicStarsProgram = magicStarsProgram;
+      this.magicStarsLocations = {
+        aWorld: gl.getAttribLocation(magicStarsProgram, "a_world"),
+        aBaseSize: gl.getAttribLocation(magicStarsProgram, "a_base_size"),
+        aPhase: gl.getAttribLocation(magicStarsProgram, "a_phase"),
+        aHue: gl.getAttribLocation(magicStarsProgram, "a_hue"),
+        uResolution: gl.getUniformLocation(magicStarsProgram, "u_resolution"),
+        uCenter: gl.getUniformLocation(magicStarsProgram, "u_center"),
+        uFocal: gl.getUniformLocation(magicStarsProgram, "u_focal"),
+        uMaxDepth: gl.getUniformLocation(magicStarsProgram, "u_max_depth"),
+        uRadiusScale: gl.getUniformLocation(magicStarsProgram, "u_radius_scale"),
+        uBrightness: gl.getUniformLocation(magicStarsProgram, "u_brightness"),
+        uTime: gl.getUniformLocation(magicStarsProgram, "u_time"),
+        uHueSpeed: gl.getUniformLocation(magicStarsProgram, "u_hue_speed"),
+        uFadeAlpha: gl.getUniformLocation(magicStarsProgram, "u_fade_alpha"),
+      };
+      this.magicStarsBuffer = gl.createBuffer();
+    }
+
+    const magicConfettiProgram = createProgram(
+      gl,
+      CELEBRATION_VERTEX_SHADER,
+      CELEBRATION_FRAGMENT_SHADER,
+    );
+    if (magicConfettiProgram) {
+      this.magicConfettiProgram = magicConfettiProgram;
+      this.magicConfettiLocations = {
+        aPosition: gl.getAttribLocation(magicConfettiProgram, "a_position"),
+        aSize: gl.getAttribLocation(magicConfettiProgram, "a_size"),
+        aRotation: gl.getAttribLocation(magicConfettiProgram, "a_rotation"),
+        aShape: gl.getAttribLocation(magicConfettiProgram, "a_shape"),
+        aHuePhase: gl.getAttribLocation(magicConfettiProgram, "a_hue_phase"),
+        aAlpha: gl.getAttribLocation(magicConfettiProgram, "a_alpha"),
+        uResolution: gl.getUniformLocation(magicConfettiProgram, "u_resolution"),
+        uTime: gl.getUniformLocation(magicConfettiProgram, "u_time"),
+      };
+      this.magicConfettiBuffer = gl.createBuffer();
+    }
+
     gl.disable(gl.DEPTH_TEST);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -543,6 +1025,18 @@ class BlazingStarfield {
 
   resetDefaults() {
     this.setSettings(DEFAULT_STAR_SETTINGS);
+  }
+
+  setWinSettings(nextSettings = {}) {
+    this.winSettings = this.normalizeWinSettings(nextSettings);
+  }
+
+  getWinSettings() {
+    return { ...this.winSettings };
+  }
+
+  resetWinDefaults() {
+    this.winSettings = { ...DEFAULT_WIN_SETTINGS };
   }
 
   fillMovingStar(index, spawnFar = false) {
@@ -650,10 +1144,12 @@ class BlazingStarfield {
   }
 
   handleResize() {
-    this.canvas.width = window.innerWidth;
-    this.canvas.height = window.innerHeight;
-    this.centerX = this.canvas.width / 2;
-    this.centerY = this.canvas.height / 2;
+    const cssW = this.canvas.clientWidth || window.innerWidth;
+    const cssH = this.canvas.clientHeight || window.innerHeight;
+    this.canvas.width = cssW;
+    this.canvas.height = cssH;
+    this.centerX = cssW / 2;
+    this.centerY = cssH / 2;
     this.maxDepth = this.computeMaxDepth();
 
     this.initMovingStars();
@@ -730,6 +1226,370 @@ class BlazingStarfield {
       this.movingRenderData[offset + 1] = y;
       this.movingRenderData[offset + 2] = z;
     }
+  }
+
+  fillWinStar(index, spawnFar = false) {
+    const offset = index * 6;
+    const ws = this.winSettings;
+    const winMaxDepth = Math.max(60, this.canvas.width * 1.2);
+
+    if (spawnFar) {
+      const spawnPadX = Math.max(24, this.canvas.width * 0.18);
+      const spawnPadY = Math.max(24, this.canvas.height * 0.18);
+      const spawnOnVerticalSides = Math.random() < 0.5;
+      let px = 0;
+      let py = 0;
+
+      if (spawnOnVerticalSides) {
+        const leftSide = Math.random() < 0.5;
+        const sideOffset = 0.35 + Math.random() * 0.9;
+        px = leftSide
+          ? -spawnPadX * sideOffset
+          : this.canvas.width + spawnPadX * sideOffset;
+        py = -spawnPadY * 0.4 + Math.random() * (this.canvas.height + spawnPadY * 0.8);
+      } else {
+        const topSide = Math.random() < 0.5;
+        const sideOffset = 0.35 + Math.random() * 0.9;
+        py = topSide
+          ? -spawnPadY * sideOffset
+          : this.canvas.height + spawnPadY * sideOffset;
+        px = -spawnPadX * 0.4 + Math.random() * (this.canvas.width + spawnPadX * 0.8);
+      }
+
+      const z = Math.max(12, winMaxDepth * (0.35 + Math.random() * 0.65));
+      const focal = Math.max(12, ws.msFocalLength);
+
+      this.winStarsRenderData[offset] =
+        this.centerX + ((px - this.centerX) * z) / focal;
+      this.winStarsRenderData[offset + 1] =
+        this.centerY + ((py - this.centerY) * z) / focal;
+      this.winStarsRenderData[offset + 2] = z;
+    } else {
+      this.winStarsRenderData[offset] = Math.random() * this.canvas.width;
+      this.winStarsRenderData[offset + 1] = Math.random() * this.canvas.height;
+      this.winStarsRenderData[offset + 2] = Math.max(1, Math.random() * winMaxDepth);
+    }
+
+    this.winStarsRenderData[offset + 3] = 0.6 + Math.random() * 1.1;
+    this.winStarsRenderData[offset + 4] = Math.random() * Math.PI * 2;
+    this.winStarsRenderData[offset + 5] = Math.random();
+
+    this.winStarsDriftX[index] = (Math.random() - 0.5) * 2;
+    this.winStarsDriftY[index] = (Math.random() - 0.5) * 2;
+    this.winStarsVelocity[index] = 0.7 + Math.random() * 1.4;
+  }
+
+  initMagicStars() {
+    const ws = this.winSettings;
+    this.winStarsCount = ws.msCount;
+
+    this.winStarsRenderData = new Float32Array(this.winStarsCount * 6);
+    this.winStarsDriftX = new Float32Array(this.winStarsCount);
+    this.winStarsDriftY = new Float32Array(this.winStarsCount);
+    this.winStarsVelocity = new Float32Array(this.winStarsCount);
+
+    for (let i = 0; i < this.winStarsCount; i += 1) {
+      this.fillWinStar(i, false);
+    }
+
+    this.winStartTime = performance.now() * 0.001;
+    this.winActive = true;
+    this.winMode = "magic_stars";
+  }
+
+  moveWinStars() {
+    if (!this.winActive || this.winMode !== "magic_stars") {
+      return;
+    }
+
+    const elapsed = performance.now() * 0.001 - this.winStartTime;
+    const ws = this.winSettings;
+
+    if (elapsed >= ws.msDuration) {
+      this.winActive = false;
+      this.canvas.classList.remove("win-overlay");
+      return;
+    }
+
+    const width = this.canvas.width;
+    const height = this.canvas.height;
+    const winMaxDepth = Math.max(60, width * 1.2);
+    const outXMin = -width * 0.35;
+    const outXMax = width * 1.35;
+    const outYMin = -height * 0.35;
+    const outYMax = height * 1.35;
+
+    const speed = ws.msSpeed;
+    const gravity = ws.msGravity * 0.0026 * speed;
+    const driftScale = ws.msDrift * speed;
+    const turbulence = ws.msTurbulence * speed;
+    const progress = elapsed / ws.msDuration;
+    const respawnCutoff = 0.7;
+
+    for (let i = 0; i < this.winStarsCount; i += 1) {
+      const offset = i * 6;
+      let x = this.winStarsRenderData[offset];
+      let y = this.winStarsRenderData[offset + 1];
+      let z = this.winStarsRenderData[offset + 2];
+
+      const depthRatio = 1 - z / winMaxDepth;
+      const zVelocity =
+        (0.6 + this.winStarsVelocity[i] + depthRatio * (ws.msFocalLength / 120)) * speed;
+      z -= zVelocity;
+
+      x += this.winStarsDriftX[i] * driftScale + (this.centerX - x) * gravity;
+      y += this.winStarsDriftY[i] * driftScale + (this.centerY - y) * gravity;
+
+      if (turbulence > 0) {
+        x += (Math.random() - 0.5) * turbulence;
+        y += (Math.random() - 0.5) * turbulence;
+      }
+
+      const outside = x < outXMin || x > outXMax || y < outYMin || y > outYMax;
+      if (z <= 1 || outside) {
+        if (progress < respawnCutoff) {
+          this.fillWinStar(i, true);
+        }
+        continue;
+      }
+
+      this.winStarsRenderData[offset] = x;
+      this.winStarsRenderData[offset + 1] = y;
+      this.winStarsRenderData[offset + 2] = z;
+    }
+  }
+
+  drawWinStars(timeSec) {
+    if (!this.winActive || this.winMode !== "magic_stars") {
+      return;
+    }
+
+    const gl = this.gl;
+    if (!gl || !this.magicStarsProgram || !this.magicStarsBuffer || !this.magicStarsLocations) {
+      return;
+    }
+
+    if (this.winStarsCount === 0) {
+      return;
+    }
+
+    const ws = this.winSettings;
+    const elapsed = timeSec - this.winStartTime;
+    const progress = Math.min(1, elapsed / ws.msDuration);
+    let fadeAlpha = 1.0;
+    if (progress > 0.7) {
+      fadeAlpha = 1.0 - (progress - 0.7) / 0.3;
+    }
+
+    const winMaxDepth = Math.max(60, this.canvas.width * 1.2);
+
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+
+    gl.useProgram(this.magicStarsProgram);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.magicStarsBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, this.winStarsRenderData, gl.DYNAMIC_DRAW);
+
+    const stride = 6 * 4;
+    const loc = this.magicStarsLocations;
+
+    gl.enableVertexAttribArray(loc.aWorld);
+    gl.vertexAttribPointer(loc.aWorld, 3, gl.FLOAT, false, stride, 0);
+
+    gl.enableVertexAttribArray(loc.aBaseSize);
+    gl.vertexAttribPointer(loc.aBaseSize, 1, gl.FLOAT, false, stride, 3 * 4);
+
+    gl.enableVertexAttribArray(loc.aPhase);
+    gl.vertexAttribPointer(loc.aPhase, 1, gl.FLOAT, false, stride, 4 * 4);
+
+    gl.enableVertexAttribArray(loc.aHue);
+    gl.vertexAttribPointer(loc.aHue, 1, gl.FLOAT, false, stride, 5 * 4);
+
+    gl.uniform2f(loc.uResolution, this.canvas.width, this.canvas.height);
+    gl.uniform2f(loc.uCenter, this.centerX, this.centerY);
+    gl.uniform1f(loc.uFocal, Math.max(0.01, ws.msFocalLength));
+    gl.uniform1f(loc.uMaxDepth, winMaxDepth);
+    gl.uniform1f(loc.uRadiusScale, ws.msSize);
+    gl.uniform1f(loc.uBrightness, ws.msBrightness);
+    gl.uniform1f(loc.uTime, timeSec);
+    gl.uniform1f(loc.uHueSpeed, ws.msHueSpeed);
+    gl.uniform1f(loc.uFadeAlpha, fadeAlpha);
+
+    gl.drawArrays(gl.POINTS, 0, this.winStarsCount);
+
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  }
+
+  initMagicConfetti() {
+    if (!this.gl || !this.magicConfettiProgram) {
+      return;
+    }
+
+    const ws = this.winSettings;
+    const count = ws.mcCount;
+    const floatsPerParticle = 6;
+
+    this.confettiCount = count;
+    this.confettiRenderData = new Float32Array(count * floatsPerParticle);
+    this.confettiVx = new Float32Array(count);
+    this.confettiVy = new Float32Array(count);
+    this.confettiRotSpeed = new Float32Array(count);
+    this.confettiAlpha = new Float32Array(count);
+
+    const cx = this.canvas.width * 0.5;
+    const cy = this.canvas.height * 0.5;
+
+    for (let i = 0; i < count; i += 1) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = (0.4 + Math.random() * 1.44) * ws.mcSpeed;
+      this.confettiVx[i] = Math.cos(angle) * speed + (Math.random() - 0.5) * 2.0;
+      this.confettiVy[i] = Math.sin(angle) * speed + (Math.random() - 0.5) * 2.0;
+      this.confettiRotSpeed[i] = (Math.random() - 0.5) * 0.12;
+      this.confettiAlpha[i] = 1.0;
+
+      const offset = i * floatsPerParticle;
+      this.confettiRenderData[offset] = cx + (Math.random() - 0.5) * 20;
+      this.confettiRenderData[offset + 1] = cy + (Math.random() - 0.5) * 20;
+      this.confettiRenderData[offset + 2] = ws.mcSize * (0.44 + Math.random() * 1.56);
+      this.confettiRenderData[offset + 3] = Math.random() * Math.PI * 2;
+      this.confettiRenderData[offset + 4] = Math.floor(Math.random() * 3);
+      this.confettiRenderData[offset + 5] = Math.random();
+    }
+
+    this.winStartTime = performance.now() * 0.001;
+    this.winActive = true;
+    this.winMode = "magic_confetti";
+  }
+
+  moveConfetti() {
+    if (!this.winActive || this.winMode !== "magic_confetti") {
+      return;
+    }
+
+    const ws = this.winSettings;
+    const elapsed = performance.now() * 0.001 - this.winStartTime;
+
+    if (elapsed >= ws.mcDuration) {
+      this.winActive = false;
+      this.canvas.classList.remove("win-overlay");
+      return;
+    }
+
+    const count = this.confettiCount;
+    const floatsPerParticle = 6;
+    const width = this.canvas.width;
+    const height = this.canvas.height;
+    const progress = elapsed / ws.mcDuration;
+
+    for (let i = 0; i < count; i += 1) {
+      const offset = i * floatsPerParticle;
+
+      this.confettiRenderData[offset] += this.confettiVx[i];
+      this.confettiRenderData[offset + 1] += this.confettiVy[i];
+
+      this.confettiVx[i] += (Math.random() - 0.5) * ws.mcDrift;
+      this.confettiVy[i] += (Math.random() - 0.5) * ws.mcDrift + ws.mcTurbulence;
+
+      this.confettiVx[i] *= ws.mcDamping;
+      this.confettiVy[i] *= ws.mcDamping;
+
+      this.confettiRenderData[offset + 3] += this.confettiRotSpeed[i];
+
+      let alpha = 1.0;
+      if (progress < 0.7) {
+        alpha = 1.0 - progress * 0.35;
+      } else {
+        const fadeProgress = (progress - 0.7) / 0.3;
+        alpha = (1.0 - 0.7 * 0.35) * (1.0 - fadeProgress);
+      }
+      this.confettiAlpha[i] = Math.max(0, alpha);
+
+      let px = this.confettiRenderData[offset];
+      let py = this.confettiRenderData[offset + 1];
+      if (px < -60) px += width + 120;
+      else if (px > width + 60) px -= width + 120;
+      if (py < -60) py += height + 120;
+      else if (py > height + 60) py -= height + 120;
+      this.confettiRenderData[offset] = px;
+      this.confettiRenderData[offset + 1] = py;
+    }
+  }
+
+  drawConfetti(timeSec) {
+    if (!this.winActive || this.winMode !== "magic_confetti") {
+      return;
+    }
+
+    const gl = this.gl;
+    if (!gl || !this.magicConfettiProgram || !this.magicConfettiBuffer || !this.magicConfettiLocations) {
+      return;
+    }
+
+    const count = this.confettiCount;
+    const floatsPerParticle = 6;
+    const uploadData = new Float32Array(count * 7);
+
+    for (let i = 0; i < count; i += 1) {
+      const srcOff = i * floatsPerParticle;
+      const dstOff = i * 7;
+      uploadData[dstOff] = this.confettiRenderData[srcOff];
+      uploadData[dstOff + 1] = this.confettiRenderData[srcOff + 1];
+      uploadData[dstOff + 2] = this.confettiRenderData[srcOff + 2];
+      uploadData[dstOff + 3] = this.confettiRenderData[srcOff + 3];
+      uploadData[dstOff + 4] = this.confettiRenderData[srcOff + 4];
+      uploadData[dstOff + 5] = this.confettiRenderData[srcOff + 5];
+      uploadData[dstOff + 6] = this.confettiAlpha[i];
+    }
+
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+
+    gl.useProgram(this.magicConfettiProgram);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.magicConfettiBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, uploadData, gl.DYNAMIC_DRAW);
+
+    const stride = 7 * 4;
+    const loc = this.magicConfettiLocations;
+
+    gl.enableVertexAttribArray(loc.aPosition);
+    gl.vertexAttribPointer(loc.aPosition, 2, gl.FLOAT, false, stride, 0);
+
+    gl.enableVertexAttribArray(loc.aSize);
+    gl.vertexAttribPointer(loc.aSize, 1, gl.FLOAT, false, stride, 2 * 4);
+
+    gl.enableVertexAttribArray(loc.aRotation);
+    gl.vertexAttribPointer(loc.aRotation, 1, gl.FLOAT, false, stride, 3 * 4);
+
+    gl.enableVertexAttribArray(loc.aShape);
+    gl.vertexAttribPointer(loc.aShape, 1, gl.FLOAT, false, stride, 4 * 4);
+
+    gl.enableVertexAttribArray(loc.aHuePhase);
+    gl.vertexAttribPointer(loc.aHuePhase, 1, gl.FLOAT, false, stride, 5 * 4);
+
+    gl.enableVertexAttribArray(loc.aAlpha);
+    gl.vertexAttribPointer(loc.aAlpha, 1, gl.FLOAT, false, stride, 6 * 4);
+
+    gl.uniform2f(loc.uResolution, this.canvas.width, this.canvas.height);
+    gl.uniform1f(loc.uTime, timeSec);
+
+    gl.drawArrays(gl.POINTS, 0, count);
+
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  }
+
+  triggerWin() {
+    this.winActive = false;
+    this.canvas.classList.add("win-overlay");
+
+    const mode = this.winSettings.mode;
+    if (mode === "magic_confetti") {
+      this.initMagicConfetti();
+    } else {
+      this.initMagicStars();
+    }
+  }
+
+  cancelWin() {
+    this.winActive = false;
+    this.canvas.classList.remove("win-overlay");
   }
 
   drawStaticStars(timeSec) {
@@ -842,6 +1702,8 @@ class BlazingStarfield {
 
     this.drawStaticStars(timeSec);
     this.drawMovingStars(timeSec);
+    this.drawWinStars(timeSec);
+    this.drawConfetti(timeSec);
   }
 
   loop() {
@@ -850,6 +1712,8 @@ class BlazingStarfield {
     }
 
     this.moveStars();
+    this.moveWinStars();
+    this.moveConfetti();
     this.updateParallax();
     this.drawStars();
     this.rafId = window.requestAnimationFrame(this.loop);
@@ -951,6 +1815,77 @@ function clearSavedStarSettings() {
   }
 }
 
+function loadSavedWinSettings() {
+  try {
+    const raw = window.localStorage.getItem(WIN_SETTINGS_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return null;
+    }
+
+    const allowed = Object.keys(DEFAULT_WIN_SETTINGS);
+    const sanitized = {};
+
+    for (let i = 0; i < allowed.length; i += 1) {
+      const key = allowed[i];
+      const value = parsed[key];
+      if (key === "mode" && (value === "magic_stars" || value === "magic_confetti")) {
+        sanitized[key] = value;
+      } else if (typeof value === "number" && Number.isFinite(value)) {
+        sanitized[key] = value;
+      }
+    }
+
+    return sanitized;
+  } catch {
+    return null;
+  }
+}
+
+function saveWinSettings(settings) {
+  try {
+    window.localStorage.setItem(
+      WIN_SETTINGS_STORAGE_KEY,
+      JSON.stringify(settings),
+    );
+  } catch {
+    // Ignore storage errors.
+  }
+}
+
+function clearSavedWinSettings() {
+  try {
+    window.localStorage.removeItem(WIN_SETTINGS_STORAGE_KEY);
+  } catch {
+    // Ignore storage errors.
+  }
+}
+
+function createSpaceLoader() {
+  const wrap = document.createElement("div");
+  wrap.className = "space-loader-wrap";
+  wrap.setAttribute("aria-hidden", "true");
+  const spinner = document.createElement("span");
+  spinner.className = "space-loader";
+  wrap.appendChild(spinner);
+  document.body.prepend(wrap);
+  return wrap;
+}
+
+function fadeOutLoader(loader) {
+  if (!loader || !loader.parentElement) {
+    return;
+  }
+  loader.classList.add("fade-out");
+  loader.addEventListener("transitionend", () => {
+    loader.remove();
+  }, { once: true });
+}
+
 function ensureBackgroundCanvas() {
   const existing = document.getElementById(CANVAS_ID);
   if (existing instanceof HTMLCanvasElement) {
@@ -960,7 +1895,7 @@ function ensureBackgroundCanvas() {
   const canvas = document.createElement("canvas");
   canvas.id = CANVAS_ID;
   canvas.setAttribute("aria-hidden", "true");
-  document.body.prepend(canvas);
+  document.body.appendChild(canvas);
   return canvas;
 }
 
@@ -976,7 +1911,7 @@ function ensureSvemirControlPanel() {
     const logo = document.querySelector(".svemir-logo");
     if (logo && logo.parentElement) {
       const temp = document.createElement("template");
-      temp.innerHTML = SVEMIR_BUTTON_TEMPLATE;
+      temp.innerHTML = SPACE_BUTTON_TEMPLATE;
       logo.after(temp.content.firstElementChild);
     }
   }
@@ -986,6 +1921,42 @@ function ensureSvemirControlPanel() {
     const temp = document.createElement("template");
     temp.innerHTML = SVEMIR_DROPDOWN_TEMPLATE;
     document.body.appendChild(temp.content.firstElementChild);
+  }
+}
+
+function ensureWinControlPanel() {
+  const hasButton = document.getElementById(WIN_BUTTON_ID);
+  const hasDropdown = document.getElementById(WIN_PANEL_ID);
+  if (hasButton && hasDropdown) {
+    return;
+  }
+
+  // Place win button next to spaceControll button
+  if (!hasButton) {
+    const spaceBtn = document.getElementById(CONTROL_BUTTON_ID);
+    if (spaceBtn) {
+      const temp = document.createElement("template");
+      temp.innerHTML = WIN_BUTTON_TEMPLATE;
+      spaceBtn.after(temp.content.firstElementChild);
+    }
+  }
+
+  // Place win dropdown right after the space controls dropdown
+  if (!hasDropdown) {
+    const temp = document.createElement("template");
+    temp.innerHTML = WIN_DROPDOWN_TEMPLATE;
+    const winEl = temp.content.firstElementChild;
+    const spaceDropdown = document.getElementById(CONTROL_PANEL_ID);
+    if (spaceDropdown) {
+      spaceDropdown.after(winEl);
+    } else {
+      const topbar = document.querySelector(".topbar");
+      if (topbar) {
+        topbar.after(winEl);
+      } else {
+        document.body.prepend(winEl);
+      }
+    }
   }
 }
 
@@ -1120,7 +2091,21 @@ function bindSvemirControlPanel(starfield) {
     saveStarSettings(starfield.getSettings());
   }
 
+  function closeWinPanel() {
+    const winDropdown = document.getElementById(WIN_PANEL_ID);
+    const winBtn = document.getElementById(WIN_BUTTON_ID);
+    if (winDropdown && !winDropdown.hidden) {
+      winDropdown.hidden = true;
+      if (winBtn) {
+        winBtn.setAttribute("aria-expanded", "false");
+      }
+    }
+  }
+
   function setPanelOpen(open) {
+    if (open) {
+      closeWinPanel();
+    }
     dropdown.hidden = !open;
     button.setAttribute("aria-expanded", String(open));
     document.body.classList.toggle("svemir-focus-mode", open);
@@ -1173,7 +2158,9 @@ function bindSvemirControlPanel(starfield) {
   });
 
   document.addEventListener("click", () => {
-    setPanelOpen(false);
+    if (!dropdown.hidden) {
+      setPanelOpen(false);
+    }
   });
 
   document.addEventListener("keydown", (event) => {
@@ -1200,13 +2187,284 @@ function bindSvemirControlPanel(starfield) {
   }
 }
 
+function bindWinControlPanel(starfield) {
+  const winButton = document.getElementById(WIN_BUTTON_ID);
+  const dropdown = document.getElementById(WIN_PANEL_ID);
+  if (!(dropdown instanceof HTMLElement)) {
+    return;
+  }
+
+  function closeSpacePanel() {
+    const spaceDropdown = document.getElementById(CONTROL_PANEL_ID);
+    const spaceBtn = document.getElementById(CONTROL_BUTTON_ID);
+    if (spaceDropdown && !spaceDropdown.hidden) {
+      spaceDropdown.hidden = true;
+      if (spaceBtn) {
+        spaceBtn.setAttribute("aria-expanded", "false");
+      }
+    }
+  }
+
+  function setWinPanelOpen(open) {
+    if (open) {
+      closeSpacePanel();
+    }
+    dropdown.hidden = !open;
+    if (winButton) {
+      winButton.setAttribute("aria-expanded", String(open));
+    }
+    document.body.classList.toggle("svemir-focus-mode", open);
+  }
+
+  if (winButton instanceof HTMLButtonElement) {
+    winButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setWinPanelOpen(dropdown.hidden);
+    });
+  }
+
+  dropdown.addEventListener("click", (event) => {
+    event.stopPropagation();
+  });
+
+  document.addEventListener("click", () => {
+    if (!dropdown.hidden) {
+      setWinPanelOpen(false);
+    }
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !dropdown.hidden) {
+      setWinPanelOpen(false);
+    }
+  });
+
+  const closeBtn = dropdown.querySelector("[data-action='close-win-panel']");
+  if (closeBtn instanceof HTMLButtonElement) {
+    closeBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      setWinPanelOpen(false);
+    });
+  }
+
+  const modeSelect = document.getElementById("sv-win-mode");
+  const msGroup = document.getElementById("sv-win-ms-group");
+  const mcGroup = document.getElementById("sv-win-mc-group");
+
+  if (!(modeSelect instanceof HTMLSelectElement)) {
+    return;
+  }
+
+  const controls = [];
+  for (let i = 0; i < WIN_CONTROL_BINDINGS.length; i += 1) {
+    const binding = WIN_CONTROL_BINDINGS[i];
+    const input = document.getElementById(binding.id);
+    if (input instanceof HTMLInputElement) {
+      let numberInput = null;
+      if (input.type === "range") {
+        const numberId = `${binding.id}-input`;
+        const existing = document.getElementById(numberId);
+        if (existing instanceof HTMLInputElement) {
+          numberInput = existing;
+        } else {
+          numberInput = document.createElement("input");
+          numberInput.id = numberId;
+          numberInput.type = "number";
+          numberInput.className = "svemir-number";
+          numberInput.min = input.min;
+          numberInput.max = input.max;
+          numberInput.step = input.step || (binding.type === "integer" ? "1" : "0.01");
+          numberInput.value = input.value;
+          const labelText = input
+            .closest("label")
+            ?.querySelector("span")
+            ?.textContent?.trim();
+          if (labelText) {
+            numberInput.setAttribute("aria-label", `${labelText} value`);
+          }
+          numberInput.setAttribute(
+            "inputmode",
+            binding.type === "integer" ? "numeric" : "decimal",
+          );
+          input.insertAdjacentElement("afterend", numberInput);
+        }
+      }
+      controls.push({ input, numberInput, binding });
+    }
+  }
+
+  function toggleGroupVisibility(mode) {
+    if (msGroup) {
+      msGroup.hidden = mode !== "magic_stars";
+    }
+    if (mcGroup) {
+      mcGroup.hidden = mode !== "magic_confetti";
+    }
+  }
+
+  function syncWinOutputs() {
+    for (let i = 0; i < controls.length; i += 1) {
+      const item = controls[i];
+      const outputId = item.input.dataset.output;
+      if (!outputId) {
+        continue;
+      }
+      const output = document.getElementById(outputId);
+      if (output) {
+        output.textContent = formatControlValue(item.input);
+      }
+    }
+  }
+
+  function readWinSettingsFromInputs() {
+    const next = { mode: modeSelect.value };
+    for (let i = 0; i < controls.length; i += 1) {
+      const item = controls[i];
+      const parsed =
+        item.binding.type === "integer"
+          ? Number.parseInt(item.input.value, 10)
+          : Number.parseFloat(item.input.value);
+      if (Number.isFinite(parsed)) {
+        next[item.binding.setting] = parsed;
+      }
+    }
+    return next;
+  }
+
+  function normalizeForWinRange(value, inputEl, type) {
+    let next = value;
+    const min = Number(inputEl.min);
+    const max = Number(inputEl.max);
+    if (Number.isFinite(min)) {
+      next = Math.max(min, next);
+    }
+    if (Number.isFinite(max)) {
+      next = Math.min(max, next);
+    }
+    if (type === "integer") {
+      next = Math.round(next);
+    }
+    return next;
+  }
+
+  function writeWinSettingsToInputs(settings) {
+    modeSelect.value = settings.mode || "magic_stars";
+    toggleGroupVisibility(modeSelect.value);
+
+    for (let i = 0; i < controls.length; i += 1) {
+      const item = controls[i];
+      const value = settings[item.binding.setting];
+      if (typeof value === "number") {
+        const normalized = normalizeForWinRange(
+          value,
+          item.input,
+          item.binding.type,
+        );
+        item.input.value = String(normalized);
+        if (item.numberInput) {
+          item.numberInput.value = String(normalized);
+        }
+      }
+    }
+
+    syncWinOutputs();
+  }
+
+  function applyWinSettings() {
+    starfield.setWinSettings(readWinSettingsFromInputs());
+    saveWinSettings(starfield.getWinSettings());
+  }
+
+  writeWinSettingsToInputs(starfield.getWinSettings());
+
+  modeSelect.addEventListener("change", () => {
+    toggleGroupVisibility(modeSelect.value);
+    applyWinSettings();
+  });
+
+  for (let i = 0; i < controls.length; i += 1) {
+    const item = controls[i];
+    item.input.addEventListener("input", () => {
+      if (item.numberInput) {
+        item.numberInput.value = item.input.value;
+      }
+      syncWinOutputs();
+      applyWinSettings();
+    });
+
+    if (item.numberInput) {
+      const syncFromNumber = () => {
+        const parsed = Number.parseFloat(item.numberInput.value);
+        if (!Number.isFinite(parsed)) {
+          return;
+        }
+        const normalized = normalizeForWinRange(
+          parsed,
+          item.input,
+          item.binding.type,
+        );
+        item.input.value = String(normalized);
+        item.numberInput.value = String(normalized);
+        syncWinOutputs();
+        applyWinSettings();
+      };
+
+      item.numberInput.addEventListener("input", syncFromNumber);
+      item.numberInput.addEventListener("change", syncFromNumber);
+    }
+  }
+
+  const resetWinBtn = dropdown.querySelector("[data-action='reset-win']");
+  if (resetWinBtn instanceof HTMLButtonElement) {
+    resetWinBtn.addEventListener("click", () => {
+      clearSavedWinSettings();
+      starfield.resetWinDefaults();
+      writeWinSettingsToInputs(starfield.getWinSettings());
+    });
+  }
+
+  const previewWinBtn = dropdown.querySelector("[data-action='preview-win']");
+  if (previewWinBtn instanceof HTMLButtonElement) {
+    previewWinBtn.addEventListener("click", () => {
+      starfield.triggerWin();
+    });
+  }
+
+  const stopWinBtn = dropdown.querySelector("[data-action='stop-win']");
+  if (stopWinBtn instanceof HTMLButtonElement) {
+    stopWinBtn.addEventListener("click", () => {
+      starfield.cancelWin();
+    });
+  }
+}
+
 function initBlazingBackground() {
+  const isGamePage = !!document.getElementById("slotMachineRoot");
+  const loader = isGamePage ? createSpaceLoader() : null;
   const canvas = ensureBackgroundCanvas();
   ensureSvemirControlPanel();
+  ensureWinControlPanel();
 
   const starfield = new BlazingStarfield(canvas, loadSavedStarSettings() || {});
+
+  const savedWin = loadSavedWinSettings();
+  if (savedWin) {
+    starfield.setWinSettings(savedWin);
+  }
+
   starfield.start();
+
+  // Fade loader after first frame renders; reveal canvas behind content
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      document.body.style.background = "transparent";
+      fadeOutLoader(loader);
+    });
+  });
+
   bindSvemirControlPanel(starfield);
+  bindWinControlPanel(starfield);
 
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
@@ -1214,6 +2472,14 @@ function initBlazingBackground() {
       return;
     }
     starfield.start();
+  });
+
+  document.addEventListener("slotm:win", () => {
+    starfield.triggerWin();
+  });
+
+  document.addEventListener("slotm:spin-start", () => {
+    starfield.cancelWin();
   });
 }
 

@@ -49,6 +49,10 @@
       -webkit-user-select: none;
     }
 
+    .space-wheels-toggle[hidden] {
+      display: none !important;
+    }
+
     .space-wheels-toggle {
       position: absolute;
       top: 0.5rem;
@@ -114,6 +118,18 @@
 
     .space-wheels-toggle.active .space-wheels-toggle__thumb {
       transform: translateX(16px);
+    }
+
+    .space-wheels-toggle {
+      transition: all 0.2s;
+    }
+
+    .space-wheels-toggle:hover {
+      opacity: 0.9;
+    }
+
+    .space-wheels-toggle:active {
+      opacity: 0.8;
     }
 
     .slot-menu {
@@ -399,7 +415,7 @@
       text-shadow: 0 1px 0 rgba(255, 255, 255, 0.9);
     }
 
-    button:hover { background-color: #eee; }
+
     button:active {
       background: #e9e9e9;
       text-shadow: none;
@@ -850,14 +866,14 @@
 
     /* Win Overlay */
     .win-overlay {
-      padding: 1.25rem;
+ 
       background: color-mix(in srgb, var(--slot-card-bg) 45%, rgba(18, 20, 24, 0.96));
-      border: 2px solid var(--slot-border-color);
+   
       position: fixed;
       top: 50%;
       left: 50%;
-      transform: translate(-50%, -50%);
-      z-index: 100001;
+   
+  
       display: flex;
       justify-content: center;
       align-items: center;
@@ -865,7 +881,7 @@
       border-radius: 6px;
       box-shadow: 0 4px rgba(0,0,0,0.3);
       min-width: 300px;
-      max-width: calc(100vw - 2rem);
+ 
       color: var(--slot-text-primary);
       margin: 0;
     }

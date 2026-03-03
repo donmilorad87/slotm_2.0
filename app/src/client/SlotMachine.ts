@@ -3123,8 +3123,8 @@ export class SlotMachine {
     };
 
     const contourGapFill = this.colorWithAlpha(
-      this.reelCellFillColor || 'rgba(208, 156, 61, 1)',
-      1,
+      this.reelCellFillColor || 'rgba(208, 156, 61, 0.2)',
+      0.7,
     );
 
     const drawLoopSegments = (points) => {
@@ -3919,7 +3919,7 @@ export class SlotMachine {
       if (this.isFullscreen && pt && this.fsHitRects) {
         let newHover = null;
         const rects = this.fsHitRects;
-        const testKeys = ['start', 'stop', 'joker', 'svemir', 'betCycle', 'gtCycle'];
+        const testKeys = ['start', 'stop', 'joker', 'svemir', 'winAnim', 'betCycle', 'gtCycle'];
         for (let k = 0; k < testKeys.length; k++) {
           const r = rects[testKeys[k]];
           if (r && pt.x >= r.x && pt.x <= r.x + r.w && pt.y >= r.y && pt.y <= r.y + r.h) {
@@ -4068,10 +4068,11 @@ export class SlotMachine {
       body.slot-canvas-fullscreen .topbar,
       body.slot-canvas-fullscreen .game-page,
       body.slot-canvas-fullscreen .footer,
-      body.slot-canvas-fullscreen .svemir-control:not(#svemirDropdown) {
+      body.slot-canvas-fullscreen .svemir-control:not(#svemirDropdown):not(#winDropdown) {
         visibility: hidden !important;
       }
-      body.slot-canvas-fullscreen #svemirDropdown {
+      body.slot-canvas-fullscreen #svemirDropdown,
+      body.slot-canvas-fullscreen #winDropdown {
         z-index: 10000 !important;
       }
       body.slot-canvas-fullscreen .space-wheels-toggle {
@@ -4085,10 +4086,6 @@ export class SlotMachine {
       html, body {
         scrollbar-width: none !important;
         overflow-y: scroll !important;
-      }
-      ::-webkit-scrollbar {
-        display: none !important;
-        width: 0 !important;
       }
     `;
     document.head.appendChild(this.fullscreenStyleEl);
@@ -4508,6 +4505,29 @@ export class SlotMachine {
     ctx.restore();
     this.fsHitRects.svemir = { x: rbx, y: ry, w: rBtnW, h: scH };
 
+    // Win Animation button (two rows, below Space Configuration)
+    ry += scH + 4;
+    const waH = navBtnH;
+    const winAnimHover = hover === 'winAnim';
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.3)';
+    ctx.shadowOffsetY = winAnimHover ? 2 : 4;
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = winAnimHover ? 0.75 : 0.6;
+    ctx.fillStyle = winAnimHover ? hoverBg : cardBg;
+    ctx.beginPath(); ctx.roundRect(rbx, ry, rBtnW, waH, btnR); ctx.fill();
+    ctx.globalAlpha = 1.0;
+    ctx.shadowColor = 'transparent';
+    ctx.strokeStyle = winAnimHover ? txtS : border;
+    ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = txtS;
+    ctx.font = `500 15px ${F}`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('Win', rbx + rBtnW / 2, ry + waH / 2 - 10);
+    ctx.fillText('Animation', rbx + rBtnW / 2, ry + waH / 2 + 10);
+    ctx.restore();
+    this.fsHitRects.winAnim = { x: rbx, y: ry, w: rBtnW, h: waH };
+
     // ════════════════════════════════════════════════════════════════
     // FOOTER (full width with margins + padding)
     // ════════════════════════════════════════════════════════════════
@@ -4647,13 +4667,46 @@ export class SlotMachine {
     // Space Configuration
     if (hit(this.fsHitRects.svemir)) {
       const dropdown = document.getElementById('svemirDropdown');
-      const svemirBtn = document.getElementById('svemirControll');
+      const svemirBtn = document.getElementById('spaceControll');
+      // Close win dropdown if open
+      const winDd = document.getElementById('winDropdown');
+      const winBtn = document.getElementById('winControll');
+      if (winDd && !winDd.hidden) {
+        winDd.hidden = true;
+        if (winBtn) winBtn.setAttribute('aria-expanded', 'false');
+      }
       if (dropdown) {
         const willOpen = dropdown.hidden;
         dropdown.hidden = !willOpen;
         if (svemirBtn) svemirBtn.setAttribute('aria-expanded', String(willOpen));
         document.body.classList.toggle('svemir-focus-mode', willOpen);
-        // Block the next document click so it doesn't immediately close
+        if (willOpen) {
+          const blocker = (e) => {
+            e.stopImmediatePropagation();
+            document.removeEventListener('click', blocker, true);
+          };
+          document.addEventListener('click', blocker, true);
+        }
+      }
+      return true;
+    }
+
+    // Win Animation
+    if (hit(this.fsHitRects.winAnim)) {
+      const winDropdown = document.getElementById('winDropdown');
+      const winBtn = document.getElementById('winControll');
+      // Close space dropdown if open
+      const spaceDd = document.getElementById('svemirDropdown');
+      const spaceBtn = document.getElementById('spaceControll');
+      if (spaceDd && !spaceDd.hidden) {
+        spaceDd.hidden = true;
+        if (spaceBtn) spaceBtn.setAttribute('aria-expanded', 'false');
+      }
+      if (winDropdown) {
+        const willOpen = winDropdown.hidden;
+        winDropdown.hidden = !willOpen;
+        if (winBtn) winBtn.setAttribute('aria-expanded', String(willOpen));
+        document.body.classList.toggle('svemir-focus-mode', willOpen);
         if (willOpen) {
           const blocker = (e) => {
             e.stopImmediatePropagation();
@@ -4669,6 +4722,10 @@ export class SlotMachine {
   }
 
   toggleMagicOpenAiMode(forceState = null) {
+    if (this.rewardMode === 1 && forceState !== false) {
+      return;
+    }
+
     const nextState = typeof forceState === 'boolean' ? forceState : !this.magicOpenAiMode;
     const wasMagicMode = this.magicOpenAiMode;
 
@@ -5016,11 +5073,16 @@ export class SlotMachine {
 
     const infoPanelEl = this.shadowRoot.querySelector('.info-panel');
 
+    const spaceWheelsBtnEl = this.shadowRoot.getElementById('spaceWheelsBtn');
+
     if (value === 1) {
       // Multi-line mode: show full 3x5 with lines and joker controls
       // 3x5 is a digital slot — disable Space Wheels if active
       if (this.magicOpenAiMode) {
         this.toggleMagicOpenAiMode(false);
+      }
+      if (spaceWheelsBtnEl) {
+        spaceWheelsBtnEl.hidden = true;
       }
       this.shadowRoot.getElementById('linesContainer').style.display = 'flex';
       this.shadowRoot.getElementById('jokerContainer').style.display = 'block';
@@ -5028,6 +5090,9 @@ export class SlotMachine {
       this.setCanvasFullHeight();
     } else {
       // Single line mode (value === 2): hide lines/joker controls
+      if (spaceWheelsBtnEl) {
+        spaceWheelsBtnEl.hidden = false;
+      }
       this.shadowRoot.getElementById('linesContainer').style.display = 'none';
       this.shadowRoot.getElementById('jokerContainer').style.display = 'none';
       infoPanelEl.style.marginTop = '0';
@@ -5781,6 +5846,7 @@ export class SlotMachine {
     this.isSpinning = true;
     this.credits -= totalBet;
     this.updateDisplay();
+    document.dispatchEvent(new CustomEvent("slotm:spin-start"));
 
     // Disable all buttons while spin is preparing.
     this.setButtonsEnabled(false);
@@ -6101,6 +6167,7 @@ export class SlotMachine {
   }
 
   showWin(data) {
+    document.dispatchEvent(new CustomEvent("slotm:win"));
     const overlay = document.createElement('dialog');
     overlay.className = 'win-overlay';
 
