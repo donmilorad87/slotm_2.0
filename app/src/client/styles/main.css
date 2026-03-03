@@ -178,14 +178,6 @@ body.theme-blazing-sun .flash-msg {
   color: var(--blz-muted);
 }
 
-body.theme-blazing-sun .game-page__content {
-  background: var(--blz-panel-bg);
-  border: 1px solid var(--blz-panel-border);
-  border-radius: 0.9rem;
-  box-shadow: var(--blz-panel-shadow);
-  padding: 1rem;
-}
-
 body.theme-blazing-sun .game-page__content > .slot-machine-root {
   display: block;
   border-radius: 0.9rem;
@@ -193,9 +185,21 @@ body.theme-blazing-sun .game-page__content > .slot-machine-root {
 }
 
 body.theme-blazing-sun .btn--ghost {
-  background: rgba(208, 156, 61, 0.2);
-  border-color: var(--blz-panel-border);
+  background: color-mix(in srgb, rgba(208, 156, 61, 0.2) 60%, transparent);
+  border: 2px solid var(--blz-panel-border);
   color: var(--blz-text);
+  box-shadow: 0 4px rgba(0, 0, 0, 0.3);
+}
+
+body.theme-blazing-sun .btn--ghost:hover {
+  background: color-mix(in srgb, #667eea 60%, transparent);
+  border-color: #667eea;
+  color: #fff;
+}
+
+body.theme-blazing-sun .btn--ghost:active {
+  box-shadow: 0 2px rgba(0, 0, 0, 0.3);
+  transform: translateY(2px);
 }
 
 body.theme-blazing-sun .wallet-balance-card,
@@ -253,13 +257,21 @@ body.theme-blazing-sun input::placeholder {
 }
 
 body.theme-blazing-sun .btn--primary {
-  background: rgba(208, 156, 61, 0.28);
-  border-color: var(--blz-panel-border);
+  background: color-mix(in srgb, rgba(208, 156, 61, 0.28) 60%, transparent);
+  border: 2px solid var(--blz-panel-border);
   color: var(--blz-text);
+  box-shadow: 0 4px rgba(0, 0, 0, 0.3);
 }
 
 body.theme-blazing-sun .btn--primary:hover {
-  background: rgba(208, 156, 61, 0.4);
+  background: color-mix(in srgb, #667eea 60%, transparent);
+  border-color: #667eea;
+  color: #fff;
+}
+
+body.theme-blazing-sun .btn--primary:active {
+  box-shadow: 0 2px rgba(0, 0, 0, 0.3);
+  transform: translateY(2px);
 }
 
 body.theme-blazing-sun .auth-switch a,
@@ -458,12 +470,12 @@ position: absolute;
   position: absolute;
   top: 0.5rem;
   right: 0.5rem;
-  width: 24px;
-  height: 24px;
-  border: none;
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--blz-panel-border);
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.08);
-  color: inherit;
+  background: color-mix(in srgb, rgba(208, 156, 61, 0.28) 60%, transparent);
+  color: var(--blz-text);
   font-size: 14px;
   line-height: 1;
   cursor: pointer;
@@ -471,10 +483,19 @@ position: absolute;
   align-items: center;
   justify-content: center;
   padding: 0;
+  box-shadow: 0 3px rgba(0, 0, 0, 0.3);
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.1s, transform 0.1s;
 }
 
 .svemir-close:hover {
-  background: rgba(0, 0, 0, 0.16);
+  background: color-mix(in srgb, #ef4444 60%, transparent);
+  border-color: #ef4444;
+  color: #fff;
+}
+
+.svemir-close:active {
+  box-shadow: 0 1px rgba(0, 0, 0, 0.3);
+  transform: translateY(2px);
 }
 
 .space-configuration[hidden] {
@@ -581,8 +602,8 @@ body.svemir-focus-mode .svemir-toggle {
 }
 
 .btn {
-  border: 1px solid transparent;
-  border-radius: 0.6rem;
+  border: 2px solid var(--c-border);
+  border-radius: 6px;
   padding: 0.55rem 0.9rem;
   cursor: pointer;
   text-decoration: none;
@@ -591,15 +612,24 @@ body.svemir-focus-mode .svemir-toggle {
   align-items: center;
   justify-content: center;
   gap: 0.35rem;
+  box-shadow: 0 4px rgba(0, 0, 0, 0.3);
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.1s, transform 0.1s;
+}
+
+.btn:active {
+  box-shadow: 0 2px rgba(0, 0, 0, 0.3);
+  transform: translateY(2px);
 }
 
 .btn--primary {
   background: var(--c-primary);
   color: #fff;
+  border-color: var(--c-primary);
 }
 
 .btn--primary:hover {
   background: var(--c-primary-dark);
+  border-color: var(--c-primary-dark);
 }
 
 .btn--ghost {
@@ -1161,12 +1191,14 @@ body:not(.sw-active) .sw-skip {
 
 .footer {
   margin: 0 1rem 1rem;
+  margin-top: auto;
   padding: 0.8rem 1rem;
   text-align: center;
   background: rgba(255, 255, 255, 0.8);
   border: 1px solid var(--c-border);
   border-radius: 0.9rem;
   color: var(--c-muted);
+  flex-shrink: 0;
 }
 
 .footer p {
@@ -1209,6 +1241,10 @@ body:not(.sw-active) .sw-skip {
 
 .game-page__content {
   margin-top: 1rem;
+  width: 1200px;
+  max-width: calc(100% - 2rem);
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .flash-msg {

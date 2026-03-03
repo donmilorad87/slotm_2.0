@@ -472,8 +472,18 @@ class BingoMiniGame {
     this.overlay.querySelector('#playBtn').textContent = 'Drawing...';
     this.overlay.querySelector('#nextTicketBtn').disabled = true;
     this.overlay.querySelector('#skipBtn').style.display = 'none';
-    this.overlay.querySelectorAll('.number-btn').forEach(btn => btn.classList.add('disabled'));
-    this.overlay.querySelectorAll('.coin-btn').forEach(btn => btn.classList.add('disabled'));
+
+    // Clear all number selections and ticket active states
+    this.overlay.querySelectorAll('.number-btn').forEach(btn => {
+      btn.classList.remove('selected');
+    });
+    this.overlay.querySelector('.number-grid').style.pointerEvents = 'none';
+    const coinSelectorEl = this.overlay.querySelector('.coin-selector-buttons');
+    if (coinSelectorEl) coinSelectorEl.style.pointerEvents = 'none';
+    this.overlay.querySelectorAll('.ticket').forEach(ticket => ticket.classList.remove('active'));
+    this.overlay.querySelectorAll('.ticket-number').forEach(el => {
+      el.classList.add('locked');
+    });
 
     // Show drawn section
     this.overlay.querySelector('#drawnSection').style.display = 'block';
@@ -519,8 +529,13 @@ class BingoMiniGame {
       this.overlay.querySelector('#playBtn').textContent = 'Start drawing';
       this.overlay.querySelector('#nextTicketBtn').disabled = false;
       this.overlay.querySelector('#skipBtn').style.display = 'inline-block';
-      this.overlay.querySelectorAll('.number-btn').forEach(btn => btn.classList.remove('disabled'));
-      this.overlay.querySelectorAll('.coin-btn').forEach(btn => btn.classList.remove('disabled'));
+      this.overlay.querySelector('.number-grid').style.pointerEvents = '';
+      const coinSelRestore = this.overlay.querySelector('.coin-selector-buttons');
+      if (coinSelRestore) coinSelRestore.style.pointerEvents = '';
+      this.overlay.querySelectorAll('.ticket-number').forEach(el => {
+        el.classList.remove('locked');
+      });
+      this.updateUI();
       this.overlay.querySelector('#drawnSection').style.display = 'none';
     }
   }
@@ -533,10 +548,11 @@ class BingoMiniGame {
 
     const num = this.drawnNumbers[index];
     const container = this.overlay.querySelector('#drawnNumbers');
+    const isInTicket = this.tickets.some(t => t.includes(num));
 
     // Add drawn number to display
     const numEl = document.createElement('span');
-    numEl.className = 'drawn-number';
+    numEl.className = isInTicket ? 'drawn-number matched' : 'drawn-number';
     numEl.textContent = num;
     container.appendChild(numEl);
 
@@ -544,7 +560,7 @@ class BingoMiniGame {
     const gridBtn = this.overlay.querySelector(`.number-btn[data-number="${num}"]`);
     if (gridBtn) {
       gridBtn.classList.add('drawn');
-      if (gridBtn.classList.contains('selected')) {
+      if (isInTicket) {
         gridBtn.classList.add('matched');
       }
     }
@@ -3662,7 +3678,7 @@ export class SlotMachine {
     const panelX = headerRight - rowW - fsPad;
     const panelY = fsFramePad + (fsTopH - panelH) / 2;
 
-    // Row 1: Swing (-360 to 360)
+    // Row 1: Swing (-90 to 90)
     let y = panelY;
     const swingLabel = this.debugSwingPaused ? 'Resume Swing' : 'Pause Swing';
     this.debugSwingBtnRect = drawBtn(panelX, y, btnW, btnH, swingLabel, this.debugSwingPaused);
@@ -3672,7 +3688,7 @@ export class SlotMachine {
       sliderX += arrowSize + gap;
       this.debugSwingSliderRect = drawSlider(
         sliderX, y + (btnH - sliderH) / 2, sliderW, sliderH,
-        this.debugSwingSliderValue, -360, 360, '\u00B0');
+        this.debugSwingSliderValue, -90, 90, '\u00B0');
       sliderX += sliderW + gap;
       this.debugSwingRightArrowRect = drawArrowBtn(sliderX, y, arrowSize, 'right');
       sliderX += arrowSize + gap;
@@ -3919,7 +3935,7 @@ export class SlotMachine {
     };
 
     const adjustSwing = (delta) => {
-      this.debugSwingSliderValue = Math.max(-360, Math.min(360, this.debugSwingSliderValue + delta));
+      this.debugSwingSliderValue = Math.max(-90, Math.min(90, this.debugSwingSliderValue + delta));
       this.magicSwingAngleRad = (this.debugSwingSliderValue * Math.PI) / 180;
       if (!this.reelAnimationFrame) this.renderFrame();
     };
@@ -3966,7 +3982,7 @@ export class SlotMachine {
       if (this.debugSwingPaused && hitRect(pt, this.debugSwingSliderRect)) {
         event.preventDefault();
         this.debugDragging = 'swing';
-        this.debugSwingSliderValue = sliderFromX(pt, this.debugSwingSliderRect, -360, 360);
+        this.debugSwingSliderValue = sliderFromX(pt, this.debugSwingSliderRect, -90, 90);
         this.magicSwingAngleRad = (this.debugSwingSliderValue * Math.PI) / 180;
         if (!this.reelAnimationFrame) this.renderFrame();
         return;
@@ -3998,7 +4014,7 @@ export class SlotMachine {
         if (!pt) return;
         event.preventDefault();
         if (this.debugDragging === 'swing' && this.debugSwingSliderRect) {
-          this.debugSwingSliderValue = sliderFromX(pt, this.debugSwingSliderRect, -360, 360);
+          this.debugSwingSliderValue = sliderFromX(pt, this.debugSwingSliderRect, -90, 90);
           this.magicSwingAngleRad = (this.debugSwingSliderValue * Math.PI) / 180;
           if (!this.reelAnimationFrame) this.renderFrame();
         } else if (this.debugDragging === 'space' && this.debugSpaceSliderRect) {
@@ -4741,8 +4757,6 @@ export class SlotMachine {
     const infoItems = [
       `Bet: ${this.bet} $`,
       `Type: ${gameTypeNames[this.gameTypeValue] || 'Numbers'}`,
-      `Joker: ${this.jokerAdded ? 'YES' : 'NO'}`,
-      `Lines: ${activeLines}`,
       `Total: ${totalBet} $`,
       `Credits: ${this.credits} $`,
     ];
@@ -5292,6 +5306,9 @@ export class SlotMachine {
 
     const spaceWheelsBtnEl = this.shadowRoot.getElementById('spaceWheelsBtn');
 
+    const jokerInfoEl = this.shadowRoot.getElementById('jokerInfo');
+    const linesInfoEl = this.shadowRoot.getElementById('linesInfo');
+
     if (value === 1) {
       // Multi-line mode: show full 3x5 with lines and joker controls
       // 3x5 is a digital slot — disable Space Wheels if active
@@ -5303,6 +5320,8 @@ export class SlotMachine {
       }
       this.shadowRoot.getElementById('linesContainer').style.display = 'flex';
       this.shadowRoot.getElementById('jokerContainer').style.display = 'block';
+      if (jokerInfoEl) jokerInfoEl.style.display = '';
+      if (linesInfoEl) linesInfoEl.style.display = '';
       infoPanelEl.style.marginTop = '0';
       this.setCanvasFullHeight();
     } else {
@@ -5312,6 +5331,8 @@ export class SlotMachine {
       }
       this.shadowRoot.getElementById('linesContainer').style.display = 'none';
       this.shadowRoot.getElementById('jokerContainer').style.display = 'none';
+      if (jokerInfoEl) jokerInfoEl.style.display = 'none';
+      if (linesInfoEl) linesInfoEl.style.display = 'none';
       infoPanelEl.style.marginTop = '0';
       this.setCanvasMiddleRow();
     }

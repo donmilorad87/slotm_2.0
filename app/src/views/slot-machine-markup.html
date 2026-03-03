@@ -1,4 +1,37 @@
   <style>
+    /* Viewport fit — no scrollbars */
+    body.slot-page-fit {
+      min-height: 100vh;
+      min-width: 1024px;
+      overflow-x: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    body.slot-page-fit > .topbar {
+      flex-shrink: 0;
+    }
+    body.slot-page-fit .game-page {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    body.slot-page-fit .flash-msg:empty {
+      display: none;
+    }
+    body.slot-page-fit .game-page__content {
+      flex: 1;
+      min-height: 0;
+      margin-top: 0;
+    }
+    body.slot-page-fit .slot-game {
+      padding: 0.75rem;
+    }
+    body.slot-page-fit .footer {
+      flex-shrink: 0;
+      margin-top: auto;
+    }
+
     .slot-machine-root {
       display: block;
       font-family: "Lucida Sans Unicode", "Lucida Grande", sans-serif;
@@ -41,7 +74,6 @@
       position: relative;
       background: var(--bg-gradient);
       background-attachment: fixed;
-      border: 1px solid var(--slot-border-color);
       box-shadow: var(--slot-panel-shadow);
       border-radius: 1rem;
       padding: 1.5rem;
@@ -69,6 +101,7 @@
       -webkit-tap-highlight-color: transparent;
       white-space: nowrap;
       flex-shrink: 0;
+      box-shadow:none;
     }
 
     .space-wheels-toggle__label {
@@ -537,15 +570,6 @@
       align-items: start;
     }
 
-    @media (max-width: 900px) {
-      .slot-layout {
-        grid-template-columns: 1fr;
-      }
-      .slot-sidebar { order: 2; }
-      .slot-center { order: 1; }
-      .slot-options { order: 3; }
-    }
-
     /* Center Column */
     .slot-center {
       display: flex;
@@ -872,8 +896,8 @@
       position: fixed;
       top: 50%;
       left: 50%;
-   
-  
+      padding:1rem;
+      padding-bottom:2rem;
       display: flex;
       justify-content: center;
       align-items: center;
@@ -992,12 +1016,6 @@
       gap: 20px;
     }
 
-    @media (max-width: 600px) {
-      .minigame-layout {
-        grid-template-columns: 1fr;
-      }
-    }
-
     .minigame-numbers {
       background: color-mix(in srgb, var(--slot-card-bg) 40%, transparent);
       border-radius: 12px;
@@ -1033,6 +1051,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      text-shadow: 0 0 5px #0e1114;
     }
 
     .number-btn:hover:not(.selected):not(.disabled) {
@@ -1049,8 +1068,7 @@
     }
 
     .number-btn.disabled {
-      opacity: 0.3;
-      cursor: not-allowed;
+      pointer-events: none;
     }
 
     .number-btn.drawn {
@@ -1060,7 +1078,7 @@
     }
 
     .number-btn.matched {
-      background: linear-gradient(145deg, #ffd700, #ffa500);
+      background: conic-gradient(from 0deg, #ffd700, #b8860b, #ffd700, #daa520, #ffd700, #b8860b, #ffd700);
       border-color: #ffd700;
       animation: glow 1s ease-in-out infinite;
     }
@@ -1128,27 +1146,32 @@
     }
 
     .ticket-number {
-      width: 32px;
-      height: 32px;
+      width: 26px;
+      height: 26px;
       border-radius: 50%;
       background: color-mix(in srgb, var(--primary-color) 60%, transparent);
       color: white;
-      font-size: 0.8rem;
+      font-size: 0.65rem;
       font-weight: bold;
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
       transition: all 0.2s;
+      text-shadow: 0 0 5px #0e1114;
     }
 
-    .ticket-number:hover {
+    .ticket-number:hover:not(.locked) {
       transform: scale(1.1);
       background: #c92a2a;
     }
 
+    .ticket-number.locked {
+      pointer-events: none;
+    }
+
     .ticket-number.matched {
-      background: linear-gradient(145deg, #ffd700, #ffa500);
+      background: conic-gradient(from 0deg, #ffd700, #b8860b, #ffd700, #daa520, #ffd700, #b8860b, #ffd700);
     }
 
     .ticket-result {
@@ -1244,6 +1267,12 @@
       align-items: center;
       justify-content: center;
       animation: popIn 0.3s ease-out;
+      text-shadow: 0 0 5px #0e1114;
+    }
+
+    .drawn-number.matched {
+      background: conic-gradient(from 0deg, #ffd700, #b8860b, #ffd700, #daa520, #ffd700, #b8860b, #ffd700);
+      animation: popIn 0.3s ease-out, glow 1s ease-in-out 0.3s infinite;
     }
 
     @keyframes popIn {
@@ -1634,8 +1663,8 @@
           <div class="info-panel">
             <div>Bet: <span id="currentBet">2</span> $</div>
             <div>Type: <span id="gameType">Numbers</span></div>
-            <div>Joker: <span id="jokerStatus">NO (0 $)</span></div>
-            <div>Lines: <span id="lineCount">1</span></div>
+            <div id="jokerInfo" style="display:none">Joker: <span id="jokerStatus">NO (0 $)</span></div>
+            <div id="linesInfo" style="display:none">Lines: <span id="lineCount">1</span></div>
             <div>Total: <span id="totalBet">2</span> $</div>
             <div>Krediti: <span id="credits">0</span> $</div>
           </div>
