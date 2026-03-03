@@ -14,6 +14,7 @@ declare global {
       auth?: RequestAuthState;
       securitySession?: RequestSecuritySession;
       csrfToken?: string;
+      file?: Express.Multer.File;
     }
   }
 }

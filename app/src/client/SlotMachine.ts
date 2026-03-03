@@ -822,11 +822,49 @@ export class SlotMachine {
     this.img = new Image();
     // Preload joker image so it's ready when user clicks
     this.img.onload = () => { this.jokerImageLoaded = true; };
+    // Use a DOM-attached <img> so the browser decodes GIF frames for canvas
+    this.logoImg = document.createElement('img');
+    this.logoImg.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden;pointer-events:none;opacity:0;';
+    this.logoImg.alt = '';
+    this.logoImg.setAttribute('aria-hidden', 'true');
+    this.logoImgLoaded = false;
+    this.logoImg.onload = () => { this.logoImgLoaded = true; };
+    this.logoImg.src = '/assets/images/blazingSun.gif';
+    document.body.appendChild(this.logoImg);
     this.img.src = "data:image/png;base64,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";
     this.cellHalfWidth = 0;
     this.spinnerPaddingLeft = 0;
     this.spinnerPaddingTop = 0;
     this.lineColor = 'rgb(68, 42, 11)';
+
+    // Ring configuration settings (applied via slotm:ring-settings event)
+    this.ringSettings = {
+      cellFillColor: 'rgba(208, 156, 61, 0.2)',
+      cellFillAlpha: 0.7,
+      borderColor: 'rgba(56, 36, 12, 0.96)',
+      contourColor: 'rgba(22, 13, 4, 1)',
+      gapFillAlpha: 0.7,
+      diamondDarkGold: 'rgba(122, 84, 20, 0.98)',
+      diamondBrightGold: 'rgba(245, 202, 94, 0.97)',
+      diamondMidGold: 'rgba(187, 131, 42, 0.97)',
+      diamondStrokeColor: 'rgba(219, 162, 54, 0.98)',
+      symbolFillColor: 'rgba(44, 29, 9, 0.98)',
+      symbolStrokeColor: 'rgba(19, 13, 4, 0.82)',
+      symbolGlowColor: 'rgba(255, 236, 162, 0.98)',
+      innerRingPulseColor: 'rgba(208, 156, 61, 1)',
+      innerRingPulseMinAlpha: 0.08,
+      innerRingPulseMaxAlpha: 0.22,
+      innerRingPulseSpeed: 0.002,
+      swingSpeed: 0.3,
+      swingAmplitude: 40,
+      cameraZoom: -34,
+      cameraPitch: -0.08,
+    };
+
+    // Listen for ring settings events from control panel
+    document.addEventListener('slotm:ring-settings', (e) => {
+      this.setRingSettings(e.detail);
+    });
 
     // Bind event handlers
     this.boundCanvasClick = this.handleCanvasClick.bind(this);
@@ -841,41 +879,33 @@ export class SlotMachine {
     // Bet options - initialized based on game type
     this.updateBetOptions();
 
-    // Lines
+    // Lines - bind events to static buttons
     const linesContainer = this.shadowRoot.getElementById('linesContainer');
-    for (let i = 0; i < 7; i++) {
-      const lineButton = document.createElement('button');
-      lineButton.type = 'button';
-      lineButton.className = `control-group line-btn${i === 0 ? ' active' : ''}`;
-      lineButton.dataset.line = String(i);
-      lineButton.textContent = `Line ${i + 1}`;
+    const lineButtons = linesContainer.querySelectorAll('.line-btn');
+    for (let i = 0; i < lineButtons.length; i++) {
+      const lineButton = lineButtons[i];
       lineButton.addEventListener('click', () => this.toggleLine(i, lineButton));
-      linesContainer.appendChild(lineButton);
     }
 
-    // Game types
+    // Game types - bind events to static buttons
+    const gameTypeLabels = ['Numbers', 'Roman', 'Fruits', 'Animals', 'Emoji'];
     const gameTypeOptions = this.shadowRoot.getElementById('gameTypeOptions');
-    ['Numbers', 'Roman', 'Fruits', 'Animals', 'Emoji'].forEach((type, idx) => {
-      const optionButton = document.createElement('button');
-      optionButton.type = 'button';
-      optionButton.className = 'control-group' + (idx === 0 ? ' active' : '');
-      optionButton.dataset.value = String(idx + 1);
-      optionButton.textContent = type;
-      optionButton.addEventListener('click', () => this.selectGameType(idx + 1, type, optionButton));
-      gameTypeOptions.appendChild(optionButton);
-    });
+    const gameTypeButtons = gameTypeOptions.querySelectorAll('.control-group');
+    for (let i = 0; i < gameTypeButtons.length; i++) {
+      const optionButton = gameTypeButtons[i];
+      const value = parseInt(optionButton.dataset.value);
+      const label = gameTypeLabels[value - 1] || optionButton.textContent;
+      optionButton.addEventListener('click', () => this.selectGameType(value, label, optionButton));
+    }
 
-    // Reward modes
+    // Reward modes - bind events to static buttons
     const rewardModeOptions = this.shadowRoot.getElementById('rewardModeOptions');
-    [{ value: 2, label: '1x5 Middle' }, { value: 1, label: '3x5 Multi-line' }].forEach((mode, idx) => {
-      const optionButton = document.createElement('button');
-      optionButton.type = 'button';
-      optionButton.className = 'control-group' + (idx === 0 ? ' active' : '');
-      optionButton.dataset.value = String(mode.value);
-      optionButton.textContent = mode.label;
-      optionButton.addEventListener('click', () => this.selectRewardMode(mode.value, optionButton));
-      rewardModeOptions.appendChild(optionButton);
-    });
+    const rewardModeButtons = rewardModeOptions.querySelectorAll('.control-group');
+    for (let i = 0; i < rewardModeButtons.length; i++) {
+      const optionButton = rewardModeButtons[i];
+      const value = parseInt(optionButton.dataset.value);
+      optionButton.addEventListener('click', () => this.selectRewardMode(value, optionButton));
+    }
 
     // Canvas reels
     this.canvas = this.shadowRoot.getElementById('spinners');
@@ -1677,10 +1707,11 @@ export class SlotMachine {
       ctx.closePath();
     };
 
-    const darkGoldA = depth > 0.5 ? 'rgba(122, 84, 20, 0.98)' : 'rgba(104, 70, 16, 0.97)';
+    const rs = this.ringSettings;
+    const darkGoldA = depth > 0.5 ? rs.diamondDarkGold : 'rgba(104, 70, 16, 0.97)';
     const darkGoldB = depth > 0.5 ? 'rgba(94, 62, 12, 0.98)' : 'rgba(81, 53, 10, 0.98)';
-    const brightGold = depth > 0.5 ? 'rgba(245, 202, 94, 0.97)' : 'rgba(227, 175, 72, 0.96)';
-    const midGold = depth > 0.5 ? 'rgba(187, 131, 42, 0.97)' : 'rgba(169, 117, 33, 0.97)';
+    const brightGold = depth > 0.5 ? rs.diamondBrightGold : 'rgba(227, 175, 72, 0.96)';
+    const midGold = depth > 0.5 ? rs.diamondMidGold : 'rgba(169, 117, 33, 0.97)';
 
     let fillGradient = null;
     if (this.magicOpenAiMode) {
@@ -1719,7 +1750,7 @@ export class SlotMachine {
 
     ctx.save();
     drawDiamondPath();
-    ctx.strokeStyle = this.reelBorderColor || 'rgba(219, 162, 54, 0.98)';
+    ctx.strokeStyle = this.ringSettings.diamondStrokeColor || this.reelBorderColor || 'rgba(219, 162, 54, 0.98)';
     ctx.lineWidth = Math.max(1.2, width * 0.04);
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
@@ -2124,12 +2155,12 @@ export class SlotMachine {
       ? 0.96
       : 0.72 + (0.26 * frontStrength);
     const edgeColor = this.magicOpenAiMode
-      ? 'rgba(56, 36, 12, 0.96)'
+      ? this.ringSettings.borderColor
       : (this.lineColor || 'rgb(94, 61, 17)');
     const lastEdgeIndex = leftEdge.length - 1;
     const panelBackgroundColor = this.reelCellFillColor || 'rgba(208, 156, 61, 0.2)';
     const itemBackground = this.magicOpenAiMode
-      ? this.colorWithAlpha(panelBackgroundColor, 0.7)
+      ? this.colorWithAlpha(panelBackgroundColor, this.ringSettings.cellFillAlpha)
       : panelBackgroundColor;
     const panelPoints = [...leftEdge, ...rightEdge.slice().reverse()];
     const totalYaw = Number(cell.totalYawRad ?? this.magicCameraYawRad) || 0;
@@ -2484,10 +2515,10 @@ export class SlotMachine {
     }
     const symbolText = String(symbol ?? '');
     ctx.font = `700 ${this.getSymbolFontSizePx(symbolCellHeight, symbolText)}px "Lucida Sans Unicode", "Lucida Grande", sans-serif`;
-    ctx.fillStyle = 'rgba(44, 29, 9, 0.98)';
-    ctx.strokeStyle = 'rgba(19, 13, 4, 0.82)';
+    ctx.fillStyle = this.ringSettings.symbolFillColor;
+    ctx.strokeStyle = this.ringSettings.symbolStrokeColor;
     ctx.lineWidth = Math.max(0.8, symbolCellHeight * 0.028);
-    ctx.shadowColor = 'rgba(255, 236, 162, 0.98)';
+    ctx.shadowColor = this.ringSettings.symbolGlowColor;
     ctx.shadowBlur = 20;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
@@ -2587,10 +2618,10 @@ export class SlotMachine {
     ctx.scale(projectedWidth / baseCellWidth, projectedHeight / baseCellHeight);
     const symbolText = String(symbol ?? '');
     ctx.font = `700 ${this.getSymbolFontSizePx(baseCellHeight, symbolText)}px "Lucida Sans Unicode", "Lucida Grande", sans-serif`;
-    ctx.fillStyle = 'rgba(44, 29, 9, 0.98)';
-    ctx.strokeStyle = 'rgba(19, 13, 4, 0.82)';
+    ctx.fillStyle = this.ringSettings.symbolFillColor;
+    ctx.strokeStyle = this.ringSettings.symbolStrokeColor;
     ctx.lineWidth = Math.max(0.9, baseCellHeight * 0.03);
-    ctx.shadowColor = 'rgba(255, 236, 162, 0.98)';
+    ctx.shadowColor = this.ringSettings.symbolGlowColor;
     ctx.shadowBlur = 20;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
@@ -3124,7 +3155,7 @@ export class SlotMachine {
 
     const contourGapFill = this.colorWithAlpha(
       this.reelCellFillColor || 'rgba(208, 156, 61, 0.2)',
-      0.7,
+      this.ringSettings.gapFillAlpha,
     );
 
     const drawLoopSegments = (points) => {
@@ -3140,6 +3171,36 @@ export class SlotMachine {
     };
     const drawLoop = (points) => {
       drawLoopSegments(points);
+    };
+    const drawLoopHalf = (points, frontHalf) => {
+      if (!points.length) return;
+      const len = points.length;
+      let drawing = false;
+      ctx.beginPath();
+      for (let i = 0; i <= len; i++) {
+        const p = points[i % len];
+        const visible = frontHalf
+          ? (p.normalViewZ >= 0)
+          : (p.normalViewZ < 0);
+        if (visible) {
+          if (!drawing) {
+            ctx.moveTo(p.x, p.y);
+            drawing = true;
+          } else {
+            ctx.lineTo(p.x, p.y);
+          }
+        } else {
+          drawing = false;
+        }
+      }
+      ctx.stroke();
+    };
+    const drawNamedLoopsHalf = (loops, keys, frontHalf) => {
+      for (let j = 0; j < keys.length; j++) {
+        const loop = loops[keys[j]];
+        if (!Array.isArray(loop) || !loop.length) continue;
+        drawLoopHalf(loop, frontHalf);
+      }
     };
     const drawAnnulusFill = (outerPoints, innerPoints) => {
       if (!outerPoints.length || !innerPoints.length) return;
@@ -3159,6 +3220,30 @@ export class SlotMachine {
       }
       ctx.closePath();
       ctx.fill('evenodd');
+      ctx.restore();
+    };
+    const pulseMinA = this.ringSettings.innerRingPulseMinAlpha;
+    const pulseMaxA = this.ringSettings.innerRingPulseMaxAlpha;
+    const pulseSpeed = this.ringSettings.innerRingPulseSpeed;
+    const innerRingPulse = 0.5 + 0.5 * Math.sin(performance.now() * pulseSpeed);
+    const innerRingAlpha = pulseMinA + (pulseMaxA - pulseMinA) * innerRingPulse;
+    const pulseColorHex = this.ringSettings.innerRingPulseColor;
+    const pulseColorMatch = pulseColorHex.match(/[\d.]+/g);
+    const pulseR = pulseColorMatch ? pulseColorMatch[0] : '208';
+    const pulseG = pulseColorMatch ? pulseColorMatch[1] : '156';
+    const pulseB = pulseColorMatch ? pulseColorMatch[2] : '61';
+    const drawInnerRingFill = (innerPoints) => {
+      if (!innerPoints.length) return;
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = `rgba(${pulseR}, ${pulseG}, ${pulseB}, ${innerRingAlpha.toFixed(3)})`;
+      ctx.beginPath();
+      ctx.moveTo(innerPoints[0].x, innerPoints[0].y);
+      for (let i = 1; i < innerPoints.length; i++) {
+        ctx.lineTo(innerPoints[i].x, innerPoints[i].y);
+      }
+      ctx.closePath();
+      ctx.fill();
       ctx.restore();
     };
 
@@ -3278,17 +3363,6 @@ export class SlotMachine {
       const reelCells = cellsByReel.get(reelIndex) || [];
       const loops = loopsByReel.get(reelIndex);
       if (!loops) continue;
-      ctx.save();
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.strokeStyle = 'rgba(22, 13, 4, 1)';
-      ctx.globalAlpha = 1;
-      ctx.lineWidth = minimalContourStrokeWidth;
-      ctx.lineJoin = 'round';
-      ctx.lineCap = 'round';
-      ctx.shadowBlur = 0;
-
-      // Minimal-priority side (drawn first): visible only where not covered later.
-      // When symmetricEllipses is set, skip the split so both sides draw equally.
       const minimalSide = symmetricEllipses ? null : (faceRight ? 'right' : (faceLeft ? 'left' : null));
       const prioritySide = symmetricEllipses ? null : (faceRight ? 'left' : (faceLeft ? 'right' : null));
       const minimalLoopKeys = minimalSide ? sideLoopKeys[minimalSide] : [];
@@ -3296,15 +3370,32 @@ export class SlotMachine {
       const baseLoopKeys = allLoopKeys.filter((key) => (
         !minimalLoopKeys.includes(key) && !priorityLoopKeys.includes(key)
       ));
-      if (minimalSide) {
+
+      // --- Low-priority contours (drawn first, behind fills and cells) ---
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.strokeStyle = this.ringSettings.contourColor;
+      ctx.globalAlpha = 1;
+      ctx.lineWidth = minimalContourStrokeWidth;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.shadowBlur = 0;
+      if (symmetricEllipses) {
+        // Neutral: back-facing halves of all ellipses drawn first (behind ring surface).
+        drawNamedLoopsHalf(loops, allLoopKeys, false);
+      } else if (minimalSide) {
+        // Swinging: full far-side ellipses drawn first.
         drawNamedLoops(loops, minimalLoopKeys);
       }
       ctx.restore();
 
-      // Fill side/gap surfaces after minimal lines, so minimal side truly stays behind.
+      // --- Fills ---
+      drawInnerRingFill(loops.innerLeft);
+      drawInnerRingFill(loops.innerRight);
       drawAnnulusFill(loops.outerLeft, loops.innerLeft);
       drawAnnulusFill(loops.outerRight, loops.innerRight);
 
+      // --- Cell faces ---
       for (let cellIndex = 0; cellIndex < reelCells.length; cellIndex++) {
         this.drawReelCell(reelCells[cellIndex], 'geometry');
       }
@@ -3312,24 +3403,28 @@ export class SlotMachine {
         this.drawReelCell(reelCells[cellIndex], 'overlay');
       }
 
+      // --- High-priority contours (drawn last, on top of everything) ---
       ctx.save();
       ctx.globalCompositeOperation = 'source-over';
-      ctx.strokeStyle = 'rgba(22, 13, 4, 1)';
+      ctx.strokeStyle = this.ringSettings.contourColor;
       ctx.globalAlpha = 1;
       ctx.lineWidth = contourStrokeWidth;
       ctx.lineJoin = 'round';
       ctx.lineCap = 'round';
       ctx.shadowBlur = 0;
-      if (prioritySide) {
-        drawNamedLoops(loops, baseLoopKeys);
-      }
-      drawConnector(loops.outerLeftTop, loops.outerRightTop);
-
-      if (prioritySide) {
-        drawNamedLoops(loops, priorityLoopKeys);
+      if (symmetricEllipses) {
+        // Neutral: front-facing halves of all ellipses drawn last (visible on top).
+        drawConnector(loops.outerLeftTop, loops.outerRightTop);
+        drawNamedLoopsHalf(loops, allLoopKeys, true);
       } else {
-        // Neutral: all side ellipses are drawn last with total priority.
-        drawNamedLoops(loops, allLoopKeys);
+        // Swinging: current priority-side behavior.
+        if (prioritySide) {
+          drawNamedLoops(loops, baseLoopKeys);
+        }
+        drawConnector(loops.outerLeftTop, loops.outerRightTop);
+        if (prioritySide) {
+          drawNamedLoops(loops, priorityLoopKeys);
+        }
       }
       ctx.restore();
     }
@@ -3844,6 +3939,7 @@ export class SlotMachine {
       // Fullscreen canvas UI (bet, lines, start, stop, etc.)
       if (this.isFullscreen && this.handleFullscreenUIClick(pt)) {
         event.preventDefault();
+        event.stopPropagation();
         return;
       }
 
@@ -3919,7 +4015,7 @@ export class SlotMachine {
       if (this.isFullscreen && pt && this.fsHitRects) {
         let newHover = null;
         const rects = this.fsHitRects;
-        const testKeys = ['start', 'stop', 'joker', 'svemir', 'winAnim', 'betCycle', 'gtCycle'];
+        const testKeys = ['start', 'stop', 'joker', 'svemir', 'winAnim', 'ringCfg', 'betCycle', 'gtCycle'];
         for (let k = 0; k < testKeys.length; k++) {
           const r = rects[testKeys[k]];
           if (r && pt.x >= r.x && pt.x <= r.x + r.w && pt.y >= r.y && pt.y <= r.y + r.h) {
@@ -3960,8 +4056,19 @@ export class SlotMachine {
 
     const handleUp = () => { this.debugDragging = null; };
 
+    // Track when a fullscreen panel was toggled so we can suppress the
+    // subsequent click event that would otherwise bubble to document and
+    // trigger the click-outside handler that closes the panel immediately.
+    let fsPanelToggledAt = 0;
+    this.fsPanelToggled = () => { fsPanelToggledAt = Date.now(); };
+
     this.canvas.addEventListener('mousedown', handleDown);
     this.canvas.addEventListener('touchstart', handleDown, { passive: false });
+    this.canvas.addEventListener('click', (e) => {
+      if (Date.now() - fsPanelToggledAt < 300) {
+        e.stopPropagation();
+      }
+    }, true);
     window.addEventListener('mousemove', handleMove);
     window.addEventListener('touchmove', handleMove, { passive: false });
     window.addEventListener('mouseup', handleUp);
@@ -4047,6 +4154,64 @@ export class SlotMachine {
     this.magicSwingMotionDirection = 0;
   }
 
+  setRingSettings(settings) {
+    if (!settings || typeof settings !== 'object') return;
+    const merged = { ...this.ringSettings, ...settings };
+    this.ringSettings = merged;
+
+    // Apply direct instance properties
+    this.reelCellFillColor = merged.cellFillColor;
+    this.magicSwingSpeedRadPerSec = merged.swingSpeed;
+    this.magicSwingAmplitudeRad = (merged.swingAmplitude * Math.PI) / 180;
+    this.magicCameraDepthOffset = merged.cameraZoom;
+    this.magicCameraPitchRad = merged.cameraPitch;
+
+    // Restart swing if active to pick up new speed/amplitude
+    if (this.magicSwingAnimationFrame) {
+      this.startMagicSwingAnimation();
+    }
+
+    if (!this.reelAnimationFrame) {
+      this.renderFrame();
+    }
+  }
+
+  getRingSettings() {
+    return {
+      ...this.ringSettings,
+      cellFillColor: this.reelCellFillColor,
+      swingSpeed: this.magicSwingSpeedRadPerSec,
+      swingAmplitude: (this.magicSwingAmplitudeRad * 180) / Math.PI,
+      cameraZoom: this.magicCameraDepthOffset,
+      cameraPitch: this.magicCameraPitchRad,
+    };
+  }
+
+  resetRingDefaults() {
+    this.setRingSettings({
+      cellFillColor: 'rgba(208, 156, 61, 0.2)',
+      cellFillAlpha: 0.7,
+      borderColor: 'rgba(56, 36, 12, 0.96)',
+      contourColor: 'rgba(22, 13, 4, 1)',
+      gapFillAlpha: 0.7,
+      diamondDarkGold: 'rgba(122, 84, 20, 0.98)',
+      diamondBrightGold: 'rgba(245, 202, 94, 0.97)',
+      diamondMidGold: 'rgba(187, 131, 42, 0.97)',
+      diamondStrokeColor: 'rgba(219, 162, 54, 0.98)',
+      symbolFillColor: 'rgba(44, 29, 9, 0.98)',
+      symbolStrokeColor: 'rgba(19, 13, 4, 0.82)',
+      symbolGlowColor: 'rgba(255, 236, 162, 0.98)',
+      innerRingPulseColor: 'rgba(208, 156, 61, 1)',
+      innerRingPulseMinAlpha: 0.08,
+      innerRingPulseMaxAlpha: 0.22,
+      innerRingPulseSpeed: 0.002,
+      swingSpeed: 0.3,
+      swingAmplitude: 40,
+      cameraZoom: -34,
+      cameraPitch: -0.08,
+    });
+  }
+
   toggleFullscreen() {
     if (this.isFullscreen) {
       this.exitFullscreen();
@@ -4068,11 +4233,12 @@ export class SlotMachine {
       body.slot-canvas-fullscreen .topbar,
       body.slot-canvas-fullscreen .game-page,
       body.slot-canvas-fullscreen .footer,
-      body.slot-canvas-fullscreen .svemir-control:not(#svemirDropdown):not(#winDropdown) {
+      body.slot-canvas-fullscreen .svemir-control:not(#svemirDropdown):not(#winDropdown):not(#ringDropdown) {
         visibility: hidden !important;
       }
       body.slot-canvas-fullscreen #svemirDropdown,
-      body.slot-canvas-fullscreen #winDropdown {
+      body.slot-canvas-fullscreen #winDropdown,
+      body.slot-canvas-fullscreen #ringDropdown {
         z-index: 10000 !important;
       }
       body.slot-canvas-fullscreen .space-wheels-toggle {
@@ -4297,6 +4463,17 @@ export class SlotMachine {
     // HEADER (full width with margins)
     // ════════════════════════════════════════════════════════════════
     panel(headerX, headerY, headerW, headerH);
+
+    // ── Blazing Sun logo (left side of header) ──
+    if (this.logoImgLoaded && this.logoImg) {
+      const logoMaxH = headerH - pad * 2;
+      const logoAspect = this.logoImg.naturalWidth / this.logoImg.naturalHeight;
+      const logoH = Math.min(logoMaxH, 80);
+      const logoW = logoH * logoAspect;
+      const logoX = headerX + pad + 4;
+      const logoY = headerY + (headerH - logoH) / 2;
+      ctx.drawImage(this.logoImg, logoX, logoY, logoW, logoH);
+    }
 
     const topInner = headerY + pad;
     const startW = 100;
@@ -4528,6 +4705,29 @@ export class SlotMachine {
     ctx.restore();
     this.fsHitRects.winAnim = { x: rbx, y: ry, w: rBtnW, h: waH };
 
+    // Ring Configuration button (two rows, below Win Animation)
+    ry += waH + 4;
+    const rcH = navBtnH;
+    const ringCfgHover = hover === 'ringCfg';
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.3)';
+    ctx.shadowOffsetY = ringCfgHover ? 2 : 4;
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = ringCfgHover ? 0.75 : 0.6;
+    ctx.fillStyle = ringCfgHover ? hoverBg : cardBg;
+    ctx.beginPath(); ctx.roundRect(rbx, ry, rBtnW, rcH, btnR); ctx.fill();
+    ctx.globalAlpha = 1.0;
+    ctx.shadowColor = 'transparent';
+    ctx.strokeStyle = ringCfgHover ? txtS : border;
+    ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = txtS;
+    ctx.font = `500 15px ${F}`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('Ring', rbx + rBtnW / 2, ry + rcH / 2 - 10);
+    ctx.fillText('Configuration', rbx + rBtnW / 2, ry + rcH / 2 + 10);
+    ctx.restore();
+    this.fsHitRects.ringCfg = { x: rbx, y: ry, w: rBtnW, h: rcH };
+
     // ════════════════════════════════════════════════════════════════
     // FOOTER (full width with margins + padding)
     // ════════════════════════════════════════════════════════════════
@@ -4668,26 +4868,22 @@ export class SlotMachine {
     if (hit(this.fsHitRects.svemir)) {
       const dropdown = document.getElementById('svemirDropdown');
       const svemirBtn = document.getElementById('spaceControll');
-      // Close win dropdown if open
+      // Close win and ring dropdowns if open
       const winDd = document.getElementById('winDropdown');
       const winBtn = document.getElementById('winControll');
       if (winDd && !winDd.hidden) {
         winDd.hidden = true;
         if (winBtn) winBtn.setAttribute('aria-expanded', 'false');
       }
+      const ringDd = document.getElementById('ringDropdown');
+      if (ringDd && !ringDd.hidden) ringDd.hidden = true;
       if (dropdown) {
         const willOpen = dropdown.hidden;
         dropdown.hidden = !willOpen;
         if (svemirBtn) svemirBtn.setAttribute('aria-expanded', String(willOpen));
         document.body.classList.toggle('svemir-focus-mode', willOpen);
-        if (willOpen) {
-          const blocker = (e) => {
-            e.stopImmediatePropagation();
-            document.removeEventListener('click', blocker, true);
-          };
-          document.addEventListener('click', blocker, true);
-        }
       }
+      this.fsPanelToggled();
       return true;
     }
 
@@ -4695,26 +4891,47 @@ export class SlotMachine {
     if (hit(this.fsHitRects.winAnim)) {
       const winDropdown = document.getElementById('winDropdown');
       const winBtn = document.getElementById('winControll');
-      // Close space dropdown if open
+      // Close space and ring dropdowns if open
       const spaceDd = document.getElementById('svemirDropdown');
       const spaceBtn = document.getElementById('spaceControll');
       if (spaceDd && !spaceDd.hidden) {
         spaceDd.hidden = true;
         if (spaceBtn) spaceBtn.setAttribute('aria-expanded', 'false');
       }
+      const ringDdW = document.getElementById('ringDropdown');
+      if (ringDdW && !ringDdW.hidden) ringDdW.hidden = true;
       if (winDropdown) {
         const willOpen = winDropdown.hidden;
         winDropdown.hidden = !willOpen;
         if (winBtn) winBtn.setAttribute('aria-expanded', String(willOpen));
         document.body.classList.toggle('svemir-focus-mode', willOpen);
-        if (willOpen) {
-          const blocker = (e) => {
-            e.stopImmediatePropagation();
-            document.removeEventListener('click', blocker, true);
-          };
-          document.addEventListener('click', blocker, true);
-        }
       }
+      this.fsPanelToggled();
+      return true;
+    }
+
+    // Ring Configuration
+    if (hit(this.fsHitRects.ringCfg)) {
+      const ringDropdown = document.getElementById('ringDropdown');
+      // Close space and win dropdowns if open
+      const spaceDd = document.getElementById('svemirDropdown');
+      const spaceBtn = document.getElementById('spaceControll');
+      if (spaceDd && !spaceDd.hidden) {
+        spaceDd.hidden = true;
+        if (spaceBtn) spaceBtn.setAttribute('aria-expanded', 'false');
+      }
+      const winDd = document.getElementById('winDropdown');
+      const winBtn = document.getElementById('winControll');
+      if (winDd && !winDd.hidden) {
+        winDd.hidden = true;
+        if (winBtn) winBtn.setAttribute('aria-expanded', 'false');
+      }
+      if (ringDropdown) {
+        const willOpen = ringDropdown.hidden;
+        ringDropdown.hidden = !willOpen;
+        document.body.classList.toggle('svemir-focus-mode', willOpen);
+      }
+      this.fsPanelToggled();
       return true;
     }
 

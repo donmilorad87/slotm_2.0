@@ -180,6 +180,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ---- Get Session With User ----
+DROP FUNCTION IF EXISTS sp_get_session_with_user(TEXT);
 CREATE OR REPLACE FUNCTION sp_get_session_with_user(p_session_id TEXT)
 RETURNS TABLE(
     session_id TEXT,

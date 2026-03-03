@@ -11,15 +11,26 @@
     <canvas id="space" aria-hidden="true"></canvas>
     <header class="topbar">
       <div class="topbar__left">
-        <a class="svemir-logo" href="/" aria-label="Blazing Sun home">
+        <a class="blazing-sun-logo" href="/" aria-label="Blazing Sun home">
           <img style="height: 4em" src="/assets/images/blazingSun.gif" alt="Blazing Sun logo">
         </a>
-        <span class="topbar__muted">{{user_email}}</span>
       </div>
       <nav class="topbar__right">
-        <a href="/">Home</a>
         <a href="/games">Games</a>
-        <a href="/logout">Logout</a>
+        <div class="topbar__profile">
+          <button class="topbar__avatar" type="button" aria-label="Profile menu" aria-haspopup="true" aria-expanded="false">
+            {{#if user_profile_picture}}
+              <img src="{{user_profile_picture}}" alt="Profile">
+            {{else}}
+              <span class="topbar__avatar-initials">{{user_initials}}</span>
+            {{/if}}
+          </button>
+          <div class="topbar__dropdown" hidden>
+            <a href="/profile">Profile</a>
+            <a href="/wallet">Wallet</a>
+            <a href="/logout">Logout</a>
+          </div>
+        </div>
       </nav>
     </header>
 
@@ -100,6 +111,24 @@
       </section>
     </main>
 
+    <script>
+      (function() {
+        var btn = document.querySelector('.topbar__avatar');
+        var dd = document.querySelector('.topbar__dropdown');
+        if (!btn || !dd) return;
+        btn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          var open = !dd.hidden;
+          dd.hidden = open;
+          btn.setAttribute('aria-expanded', String(!open));
+        });
+        document.addEventListener('click', function() {
+          dd.hidden = true;
+          btn.setAttribute('aria-expanded', 'false');
+        });
+        dd.addEventListener('click', function(e) { e.stopPropagation(); });
+      })();
+    </script>
     <script type="module" src="/assets/js/blazing-background.js"></script>
     <script type="module" src="/assets/js/wallet.js"></script>
   </body>

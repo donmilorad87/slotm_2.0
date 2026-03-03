@@ -10,6 +10,7 @@ import type { NextFunction, Request, Response } from "express";
 import helmet from "helmet";
 import jwt from "jsonwebtoken";
 import morgan from "morgan";
+import multer from "multer";
 import type { ParsedQs } from "qs";
 import rateLimit from "express-rate-limit";
 
@@ -42,6 +43,33 @@ const SLOT_MACHINE_MARKUP_PATH = path.join(TEMPLATE_DIR, "slot-machine-markup.ht
 const CLIENT_DIR = path.join(DIST_DIR, "client");
 const CLIENT_STYLES_DIR = path.join(CLIENT_DIR, "styles");
 const CLIENT_IMAGES_DIR = path.join(CLIENT_DIR, "images");
+const UPLOADS_DIR = path.join(DIST_DIR, "..", "uploads");
+
+const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
+const MAX_UPLOAD_SIZE = 2 * 1024 * 1024;
+
+const uploadStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    cb(null, UPLOADS_DIR);
+  },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || ".jpg";
+    const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    cb(null, `profile-${unique}${ext}`);
+  },
+});
+
+const upload = multer({
+  storage: uploadStorage,
+  limits: { fileSize: MAX_UPLOAD_SIZE },
+  fileFilter: (_req, file, cb) => {
+    if (ALLOWED_MIME_TYPES.has(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only JPEG, PNG, GIF, and WebP images are allowed"));
+    }
+  },
+});
 
 const PORT = Number(process.env.PORT || 4300);
 const HOST = process.env.HOST || "0.0.0.0";
@@ -433,6 +461,39 @@ interface WalletRemoveCardBody {
   paymentMethodId?: unknown;
 }
 
+function userInitials(user: SlotUser): string {
+  const first = (user.firstName || "").trim();
+  const last = (user.lastName || "").trim();
+  if (first.length > 0 && last.length > 0) {
+    return (first.charAt(0) + last.charAt(0)).toUpperCase();
+  }
+  if (first.length > 0) {
+    return first.slice(0, 2).toUpperCase();
+  }
+  return (user.email || "?").slice(0, 2).toUpperCase();
+}
+
+function userTemplateData(user: SlotUser): Record<string, string> {
+  return {
+    user_email: user.email,
+    user_first_name: user.firstName || "",
+    user_last_name: user.lastName || "",
+    user_profile_picture: user.profilePicture || "",
+    user_initials: userInitials(user),
+  };
+}
+
+interface ProfileUpdateBody {
+  firstName?: unknown;
+  lastName?: unknown;
+}
+
+interface PasswordChangeBody {
+  currentPassword?: unknown;
+  newPassword?: unknown;
+  confirmPassword?: unknown;
+}
+
 async function handleGamePage(req: Request, res: Response): Promise<void> {
   const auth = requireAuthUser(req);
   const user = auth.user;
@@ -440,15 +501,16 @@ async function handleGamePage(req: Request, res: Response): Promise<void> {
   const freshUser = await store.getUserById(user.id);
   const userBalanceCoins = await store.getBalanceCoins(user.id);
 
+  const profileUser = freshUser || user;
   const html = await renderTemplate(path.join(TEMPLATE_DIR, "slot-machine.hbs"), {
     title: "Slot Machine - slotm",
     user_id: String(user.id),
-    user_email: freshUser?.email || user.email,
     user_balance_coins: String(userBalanceCoins),
     jwt_token: auth.token || "",
     slot_machine_markup: await getSlotMachineMarkup(),
     stripe_public_key: env.STRIPE_KEY || "",
     flash_message: finalize.flash || "",
+    ...userTemplateData(profileUser),
   });
 
   res.status(200).set("Content-Type", "text/html; charset=utf-8").send(html);
@@ -460,7 +522,7 @@ async function handleGamesPage(req: Request, res: Response): Promise<void> {
 
   const html = await renderTemplate(path.join(TEMPLATE_DIR, "games.hbs"), {
     title: "Games - slotm",
-    user_email: user.email,
+    ...userTemplateData(user),
   });
 
   res.status(200).set("Content-Type", "text/html; charset=utf-8").send(html);
@@ -486,14 +548,15 @@ async function handleWalletPage(req: Request, res: Response): Promise<void> {
   const txRows = txRowsHtml(await store.listTransactions(user.id, WALLET_TX_PAGE_SIZE));
   const cardRows = cardRowsHtml(cards, freshUser?.defaultPaymentMethodId || "");
 
+  const walletUser = freshUser || user;
   const html = await renderTemplate(path.join(TEMPLATE_DIR, "wallet.hbs"), {
     title: "Wallet - slotm",
-    user_email: freshUser?.email || user.email,
     user_balance_coins: String(userBalanceCoins),
     flash_message: finalize.flash || "",
     transactions_rows_html: txRows,
     cards_rows_html: cardRows,
     stripe_configured: stripe.isConfigured() ? "yes" : "no",
+    ...userTemplateData(walletUser),
   });
 
   res.status(200).set("Content-Type", "text/html; charset=utf-8").send(html);
@@ -506,7 +569,7 @@ async function handleRootPage(req: Request, res: Response): Promise<void> {
   try {
     const html = await renderTemplate(path.join(TEMPLATE_DIR, "home.hbs"), {
       title: "Blazing Sun - Home",
-      user_email: user.email,
+      ...userTemplateData(user),
     });
     res.status(200).set("Content-Type", "text/html; charset=utf-8").send(html);
   } catch (error) {
@@ -994,7 +1057,101 @@ async function handleWalletTransactions(req: Request, res: Response): Promise<vo
   }
 }
 
+async function handleProfilePage(req: Request, res: Response): Promise<void> {
+  const auth = requireAuthUser(req);
+  const freshUser = await store.getUserById(auth.user.id);
+  const user = freshUser || auth.user;
+
+  const html = await renderTemplate(path.join(TEMPLATE_DIR, "profile.hbs"), {
+    title: "Profile - slotm",
+    ...userTemplateData(user),
+  });
+
+  res.status(200).set("Content-Type", "text/html; charset=utf-8").send(html);
+}
+
+async function handleUpdateProfile(req: Request, res: Response): Promise<void> {
+  try {
+    const auth = requireAuthUser(req);
+    const payload = (req.body || {}) as ProfileUpdateBody;
+    const firstName = String(payload.firstName || "").trim().slice(0, 100);
+    const lastName = String(payload.lastName || "").trim().slice(0, 100);
+
+    await store.updateUserProfile(auth.user.id, firstName, lastName);
+    res.status(200).json({ success: true, data: { firstName, lastName } });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: toErrorMessage(error, "Failed to update profile"),
+    });
+  }
+}
+
+async function handleChangePassword(req: Request, res: Response): Promise<void> {
+  try {
+    const auth = requireAuthUser(req);
+    const payload = (req.body || {}) as PasswordChangeBody;
+    const currentPassword = String(payload.currentPassword || "");
+    const newPassword = String(payload.newPassword || "");
+    const confirmPassword = String(payload.confirmPassword || "");
+
+    if (!currentPassword) {
+      res.status(400).json({ success: false, message: "Current password is required" });
+      return;
+    }
+    if (newPassword.length < 6) {
+      res.status(400).json({ success: false, message: "New password must be at least 6 characters" });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      res.status(400).json({ success: false, message: "New passwords do not match" });
+      return;
+    }
+
+    const freshUser = await store.getUserById(auth.user.id);
+    if (!freshUser) {
+      res.status(400).json({ success: false, message: "User not found" });
+      return;
+    }
+
+    if (!verifyPassword(currentPassword, freshUser.passwordSalt, freshUser.passwordHash)) {
+      res.status(400).json({ success: false, message: "Current password is incorrect" });
+      return;
+    }
+
+    const pw = hashPassword(newPassword);
+    await store.updateUserPassword(auth.user.id, pw.hash, pw.salt);
+    res.status(200).json({ success: true, data: { message: "Password changed successfully" } });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: toErrorMessage(error, "Failed to change password"),
+    });
+  }
+}
+
+async function handleUploadProfilePicture(req: Request, res: Response): Promise<void> {
+  try {
+    const auth = requireAuthUser(req);
+    const file = req.file;
+    if (!file) {
+      res.status(400).json({ success: false, message: "No file uploaded" });
+      return;
+    }
+
+    const picturePath = `/assets/uploads/${file.filename}`;
+    await store.updateUserProfilePicture(auth.user.id, picturePath);
+    res.status(200).json({ success: true, data: { profilePicture: picturePath } });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: toErrorMessage(error, "Failed to upload profile picture"),
+    });
+  }
+}
+
 async function start(): Promise<void> {
+  await fs.mkdir(UPLOADS_DIR, { recursive: true });
   await store.init();
   console.log("[slotm] PostgreSQL migrations applied");
 
@@ -1065,6 +1222,7 @@ async function start(): Promise<void> {
   app.use("/assets/images", express.static(CLIENT_IMAGES_DIR, { index: false, fallthrough: false }));
   app.use("/assets/js", express.static(CLIENT_DIR, { index: false, fallthrough: false }));
   app.use("/assets/css", express.static(CLIENT_STYLES_DIR, { index: false, fallthrough: false }));
+  app.use("/assets/uploads", express.static(UPLOADS_DIR, { index: false, fallthrough: false }));
 
   app.post("/api/wallet/stripe/webhook", express.raw({ type: "application/json", limit: "5mb" }), handleStripeWebhook);
 
@@ -1093,6 +1251,7 @@ async function start(): Promise<void> {
     optionalJwt,
     requireJwt,
     authLimiter,
+    upload,
     handleRootPage,
     handleGamesPage,
     handleLoginPage,
@@ -1103,6 +1262,10 @@ async function start(): Promise<void> {
     handleAuthLogout,
     handleGamePage,
     handleWalletPage,
+    handleProfilePage,
+    handleUpdateProfile,
+    handleChangePassword,
+    handleUploadProfilePicture,
     handleApiGames,
     handleHistoryApi,
     handleWalletCreateTopup,

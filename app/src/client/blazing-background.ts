@@ -44,6 +44,57 @@ const PARALLAX_SMOOTHING = 0.16;
 const STAR_SETTINGS_STORAGE_KEY = "slotm.space.settings.v1";
 
 const WIN_SETTINGS_STORAGE_KEY = "slotm.win.settings.v1";
+const RING_SETTINGS_STORAGE_KEY = "slotm.ring.settings.v1";
+const RING_PANEL_ID = "ringDropdown";
+
+const DEFAULT_RING_SETTINGS = Object.freeze({
+  cellFillColor: "rgba(208, 156, 61, 0.2)",
+  cellFillAlpha: 0.7,
+  borderColor: "rgba(56, 36, 12, 0.96)",
+  contourColor: "rgba(22, 13, 4, 1)",
+  gapFillAlpha: 0.7,
+  diamondDarkGold: "rgba(122, 84, 20, 0.98)",
+  diamondBrightGold: "rgba(245, 202, 94, 0.97)",
+  diamondMidGold: "rgba(187, 131, 42, 0.97)",
+  diamondStrokeColor: "rgba(219, 162, 54, 0.98)",
+  symbolFillColor: "rgba(44, 29, 9, 0.98)",
+  symbolStrokeColor: "rgba(19, 13, 4, 0.82)",
+  symbolGlowColor: "rgba(255, 236, 162, 0.98)",
+  innerRingPulseColor: "rgba(208, 156, 61, 1)",
+  innerRingPulseMinAlpha: 0.08,
+  innerRingPulseMaxAlpha: 0.22,
+  innerRingPulseSpeed: 0.002,
+  swingSpeed: 0.3,
+  swingAmplitude: 40,
+  cameraZoom: -34,
+  cameraPitch: -0.08,
+});
+
+const RING_CONTROL_BINDINGS = [
+  { id: "sv-ring-cellFillAlpha", setting: "cellFillAlpha", type: "float" },
+  { id: "sv-ring-gapFillAlpha", setting: "gapFillAlpha", type: "float" },
+  { id: "sv-ring-pulseMinAlpha", setting: "innerRingPulseMinAlpha", type: "float" },
+  { id: "sv-ring-pulseMaxAlpha", setting: "innerRingPulseMaxAlpha", type: "float" },
+  { id: "sv-ring-pulseSpeed", setting: "innerRingPulseSpeed", type: "float" },
+  { id: "sv-ring-swingSpeed", setting: "swingSpeed", type: "float" },
+  { id: "sv-ring-swingAmplitude", setting: "swingAmplitude", type: "float" },
+  { id: "sv-ring-cameraZoom", setting: "cameraZoom", type: "float" },
+  { id: "sv-ring-cameraPitch", setting: "cameraPitch", type: "float" },
+];
+
+const RING_COLOR_BINDINGS = [
+  { id: "sv-ring-cellFillColor", setting: "cellFillColor" },
+  { id: "sv-ring-borderColor", setting: "borderColor" },
+  { id: "sv-ring-contourColor", setting: "contourColor" },
+  { id: "sv-ring-diamondDarkGold", setting: "diamondDarkGold" },
+  { id: "sv-ring-diamondBrightGold", setting: "diamondBrightGold" },
+  { id: "sv-ring-diamondMidGold", setting: "diamondMidGold" },
+  { id: "sv-ring-diamondStrokeColor", setting: "diamondStrokeColor" },
+  { id: "sv-ring-symbolFillColor", setting: "symbolFillColor" },
+  { id: "sv-ring-symbolStrokeColor", setting: "symbolStrokeColor" },
+  { id: "sv-ring-symbolGlowColor", setting: "symbolGlowColor" },
+  { id: "sv-ring-pulseColor", setting: "innerRingPulseColor" },
+];
 
 const DEFAULT_WIN_SETTINGS = Object.freeze({
   mode: "magic_stars",
@@ -314,6 +365,128 @@ const WIN_DROPDOWN_TEMPLATE = `<div id="winDropdown" class="space-configuration 
     <button type="button" class="svemir-action" data-action="preview-win">Preview</button>
     <button type="button" class="svemir-action" data-action="stop-win">Stop</button>
   </div>
+</div>`;
+
+const RING_DROPDOWN_TEMPLATE = `<div id="ringDropdown" class="space-configuration svemir-control" hidden>
+  <button type="button" class="svemir-close" data-action="close-ring-panel" aria-label="Close">\u2715</button>
+  <h2>Ring Configuration</h2>
+
+  <h3 class="svemir-section-title">Colors</h3>
+
+  <label class="svemir-row svemir-row--color" for="sv-ring-cellFillColor">
+    <span>Cell Fill</span>
+    <input id="sv-ring-cellFillColor" type="color" value="#d09c3d">
+  </label>
+
+  <label class="svemir-row" for="sv-ring-cellFillAlpha">
+    <span>Cell Fill Alpha</span>
+    <input id="sv-ring-cellFillAlpha" type="range" min="0" max="1" step="0.01" value="0.7" data-output="sv-rout-cellFillAlpha">
+    <strong id="sv-rout-cellFillAlpha" class="svemir-value">0.70</strong>
+  </label>
+
+  <label class="svemir-row svemir-row--color" for="sv-ring-borderColor">
+    <span>Border Color</span>
+    <input id="sv-ring-borderColor" type="color" value="#38240c">
+  </label>
+
+  <label class="svemir-row svemir-row--color" for="sv-ring-contourColor">
+    <span>Contour Color</span>
+    <input id="sv-ring-contourColor" type="color" value="#160d04">
+  </label>
+
+  <label class="svemir-row svemir-row--color" for="sv-ring-diamondDarkGold">
+    <span>Diamond Dark</span>
+    <input id="sv-ring-diamondDarkGold" type="color" value="#7a5414">
+  </label>
+
+  <label class="svemir-row svemir-row--color" for="sv-ring-diamondBrightGold">
+    <span>Diamond Bright</span>
+    <input id="sv-ring-diamondBrightGold" type="color" value="#f5ca5e">
+  </label>
+
+  <label class="svemir-row svemir-row--color" for="sv-ring-diamondMidGold">
+    <span>Diamond Mid</span>
+    <input id="sv-ring-diamondMidGold" type="color" value="#bb832a">
+  </label>
+
+  <label class="svemir-row svemir-row--color" for="sv-ring-diamondStrokeColor">
+    <span>Diamond Stroke</span>
+    <input id="sv-ring-diamondStrokeColor" type="color" value="#dba236">
+  </label>
+
+  <label class="svemir-row svemir-row--color" for="sv-ring-symbolFillColor">
+    <span>Symbol Fill</span>
+    <input id="sv-ring-symbolFillColor" type="color" value="#2c1d09">
+  </label>
+
+  <label class="svemir-row svemir-row--color" for="sv-ring-symbolStrokeColor">
+    <span>Symbol Stroke</span>
+    <input id="sv-ring-symbolStrokeColor" type="color" value="#130d04">
+  </label>
+
+  <label class="svemir-row svemir-row--color" for="sv-ring-symbolGlowColor">
+    <span>Symbol Glow</span>
+    <input id="sv-ring-symbolGlowColor" type="color" value="#ffeca2">
+  </label>
+
+  <h3 class="svemir-section-title">Inner Ring Pulse</h3>
+
+  <label class="svemir-row svemir-row--color" for="sv-ring-pulseColor">
+    <span>Pulse Color</span>
+    <input id="sv-ring-pulseColor" type="color" value="#d09c3d">
+  </label>
+
+  <label class="svemir-row" for="sv-ring-pulseMinAlpha">
+    <span>Pulse Min Alpha</span>
+    <input id="sv-ring-pulseMinAlpha" type="range" min="0" max="0.5" step="0.01" value="0.08" data-output="sv-rout-pulseMinAlpha">
+    <strong id="sv-rout-pulseMinAlpha" class="svemir-value">0.08</strong>
+  </label>
+
+  <label class="svemir-row" for="sv-ring-pulseMaxAlpha">
+    <span>Pulse Max Alpha</span>
+    <input id="sv-ring-pulseMaxAlpha" type="range" min="0" max="0.5" step="0.01" value="0.22" data-output="sv-rout-pulseMaxAlpha">
+    <strong id="sv-rout-pulseMaxAlpha" class="svemir-value">0.22</strong>
+  </label>
+
+  <label class="svemir-row" for="sv-ring-pulseSpeed">
+    <span>Pulse Speed</span>
+    <input id="sv-ring-pulseSpeed" type="range" min="0.0005" max="0.01" step="0.0005" value="0.002" data-output="sv-rout-pulseSpeed">
+    <strong id="sv-rout-pulseSpeed" class="svemir-value">0.0020</strong>
+  </label>
+
+  <h3 class="svemir-section-title">Ring Animation</h3>
+
+  <label class="svemir-row" for="sv-ring-swingSpeed">
+    <span>Swing Speed</span>
+    <input id="sv-ring-swingSpeed" type="range" min="0.05" max="2.0" step="0.05" value="0.3" data-output="sv-rout-swingSpeed">
+    <strong id="sv-rout-swingSpeed" class="svemir-value">0.30</strong>
+  </label>
+
+  <label class="svemir-row" for="sv-ring-swingAmplitude">
+    <span>Swing Amplitude</span>
+    <input id="sv-ring-swingAmplitude" type="range" min="5" max="90" step="1" value="40" data-output="sv-rout-swingAmplitude">
+    <strong id="sv-rout-swingAmplitude" class="svemir-value">40</strong>
+  </label>
+
+  <label class="svemir-row" for="sv-ring-cameraZoom">
+    <span>Camera Zoom</span>
+    <input id="sv-ring-cameraZoom" type="range" min="-100" max="0" step="1" value="-34" data-output="sv-rout-cameraZoom">
+    <strong id="sv-rout-cameraZoom" class="svemir-value">-34</strong>
+  </label>
+
+  <label class="svemir-row" for="sv-ring-cameraPitch">
+    <span>Camera Pitch</span>
+    <input id="sv-ring-cameraPitch" type="range" min="-0.5" max="0.5" step="0.01" value="-0.08" data-output="sv-rout-cameraPitch">
+    <strong id="sv-rout-cameraPitch" class="svemir-value">-0.08</strong>
+  </label>
+
+  <label class="svemir-row" for="sv-ring-gapFillAlpha">
+    <span>Gap Fill Alpha</span>
+    <input id="sv-ring-gapFillAlpha" type="range" min="0" max="1" step="0.01" value="0.7" data-output="sv-rout-gapFillAlpha">
+    <strong id="sv-rout-gapFillAlpha" class="svemir-value">0.70</strong>
+  </label>
+
+  <button type="button" class="svemir-reset" data-action="reset-ring">Restore default ring</button>
 </div>`;
 
 const MOVING_VERTEX_SHADER = `
@@ -1133,7 +1306,12 @@ class BlazingStarfield {
       const offset = i * 7;
       this.staticRenderData[offset] = Math.random() * this.canvas.width;
       this.staticRenderData[offset + 1] = this.staticMinY + Math.random() * this.staticSpanY;
-      this.staticRenderData[offset + 2] = 0.2 + Math.random() * 1.2;
+      // Every ~100th star gets a random size coefficient (2x-4x),
+      // the rest stay at base size (1.0 × staticStarRadius).
+      const isBig = (i % 100 === 0) || (Math.random() < 0.01);
+      this.staticRenderData[offset + 2] = isBig
+        ? 2.0 + Math.random() * 2.0
+        : 1.0;
       this.staticRenderData[offset + 3] = 0.12 + Math.random() * 0.45;
       this.staticRenderData[offset + 4] = Math.random() * Math.PI * 2;
       this.staticRenderData[offset + 5] = 0.45 + Math.random() * 4.4;
@@ -1865,6 +2043,75 @@ function clearSavedWinSettings() {
   }
 }
 
+function rgbaToHex(rgba) {
+  const match = rgba.match(/[\d.]+/g);
+  if (!match || match.length < 3) return "#000000";
+  const r = Math.round(Number(match[0]));
+  const g = Math.round(Number(match[1]));
+  const b = Math.round(Number(match[2]));
+  return "#" + [r, g, b].map(c => c.toString(16).padStart(2, "0")).join("");
+}
+
+function rgbaAlpha(rgba) {
+  const match = rgba.match(/[\d.]+/g);
+  if (!match || match.length < 4) return 1;
+  return Number(match[3]);
+}
+
+function hexToRgba(hex, alpha = 1) {
+  const h = hex.replace("#", "");
+  const r = parseInt(h.substring(0, 2), 16);
+  const g = parseInt(h.substring(2, 4), 16);
+  const b = parseInt(h.substring(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(2)})`;
+}
+
+function loadSavedRingSettings() {
+  try {
+    const raw = window.localStorage.getItem(RING_SETTINGS_STORAGE_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+
+    const allowed = Object.keys(DEFAULT_RING_SETTINGS);
+    const sanitized = {};
+
+    for (let i = 0; i < allowed.length; i += 1) {
+      const key = allowed[i];
+      const value = parsed[key];
+      if (typeof value === "number" && Number.isFinite(value)) {
+        sanitized[key] = value;
+      } else if (typeof value === "string" && value.length < 80) {
+        sanitized[key] = value;
+      }
+    }
+
+    return sanitized;
+  } catch {
+    return null;
+  }
+}
+
+function saveRingSettings(settings) {
+  try {
+    window.localStorage.setItem(
+      RING_SETTINGS_STORAGE_KEY,
+      JSON.stringify(settings),
+    );
+  } catch {
+    // Ignore storage errors.
+  }
+}
+
+function clearSavedRingSettings() {
+  try {
+    window.localStorage.removeItem(RING_SETTINGS_STORAGE_KEY);
+  } catch {
+    // Ignore storage errors.
+  }
+}
+
 function createSpaceLoader() {
   const wrap = document.createElement("div");
   wrap.className = "space-loader-wrap";
@@ -1908,7 +2155,7 @@ function ensureSvemirControlPanel() {
 
   // Place button in topbar next to logo
   if (!hasButton) {
-    const logo = document.querySelector(".svemir-logo");
+    const logo = document.querySelector(".blazing-sun-logo");
     if (logo && logo.parentElement) {
       const temp = document.createElement("template");
       temp.innerHTML = SPACE_BUTTON_TEMPLATE;
@@ -1957,6 +2204,23 @@ function ensureWinControlPanel() {
         document.body.prepend(winEl);
       }
     }
+  }
+}
+
+function ensureRingControlPanel() {
+  const hasDropdown = document.getElementById(RING_PANEL_ID);
+  if (hasDropdown) {
+    return;
+  }
+
+  const temp = document.createElement("template");
+  temp.innerHTML = RING_DROPDOWN_TEMPLATE;
+  const ringEl = temp.content.firstElementChild;
+  const winDropdown = document.getElementById(WIN_PANEL_ID);
+  if (winDropdown) {
+    winDropdown.after(ringEl);
+  } else {
+    document.body.appendChild(ringEl);
   }
 }
 
@@ -2102,9 +2366,18 @@ function bindSvemirControlPanel(starfield) {
     }
   }
 
+  function closeRingPanel() {
+    const ringDd = document.getElementById(RING_PANEL_ID);
+    if (ringDd && !ringDd.hidden) {
+      ringDd.hidden = true;
+    }
+  }
+
   function setPanelOpen(open) {
     if (open) {
       closeWinPanel();
+      closeRingPanel();
+      if (window.__closeCrawlPanel) window.__closeCrawlPanel();
     }
     dropdown.hidden = !open;
     button.setAttribute("aria-expanded", String(open));
@@ -2205,9 +2478,18 @@ function bindWinControlPanel(starfield) {
     }
   }
 
+  function closeRingPanelFromWin() {
+    const ringDd = document.getElementById(RING_PANEL_ID);
+    if (ringDd && !ringDd.hidden) {
+      ringDd.hidden = true;
+    }
+  }
+
   function setWinPanelOpen(open) {
     if (open) {
       closeSpacePanel();
+      closeRingPanelFromWin();
+      if (window.__closeCrawlPanel) window.__closeCrawlPanel();
     }
     dropdown.hidden = !open;
     if (winButton) {
@@ -2439,12 +2721,258 @@ function bindWinControlPanel(starfield) {
   }
 }
 
+function bindRingControlPanel() {
+  const dropdown = document.getElementById(RING_PANEL_ID);
+  if (!(dropdown instanceof HTMLElement)) return;
+
+  const rangeControls = [];
+  for (let i = 0; i < RING_CONTROL_BINDINGS.length; i += 1) {
+    const binding = RING_CONTROL_BINDINGS[i];
+    const input = document.getElementById(binding.id);
+    if (input instanceof HTMLInputElement) {
+      let numberInput = null;
+      if (input.type === "range") {
+        const numberId = `${binding.id}-input`;
+        const existing = document.getElementById(numberId);
+        if (existing instanceof HTMLInputElement) {
+          numberInput = existing;
+        } else {
+          numberInput = document.createElement("input");
+          numberInput.id = numberId;
+          numberInput.type = "number";
+          numberInput.className = "svemir-number";
+          numberInput.min = input.min;
+          numberInput.max = input.max;
+          numberInput.step = input.step || "0.01";
+          numberInput.value = input.value;
+          const labelText = input
+            .closest("label")
+            ?.querySelector("span")
+            ?.textContent?.trim();
+          if (labelText) {
+            numberInput.setAttribute("aria-label", `${labelText} value`);
+          }
+          numberInput.setAttribute("inputmode", "decimal");
+          input.insertAdjacentElement("afterend", numberInput);
+        }
+      }
+      rangeControls.push({ input, numberInput, binding });
+    }
+  }
+
+  const colorControls = [];
+  for (let i = 0; i < RING_COLOR_BINDINGS.length; i += 1) {
+    const binding = RING_COLOR_BINDINGS[i];
+    const input = document.getElementById(binding.id);
+    if (input instanceof HTMLInputElement) {
+      colorControls.push({ input, binding });
+    }
+  }
+
+  function closeSpacePanel() {
+    const spaceDropdown = document.getElementById(CONTROL_PANEL_ID);
+    const spaceBtn = document.getElementById(CONTROL_BUTTON_ID);
+    if (spaceDropdown && !spaceDropdown.hidden) {
+      spaceDropdown.hidden = true;
+      if (spaceBtn) spaceBtn.setAttribute("aria-expanded", "false");
+    }
+  }
+
+  function closeWinPanel() {
+    const winDropdown = document.getElementById(WIN_PANEL_ID);
+    const winBtn = document.getElementById(WIN_BUTTON_ID);
+    if (winDropdown && !winDropdown.hidden) {
+      winDropdown.hidden = true;
+      if (winBtn) winBtn.setAttribute("aria-expanded", "false");
+    }
+  }
+
+  function setRingPanelOpen(open) {
+    if (open) {
+      closeSpacePanel();
+      closeWinPanel();
+      if (window.__closeCrawlPanel) window.__closeCrawlPanel();
+    }
+    dropdown.hidden = !open;
+    document.body.classList.toggle("svemir-focus-mode", open);
+  }
+
+  function syncRingOutputs() {
+    for (let i = 0; i < rangeControls.length; i += 1) {
+      const item = rangeControls[i];
+      const outputId = item.input.dataset.output;
+      if (!outputId) continue;
+      const output = document.getElementById(outputId);
+      if (output) {
+        output.textContent = formatControlValue(item.input);
+      }
+    }
+  }
+
+  function readRingSettingsFromInputs() {
+    const next = {};
+    for (let i = 0; i < rangeControls.length; i += 1) {
+      const item = rangeControls[i];
+      const parsed = Number.parseFloat(item.input.value);
+      if (Number.isFinite(parsed)) {
+        next[item.binding.setting] = parsed;
+      }
+    }
+    for (let i = 0; i < colorControls.length; i += 1) {
+      const item = colorControls[i];
+      const defaultRgba = DEFAULT_RING_SETTINGS[item.binding.setting];
+      const alpha = rgbaAlpha(defaultRgba);
+      next[item.binding.setting] = hexToRgba(item.input.value, alpha);
+    }
+    return next;
+  }
+
+  function writeRingSettingsToInputs(settings) {
+    for (let i = 0; i < rangeControls.length; i += 1) {
+      const item = rangeControls[i];
+      const value = settings[item.binding.setting];
+      if (typeof value === "number") {
+        const min = Number(item.input.min);
+        const max = Number(item.input.max);
+        let normalized = value;
+        if (Number.isFinite(min)) normalized = Math.max(min, normalized);
+        if (Number.isFinite(max)) normalized = Math.min(max, normalized);
+        item.input.value = String(normalized);
+        if (item.numberInput) item.numberInput.value = String(normalized);
+      }
+    }
+    for (let i = 0; i < colorControls.length; i += 1) {
+      const item = colorControls[i];
+      const value = settings[item.binding.setting];
+      if (typeof value === "string") {
+        item.input.value = rgbaToHex(value);
+      }
+    }
+    syncRingOutputs();
+  }
+
+  function applyRingSettings() {
+    const settings = readRingSettingsFromInputs();
+    document.dispatchEvent(
+      new CustomEvent("slotm:ring-settings", { detail: settings }),
+    );
+    saveRingSettings(settings);
+  }
+
+  // Load initial values
+  const saved = loadSavedRingSettings();
+  const initial = { ...DEFAULT_RING_SETTINGS, ...(saved || {}) };
+  writeRingSettingsToInputs(initial);
+
+  // Range input listeners
+  for (let i = 0; i < rangeControls.length; i += 1) {
+    const item = rangeControls[i];
+    item.input.addEventListener("input", () => {
+      if (item.numberInput) item.numberInput.value = item.input.value;
+      syncRingOutputs();
+      applyRingSettings();
+    });
+
+    if (item.numberInput) {
+      const syncFromNumber = () => {
+        const parsed = Number.parseFloat(item.numberInput.value);
+        if (!Number.isFinite(parsed)) return;
+        const min = Number(item.input.min);
+        const max = Number(item.input.max);
+        let normalized = parsed;
+        if (Number.isFinite(min)) normalized = Math.max(min, normalized);
+        if (Number.isFinite(max)) normalized = Math.min(max, normalized);
+        item.input.value = String(normalized);
+        item.numberInput.value = String(normalized);
+        syncRingOutputs();
+        applyRingSettings();
+      };
+      item.numberInput.addEventListener("input", syncFromNumber);
+      item.numberInput.addEventListener("change", syncFromNumber);
+    }
+  }
+
+  // Color input listeners
+  for (let i = 0; i < colorControls.length; i += 1) {
+    const item = colorControls[i];
+    item.input.addEventListener("input", () => {
+      applyRingSettings();
+    });
+  }
+
+  // Close button
+  const closeBtn = dropdown.querySelector("[data-action='close-ring-panel']");
+  if (closeBtn instanceof HTMLButtonElement) {
+    closeBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      setRingPanelOpen(false);
+    });
+  }
+
+  // Reset button
+  const resetBtn = dropdown.querySelector("[data-action='reset-ring']");
+  if (resetBtn instanceof HTMLButtonElement) {
+    resetBtn.addEventListener("click", () => {
+      clearSavedRingSettings();
+      writeRingSettingsToInputs(DEFAULT_RING_SETTINGS);
+      document.dispatchEvent(
+        new CustomEvent("slotm:ring-settings", { detail: { ...DEFAULT_RING_SETTINGS } }),
+      );
+    });
+  }
+
+  // Click outside closes
+  dropdown.addEventListener("click", (event) => {
+    event.stopPropagation();
+  });
+
+  document.addEventListener("click", () => {
+    if (!dropdown.hidden) {
+      setRingPanelOpen(false);
+    }
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !dropdown.hidden) {
+      setRingPanelOpen(false);
+    }
+  });
+
+  // Dispatch initial settings
+  document.dispatchEvent(
+    new CustomEvent("slotm:ring-settings", { detail: initial }),
+  );
+}
+
+function ensureCrawlConfigButton() {
+  // Only on homepage (where the crawl canvas exists)
+  if (!document.getElementById("swCrawlCanvas")) return;
+  if (document.getElementById("crawlConfigBtn")) return;
+
+  // Place crawl config button right after Space Controls button
+  const spaceBtn = document.getElementById(CONTROL_BUTTON_ID);
+  if (!spaceBtn) return;
+
+  const cfgBtn = document.createElement("button");
+  cfgBtn.id = "crawlConfigBtn";
+  cfgBtn.type = "button";
+  cfgBtn.className = "svemir-toggle";
+  cfgBtn.textContent = "Opening Crawl";
+  cfgBtn.setAttribute("aria-haspopup", "true");
+  cfgBtn.setAttribute("aria-expanded", "false");
+  cfgBtn.setAttribute("aria-controls", "crawlConfigDropdown");
+  spaceBtn.after(cfgBtn);
+}
+
 function initBlazingBackground() {
   const isGamePage = !!document.getElementById("slotMachineRoot");
   const loader = isGamePage ? createSpaceLoader() : null;
   const canvas = ensureBackgroundCanvas();
   ensureSvemirControlPanel();
-  ensureWinControlPanel();
+  if (isGamePage) {
+    ensureWinControlPanel();
+    ensureRingControlPanel();
+  }
 
   const starfield = new BlazingStarfield(canvas, loadSavedStarSettings() || {});
 
@@ -2465,6 +2993,8 @@ function initBlazingBackground() {
 
   bindSvemirControlPanel(starfield);
   bindWinControlPanel(starfield);
+  bindRingControlPanel();
+  ensureCrawlConfigButton();
 
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {

@@ -7,44 +7,189 @@
     <link rel="icon" type="image/gif" href="/assets/images/blazingSun.gif">
     <link rel="stylesheet" href="/assets/css/main.css">
   </head>
-  <body class="theme-blazing-sun">
+  <body class="theme-blazing-sun sw-active">
     <canvas id="space" aria-hidden="true"></canvas>
+
+    <!-- ========================================
+         STAR WARS OPENING CRAWL (Canvas)
+         ======================================== -->
+    <canvas id="swCrawlCanvas" class="sw-crawl-canvas" aria-label="Opening crawl animation"></canvas>
+    <button class="sw-skip" id="swSkip" type="button" aria-label="Skip intro">Skip</button>
+
+    <!-- ========================================
+         PAGE CONTENT
+         ======================================== -->
     <header class="topbar">
       <div class="topbar__left">
-        <a class="svemir-logo" href="/" aria-label="Blazing Sun home">
+        <a class="blazing-sun-logo" href="/" aria-label="Blazing Sun home">
           <img style="height: 4em" src="/assets/images/blazingSun.gif" alt="Blazing Sun logo">
         </a>
-        <span class="topbar__muted">{{user_email}}</span>
       </div>
       <nav class="topbar__right">
         <a href="/games">Games</a>
-        <a href="/wallet">Wallet</a>
-        <a href="/logout">Logout</a>
+        <div class="topbar__profile">
+          <button class="topbar__avatar" type="button" aria-label="Profile menu" aria-haspopup="true" aria-expanded="false">
+            {{#if user_profile_picture}}
+              <img src="{{user_profile_picture}}" alt="Profile">
+            {{else}}
+              <span class="topbar__avatar-initials">{{user_initials}}</span>
+            {{/if}}
+          </button>
+          <div class="topbar__dropdown" hidden>
+            <a href="/profile">Profile</a>
+            <a href="/wallet">Wallet</a>
+            <a href="/logout">Logout</a>
+          </div>
+        </div>
       </nav>
     </header>
 
-    <main class="game-page">
-      <header class="game-page__header">
-        <h1>Welcome to Blazing Sun</h1>
-      </header>
+    <main class="home-main">
+      <!-- Organization Scheme -->
+      <section class="org-scheme" aria-label="Organization structure">
 
-      <section class="wallet-actions-card home-hero">
-        <p>Choose a game mode, configure your strategy, and spin when you are ready.</p>
-        <div class="home-hero__actions">
-          <a class="btn btn--primary" href="/games">Open Games</a>
-          <a class="btn btn--ghost" href="/games/slot-machine">Play Slot Machine</a>
+        <!-- Company Header -->
+        <div class="org-header">
+          <img class="org-header__logo" src="/assets/images/blazingSun.gif" alt="Blazing Sun logo">
+          <h1 class="org-header__title">BLAZING SUN</h1>
+          <p class="org-header__full-name">
+            MILORAD ĐUKOVIĆ PR RAČUNARSKO PROGRAMIRANJE BLAZING SUN GORNJI MILANOVAC
+          </p>
+        </div>
+
+        <!-- Tree -->
+        <div class="org-tree">
+
+          <!-- Founder Card -->
+          <div class="org-card org-card--founder">
+            <span class="org-card__badge">Director &amp; Founder</span>
+            <h2 class="org-card__name">Milorad Đuković</h2>
+            <p class="org-card__role">Software Engineer</p>
+          </div>
+
+          <!-- Vertical Connector from Founder to Branches -->
+          <div class="org-connector org-connector--vertical" aria-hidden="true"></div>
+
+          <!-- Horizontal Connector across Branches -->
+          <div class="org-connector org-connector--horizontal" aria-hidden="true"></div>
+
+          <!-- Branch Cards -->
+          <div class="org-branches">
+
+            <!-- Contact -->
+            <div class="org-card org-card--branch">
+              <h3 class="org-card__section-title">Contact</h3>
+              <hr class="org-card__divider">
+              <div class="org-card__detail">
+                <span class="org-card__label">Address</span>
+                NH Svete Popovica 24
+              </div>
+              <hr class="org-card__divider">
+              <div class="org-card__detail">
+                <span class="org-card__label">City</span>
+                32300 Gornji Milanovac, Serbia
+              </div>
+              <hr class="org-card__divider">
+              <div class="org-card__detail">
+                <span class="org-card__label">Phone</span>
+                +381 62 961 6231
+              </div>
+            </div>
+
+            <!-- Company Info -->
+            <div class="org-card org-card--branch">
+              <h3 class="org-card__section-title">Company</h3>
+              <hr class="org-card__divider">
+              <div class="org-card__detail">
+                <span class="org-card__label">PIB</span>
+                114340949
+              </div>
+              <hr class="org-card__divider">
+              <div class="org-card__detail">
+                <span class="org-card__label">MB</span>
+                67500156
+              </div>
+              <hr class="org-card__divider">
+              <div class="org-card__detail">
+                <span class="org-card__label">Activity</span>
+                6201 — Computer Programming
+              </div>
+              <hr class="org-card__divider">
+              <div class="org-card__detail">
+                <span class="org-card__label">Founded</span>
+                April 26, 2024
+              </div>
+            </div>
+
+            <!-- Tech Stack -->
+            <div class="org-card org-card--branch">
+              <h3 class="org-card__section-title">Tech Stack</h3>
+              <hr class="org-card__divider">
+              <div class="org-card__tags">
+                <span class="org-tag">System Architecture</span>
+                <span class="org-tag">OOP</span>
+                <span class="org-tag">Rust</span>
+                <span class="org-tag">Actix-web</span>
+                <span class="org-tag">PHP</span>
+                <span class="org-tag">Laravel</span>
+                <span class="org-tag">Node.js</span>
+                <span class="org-tag">Express.js</span>
+                <span class="org-tag">PostgreSQL</span>
+                <span class="org-tag">MySQL</span>
+                <span class="org-tag">Prisma</span>
+                <span class="org-tag">MongoDB</span>
+                <span class="org-tag">Redis</span>
+                <span class="org-tag">Vanilla JS</span>
+                <span class="org-tag">TypeScript</span>
+                <span class="org-tag">HTML</span>
+                <span class="org-tag">CSS / SCSS</span>
+                <span class="org-tag">Vite</span>
+                <span class="org-tag">React.js</span>
+                <span class="org-tag">Remix.js</span>
+                <span class="org-tag">WordPress</span>
+                <span class="org-tag">Shopify</span>
+                <span class="org-tag">Thirty Bees</span>
+                <span class="org-tag">Kafka</span>
+                <span class="org-tag">RabbitMQ</span>
+                <span class="org-tag">WebSocket</span>
+                <span class="org-tag">WebRTC</span>
+                <span class="org-tag">Docker</span>
+              </div>
+            </div>
+
+          </div>
         </div>
       </section>
-
-      <div class="footer" id="footer"><p>Blazing Sun 2015 - <span id="footerYear"></span>. Sva prava zadržana.</p></div>
     </main>
 
+    <footer class="footer" id="footer">
+      <p>Blazing Sun&reg; 2015 - <span id="footerYear"></span>. All rights reserved.</p>
+    </footer>
+
+    <!-- Scripts -->
     <script>
-      var footerYear = document.getElementById("footerYear");
-      if (footerYear) {
-        footerYear.textContent = String(new Date().getFullYear());
-      }
+      var fy = document.getElementById("footerYear");
+      if (fy) fy.textContent = String(new Date().getFullYear());
     </script>
+    <script>
+      (function() {
+        var btn = document.querySelector('.topbar__avatar');
+        var dd = document.querySelector('.topbar__dropdown');
+        if (!btn || !dd) return;
+        btn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          var open = !dd.hidden;
+          dd.hidden = open;
+          btn.setAttribute('aria-expanded', String(!open));
+        });
+        document.addEventListener('click', function() {
+          dd.hidden = true;
+          btn.setAttribute('aria-expanded', 'false');
+        });
+        dd.addEventListener('click', function(e) { e.stopPropagation(); });
+      })();
+    </script>
+    <script src="/assets/js/opening-crawl.js"></script>
     <script type="module" src="/assets/js/blazing-background.js"></script>
   </body>
 </html>

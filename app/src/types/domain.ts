@@ -11,6 +11,9 @@ export interface SlotUser {
   balanceUnits: number;
   stripeCustomerId: Nullable<string>;
   defaultPaymentMethodId: Nullable<string>;
+  firstName: Nullable<string>;
+  lastName: Nullable<string>;
+  profilePicture: Nullable<string>;
   createdAt: string;
   updatedAt: string;
 }

@@ -1601,14 +1601,28 @@
         <div class="slot-sidebar">
           <div class="nav-div">
             <button id="betBtn">Bet</button>
-            <div id="betOptions"></div>
+            <div id="betOptions">
+              <button type="button" class="control-group active" data-value="2">2 $</button>
+              <button type="button" class="control-group" data-value="3">3 $</button>
+              <button type="button" class="control-group" data-value="4">4 $</button>
+              <button type="button" class="control-group" data-value="5">5 $</button>
+              <button type="button" class="control-group" data-value="6">6 $</button>
+            </div>
             <div class="joker-container" id="jokerContainer">
               <button type="button" class="control-group" id="jokerCheckbox" aria-pressed="false">Buy Joker</button>
               <p class="joker-hint">Joker costs 5x bet.</p>
               <button id="confirmJokerBtn" style="display: none; margin-top: 8px;">Confirm Joker</button>
               <button id="removeJokerBtn" style="display: none; margin-top: 8px;">Remove Joker</button>
             </div>
-            <div class="lines-container" id="linesContainer"></div>
+            <div class="lines-container" id="linesContainer">
+              <button type="button" class="control-group line-btn active" data-line="0">Line 1</button>
+              <button type="button" class="control-group line-btn" data-line="1">Line 2</button>
+              <button type="button" class="control-group line-btn" data-line="2">Line 3</button>
+              <button type="button" class="control-group line-btn" data-line="3">Line 4</button>
+              <button type="button" class="control-group line-btn" data-line="4">Line 5</button>
+              <button type="button" class="control-group line-btn" data-line="5">Line 6</button>
+              <button type="button" class="control-group line-btn" data-line="6">Line 7</button>
+            </div>
           </div>
         </div>
 
@@ -1735,9 +1749,18 @@
           <div class="slot-options">
             <div class="nav-div">
               <button id="gameTypeBtn">Game Type</button>
-              <div id="gameTypeOptions"></div>
+              <div id="gameTypeOptions">
+                <button type="button" class="control-group active" data-value="1">Numbers</button>
+                <button type="button" class="control-group" data-value="2">Roman</button>
+                <button type="button" class="control-group" data-value="3">Fruits</button>
+                <button type="button" class="control-group" data-value="4">Animals</button>
+                <button type="button" class="control-group" data-value="5">Emoji</button>
+              </div>
               <button id="rewardModeBtn">Reward Mode</button>
-              <div id="rewardModeOptions" class="rewardModeOptions"></div>
+              <div id="rewardModeOptions" class="rewardModeOptions">
+                <button type="button" class="control-group active" data-value="2">1x5 Middle</button>
+                <button type="button" class="control-group" data-value="1">3x5 Multi-line</button>
+              </div>
             </div>
           </div>
         </div>

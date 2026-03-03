@@ -51,15 +51,12 @@ export class SlotStore {
   }
 
   async init(): Promise<void> {
-    const migrationPath = path.resolve(
-      path.dirname(__filename),
-      "..",
-      "..",
-      "migrations",
-      "001_init.sql",
-    );
-    const sql = await fs.readFile(migrationPath, "utf8");
-    await this.db.query(sql);
+    const migrationsDir = path.resolve(process.cwd(), "migrations");
+    const initSql = await fs.readFile(path.join(migrationsDir, "001_init.sql"), "utf8");
+    await this.db.query(initSql);
+
+    const profileSql = await fs.readFile(path.join(migrationsDir, "002_user_profile.sql"), "utf8");
+    await this.db.query(profileSql);
   }
 
   resolveUserId(rawUserId: unknown): number {
@@ -175,6 +172,9 @@ export class SlotStore {
         defaultPaymentMethodId: row.user_default_payment_method_id
           ? String(row.user_default_payment_method_id)
           : null,
+        firstName: row.user_first_name ? String(row.user_first_name) : null,
+        lastName: row.user_last_name ? String(row.user_last_name) : null,
+        profilePicture: row.user_profile_picture ? String(row.user_profile_picture) : null,
         createdAt: String(row.user_created_at ?? ""),
         updatedAt: String(row.user_updated_at ?? ""),
       },
@@ -447,6 +447,38 @@ export class SlotStore {
     };
   }
 
+  async updateUserProfile(
+    userId: number,
+    firstName: string,
+    lastName: string,
+  ): Promise<void> {
+    await this.db.query(
+      "SELECT sp_update_user_profile($1, $2, $3)",
+      [userId, firstName, lastName],
+    );
+  }
+
+  async updateUserPassword(
+    userId: number,
+    passwordHash: string,
+    passwordSalt: string,
+  ): Promise<void> {
+    await this.db.query(
+      "SELECT sp_update_user_password($1, $2, $3)",
+      [userId, passwordHash, passwordSalt],
+    );
+  }
+
+  async updateUserProfilePicture(
+    userId: number,
+    picturePath: string,
+  ): Promise<void> {
+    await this.db.query(
+      "SELECT sp_update_user_profile_picture($1, $2)",
+      [userId, picturePath],
+    );
+  }
+
   #mapUser(row: DbRow): SlotUser {
     return {
       id: Number(row.id ?? 0),
@@ -458,6 +490,9 @@ export class SlotStore {
       defaultPaymentMethodId: row.default_payment_method_id
         ? String(row.default_payment_method_id)
         : null,
+      firstName: row.first_name ? String(row.first_name) : null,
+      lastName: row.last_name ? String(row.last_name) : null,
+      profilePicture: row.profile_picture ? String(row.profile_picture) : null,
       createdAt: String(row.created_at ?? ""),
       updatedAt: String(row.updated_at ?? ""),
     };

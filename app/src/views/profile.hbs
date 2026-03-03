@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{title}}</title>
+    <link rel="icon" type="image/gif" href="/assets/images/blazingSun.gif">
+    <link rel="stylesheet" href="/assets/css/main.css">
+  </head>
+  <body class="theme-blazing-sun">
+    <canvas id="space" aria-hidden="true"></canvas>
+    <header class="topbar">
+      <div class="topbar__left">
+        <a class="blazing-sun-logo" href="/" aria-label="Blazing Sun home">
+          <img style="height: 4em" src="/assets/images/blazingSun.gif" alt="Blazing Sun logo">
+        </a>
+      </div>
+      <nav class="topbar__right">
+        <a href="/games">Games</a>
+        <div class="topbar__profile">
+          <button class="topbar__avatar" type="button" aria-label="Profile menu" aria-haspopup="true" aria-expanded="false">
+            {{#if user_profile_picture}}
+              <img src="{{user_profile_picture}}" alt="Profile">
+            {{else}}
+              <span class="topbar__avatar-initials">{{user_initials}}</span>
+            {{/if}}
+          </button>
+          <div class="topbar__dropdown" hidden>
+            <a href="/profile">Profile</a>
+            <a href="/wallet">Wallet</a>
+            <a href="/logout">Logout</a>
+          </div>
+        </div>
+      </nav>
+    </header>
+
+    <main class="profile-page">
+      <h1>Profile</h1>
+
+      <section class="profile-card">
+        <h2>Profile Picture</h2>
+        <div class="profile-picture-section">
+          <div class="profile-picture-preview">
+            {{#if user_profile_picture}}
+              <img id="profilePicPreview" src="{{user_profile_picture}}" alt="Profile picture">
+            {{else}}
+              <span id="profilePicPreview" class="profile-picture-placeholder">{{user_initials}}</span>
+            {{/if}}
+          </div>
+          <form id="pictureForm" class="profile-picture-form">
+            <label class="btn btn--ghost profile-file-label">
+              Choose Image
+              <input type="file" id="profilePicInput" accept="image/jpeg,image/png,image/gif,image/webp" hidden>
+            </label>
+            <button class="btn btn--primary" type="submit" id="uploadPicBtn" disabled>Upload</button>
+            <span class="profile-file-name" id="fileName"></span>
+          </form>
+        </div>
+        <p class="form-error" id="pictureError"></p>
+        <p class="form-success" id="pictureSuccess"></p>
+      </section>
+
+      <section class="profile-card">
+        <h2>Name</h2>
+        <form id="nameForm" class="profile-form">
+          <label>
+            First Name
+            <input type="text" id="firstName" name="firstName" value="{{user_first_name}}" maxlength="100" placeholder="First name">
+          </label>
+          <label>
+            Last Name
+            <input type="text" id="lastName" name="lastName" value="{{user_last_name}}" maxlength="100" placeholder="Last name">
+          </label>
+          <button class="btn btn--primary" type="submit">Save Name</button>
+        </form>
+        <p class="form-error" id="nameError"></p>
+        <p class="form-success" id="nameSuccess"></p>
+      </section>
+
+      <section class="profile-card">
+        <h2>Email</h2>
+        <div class="profile-email-display">
+          <span>{{user_email}}</span>
+        </div>
+      </section>
+
+      <section class="profile-card">
+        <h2>Change Password</h2>
+        <form id="passwordForm" class="profile-form">
+          <label>
+            Current Password
+            <input type="password" id="currentPassword" name="currentPassword" required minlength="6">
+          </label>
+          <label>
+            New Password
+            <input type="password" id="newPassword" name="newPassword" required minlength="6">
+          </label>
+          <label>
+            Confirm New Password
+            <input type="password" id="confirmPassword" name="confirmPassword" required minlength="6">
+          </label>
+          <button class="btn btn--primary" type="submit">Change Password</button>
+        </form>
+        <p class="form-error" id="passwordError"></p>
+        <p class="form-success" id="passwordSuccess"></p>
+      </section>
+    </main>
+
+    <script>
+      (function() {
+        var btn = document.querySelector('.topbar__avatar');
+        var dd = document.querySelector('.topbar__dropdown');
+        if (btn && dd) {
+          btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            var open = !dd.hidden;
+            dd.hidden = open;
+            btn.setAttribute('aria-expanded', String(!open));
+          });
+          document.addEventListener('click', function() {
+            dd.hidden = true;
+            btn.setAttribute('aria-expanded', 'false');
+          });
+          dd.addEventListener('click', function(e) { e.stopPropagation(); });
+        }
+
+        function getCsrf() {
+          var m = document.cookie.match(/(?:^|;\s*)slotm_csrf=([^;]+)/);
+          return m ? decodeURIComponent(m[1]) : '';
+        }
+
+        function clearMessages() {
+          var els = document.querySelectorAll('.form-error, .form-success');
+          for (var i = 0; i < els.length; i++) els[i].textContent = '';
+        }
+
+        function showError(id, msg) { document.getElementById(id).textContent = msg; }
+        function showSuccess(id, msg) { document.getElementById(id).textContent = msg; }
+
+        // Name form
+        var nameForm = document.getElementById('nameForm');
+        nameForm.addEventListener('submit', function(e) {
+          e.preventDefault();
+          clearMessages();
+          var firstName = document.getElementById('firstName').value.trim();
+          var lastName = document.getElementById('lastName').value.trim();
+
+          fetch('/api/profile/update', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRF-Token': getCsrf()
+            },
+            body: JSON.stringify({ firstName: firstName, lastName: lastName })
+          })
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (data.success) {
+              showSuccess('nameSuccess', 'Name updated successfully');
+              // Update avatar initials
+              var initialsEl = document.querySelector('.topbar__avatar-initials');
+              if (initialsEl) {
+                var f = (firstName || '').trim();
+                var l = (lastName || '').trim();
+                if (f && l) initialsEl.textContent = (f[0] + l[0]).toUpperCase();
+                else if (f) initialsEl.textContent = f.slice(0, 2).toUpperCase();
+              }
+            } else {
+              showError('nameError', data.message || 'Failed to update name');
+            }
+          })
+          .catch(function() { showError('nameError', 'Network error'); });
+        });
+
+        // Password form
+        var passwordForm = document.getElementById('passwordForm');
+        passwordForm.addEventListener('submit', function(e) {
+          e.preventDefault();
+          clearMessages();
+          var currentPassword = document.getElementById('currentPassword').value;
+          var newPassword = document.getElementById('newPassword').value;
+          var confirmPassword = document.getElementById('confirmPassword').value;
+
+          if (newPassword.length < 6) {
+            showError('passwordError', 'New password must be at least 6 characters');
+            return;
+          }
+          if (newPassword !== confirmPassword) {
+            showError('passwordError', 'New passwords do not match');
+            return;
+          }
+
+          fetch('/api/profile/change-password', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRF-Token': getCsrf()
+            },
+            body: JSON.stringify({
+              currentPassword: currentPassword,
+              newPassword: newPassword,
+              confirmPassword: confirmPassword
+            })
+          })
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (data.success) {
+              showSuccess('passwordSuccess', 'Password changed successfully');
+              passwordForm.reset();
+            } else {
+              showError('passwordError', data.message || 'Failed to change password');
+            }
+          })
+          .catch(function() { showError('passwordError', 'Network error'); });
+        });
+
+        // Picture upload
+        var picInput = document.getElementById('profilePicInput');
+        var uploadBtn = document.getElementById('uploadPicBtn');
+        var fileNameEl = document.getElementById('fileName');
+        var pictureForm = document.getElementById('pictureForm');
+
+        picInput.addEventListener('change', function() {
+          if (picInput.files && picInput.files.length > 0) {
+            fileNameEl.textContent = picInput.files[0].name;
+            uploadBtn.disabled = false;
+          } else {
+            fileNameEl.textContent = '';
+            uploadBtn.disabled = true;
+          }
+        });
+
+        pictureForm.addEventListener('submit', function(e) {
+          e.preventDefault();
+          clearMessages();
+          if (!picInput.files || picInput.files.length === 0) {
+            showError('pictureError', 'Please select an image');
+            return;
+          }
+
+          var formData = new FormData();
+          formData.append('profilePicture', picInput.files[0]);
+
+          fetch('/api/profile/upload-picture', {
+            method: 'POST',
+            headers: { 'X-CSRF-Token': getCsrf() },
+            body: formData
+          })
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (data.success) {
+              showSuccess('pictureSuccess', 'Profile picture updated');
+              // Update preview
+              var preview = document.getElementById('profilePicPreview');
+              if (preview.tagName === 'IMG') {
+                preview.src = data.data.profilePicture;
+              } else {
+                var img = document.createElement('img');
+                img.id = 'profilePicPreview';
+                img.src = data.data.profilePicture;
+                img.alt = 'Profile picture';
+                preview.parentNode.replaceChild(img, preview);
+              }
+              // Update topbar avatar
+              var avatarBtn = document.querySelector('.topbar__avatar');
+              if (avatarBtn) {
+                var existing = avatarBtn.querySelector('img');
+                if (existing) {
+                  existing.src = data.data.profilePicture;
+                } else {
+                  avatarBtn.innerHTML = '<img src="' + data.data.profilePicture + '" alt="Profile">';
+                }
+              }
+              picInput.value = '';
+              fileNameEl.textContent = '';
+              uploadBtn.disabled = true;
+            } else {
+              showError('pictureError', data.message || 'Failed to upload');
+            }
+          })
+          .catch(function() { showError('pictureError', 'Network error'); });
+        });
+      })();
+    </script>
+    <script type="module" src="/assets/js/blazing-background.js"></script>
+  </body>
+</html>
