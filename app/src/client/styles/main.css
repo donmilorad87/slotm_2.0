@@ -181,7 +181,6 @@ body.theme-blazing-sun .flash-msg {
 body.theme-blazing-sun .game-page__content > .slot-machine-root {
   display: block;
   border-radius: 0.9rem;
-  overflow: hidden;
 }
 
 body.theme-blazing-sun .btn--ghost {
