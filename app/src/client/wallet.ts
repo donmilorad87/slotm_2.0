@@ -1,14 +1,31 @@
 import { fetchWithCsrf, postJson } from "./http.js";
+import type { JsonResponse } from "./http.js";
+
+interface CheckoutSessionData {
+  url?: string;
+}
+
+function toErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
+interface TransactionItem {
+  signed_amount_coins?: number;
+  created_at?: string;
+  type?: string;
+  description?: string;
+  provider?: string;
+}
 
 const WALLET_HISTORY_PAGE_SIZE = 20;
 
 let txHistoryPage = 1;
 let txHistoryTotalPages = 1;
 let txHistoryTotalItems = 0;
-let txHistoryItems = [];
+let txHistoryItems: TransactionItem[] = [];
 let txHistoryLoading = false;
 
-function flash(message, type = "info") {
+function flash(message: string, type: string = "info"): void {
   const existing = document.getElementById("walletFlash");
   if (existing) {
     existing.textContent = message;
@@ -16,7 +33,7 @@ function flash(message, type = "info") {
   }
 }
 
-function escapeHtml(value) {
+function escapeHtml(value: unknown): string {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
@@ -25,15 +42,15 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
-function formatWalletDate(ts) {
+function formatWalletDate(ts: unknown): string {
   try {
-    return new Date(ts).toLocaleString();
+    return new Date(ts as string | number).toLocaleString();
   } catch {
     return String(ts || "");
   }
 }
 
-function getHistoryPageWindow(currentPage, totalPages) {
+function getHistoryPageWindow(currentPage: number, totalPages: number): number[] {
   if (totalPages <= 5) {
     return Array.from({ length: totalPages }, (_, index) => index + 1);
   }
@@ -61,7 +78,7 @@ function getHistoryPageWindow(currentPage, totalPages) {
   ];
 }
 
-function toSafePage(value) {
+function toSafePage(value: string | number): number {
   const parsed = Number.parseInt(String(value || "1"), 10);
   if (!Number.isFinite(parsed) || parsed < 1) {
     return 1;
@@ -69,7 +86,7 @@ function toSafePage(value) {
   return parsed;
 }
 
-function renderTransactionsHistory(errorMessage = "") {
+function renderTransactionsHistory(errorMessage: string = ""): void {
   const statusEl = document.getElementById("walletHistoryStatus");
   const bodyEl = document.getElementById("walletTransactionsBody");
   const paginationEl = document.getElementById("walletHistoryPagination");
@@ -119,7 +136,7 @@ function renderTransactionsHistory(errorMessage = "") {
     bodyEl.innerHTML = '<tr><td colspan="5">No transactions yet.</td></tr>';
   } else {
     bodyEl.innerHTML = txHistoryItems
-      .map((item) => {
+      .map((item: TransactionItem) => {
         const signedAmount = Number(item?.signed_amount_coins || 0);
         const sign = signedAmount >= 0 ? "+" : "";
         const amountClass = signedAmount >= 0 ? "tx-credit" : "tx-debit";
@@ -147,7 +164,7 @@ function renderTransactionsHistory(errorMessage = "") {
     <button type="button" data-page="${prevPage}" ${txHistoryPage === 1 ? "disabled" : ""}>&lsaquo;</button>
     ${pages
     .map(
-      (page) =>
+      (page: number) =>
         `<button type="button" data-page="${page}" class="${page === txHistoryPage ? "active" : ""}">${page}</button>`,
     )
     .join("")}
@@ -160,7 +177,7 @@ function renderTransactionsHistory(errorMessage = "") {
   goBtn.disabled = txHistoryTotalPages <= 1;
 }
 
-async function loadTransactionsPage(page) {
+async function loadTransactionsPage(page: string | number): Promise<void> {
   const targetPage = Math.min(
     Math.max(1, toSafePage(page)),
     Math.max(1, txHistoryTotalPages || 1),
@@ -175,7 +192,7 @@ async function loadTransactionsPage(page) {
       headers: { "Cache-Control": "no-cache" },
     });
 
-    const json = await response.json();
+    const json: JsonResponse = await response.json();
     if (!response.ok || !json.success) {
       throw new Error(json.message || "Failed to load transactions");
     }
@@ -187,17 +204,19 @@ async function loadTransactionsPage(page) {
     txHistoryTotalPages = Number.isFinite(totalPages) && totalPages > 0 ? totalPages : 1;
     txHistoryPage = Number.isFinite(currentPage) && currentPage > 0 ? currentPage : 1;
     txHistoryTotalItems = Number.isFinite(totalItems) && totalItems > 0 ? totalItems : 0;
-    txHistoryItems = Array.isArray(json.data?.transactions) ? json.data.transactions : [];
+    txHistoryItems = Array.isArray(json.data?.transactions)
+      ? (json.data.transactions as TransactionItem[])
+      : [];
     txHistoryLoading = false;
 
     renderTransactionsHistory();
-  } catch (error) {
+  } catch (error: unknown) {
     txHistoryLoading = false;
-    renderTransactionsHistory(error.message || "Failed to load transactions");
+    renderTransactionsHistory((error as Error).message || "Failed to load transactions");
   }
 }
 
-async function startTopup(amountCoins) {
+async function startTopup(amountCoins: string | number | undefined): Promise<void> {
   const amount = Number.parseInt(String(amountCoins), 10);
   if (!Number.isFinite(amount) || amount <= 0) {
     flash("Enter a valid top-up amount", "error");
@@ -205,28 +224,32 @@ async function startTopup(amountCoins) {
   }
 
   try {
-    const result = await postJson("/api/wallet/create-checkout-session", {
+    const result = await postJson<CheckoutSessionData>("/api/wallet/create-checkout-session", {
       amountCoins: amount,
       returnTo: "/wallet",
     });
-    window.location.href = result.data?.url;
-  } catch (error) {
-    flash(error.message || "Failed to start top-up", "error");
+    if (result.data?.url) {
+      window.location.href = result.data.url;
+    }
+  } catch (error: unknown) {
+    flash(toErrorMessage(error, "Failed to start top-up"), "error");
   }
 }
 
-async function startCardSetup() {
+async function startCardSetup(): Promise<void> {
   try {
-    const result = await postJson("/api/wallet/create-setup-session", {
+    const result = await postJson<CheckoutSessionData>("/api/wallet/create-setup-session", {
       returnTo: "/wallet",
     });
-    window.location.href = result.data?.url;
-  } catch (error) {
-    flash(error.message || "Failed to start card setup", "error");
+    if (result.data?.url) {
+      window.location.href = result.data.url;
+    }
+  } catch (error: unknown) {
+    flash(toErrorMessage(error, "Failed to start card setup"), "error");
   }
 }
 
-async function removeSavedCard(paymentMethodId) {
+async function removeSavedCard(paymentMethodId: string | undefined): Promise<void> {
   const pmId = String(paymentMethodId || "").trim();
   if (!pmId) {
     flash("Invalid card id", "error");
@@ -239,45 +262,45 @@ async function removeSavedCard(paymentMethodId) {
     });
     flash("Card removed successfully", "info");
     window.location.reload();
-  } catch (error) {
-    flash(error.message || "Failed to remove card", "error");
+  } catch (error: unknown) {
+    flash(toErrorMessage(error, "Failed to remove card"), "error");
   }
 }
 
-function bindQuickButtons() {
-  document.querySelectorAll(".wallet-topup-btn").forEach((button) => {
+function bindQuickButtons(): void {
+  document.querySelectorAll<HTMLButtonElement>(".wallet-topup-btn").forEach((button) => {
     button.addEventListener("click", () => {
-      startTopup(button.dataset.amount);
+      void startTopup(button.dataset.amount);
     });
   });
 }
 
-function bindCustomForm() {
+function bindCustomForm(): void {
   const form = document.getElementById("customTopupForm");
   if (!form) {
     return;
   }
 
-  form.addEventListener("submit", (event) => {
+  form.addEventListener("submit", (event: Event) => {
     event.preventDefault();
-    const input = document.getElementById("customTopupAmount");
+    const input = document.getElementById("customTopupAmount") as HTMLInputElement | null;
     const value = input ? input.value : "";
-    startTopup(value);
+    void startTopup(value);
   });
 }
 
-function bindCardButton() {
+function bindCardButton(): void {
   const btn = document.getElementById("addCardBtn");
   if (!btn) {
     return;
   }
   btn.addEventListener("click", () => {
-    startCardSetup();
+    void startCardSetup();
   });
 }
 
-function bindRemoveCardButtons() {
-  document.querySelectorAll(".wallet-remove-card").forEach((button) => {
+function bindRemoveCardButtons(): void {
+  document.querySelectorAll<HTMLButtonElement>(".wallet-remove-card").forEach((button) => {
     button.addEventListener("click", () => {
       button.disabled = true;
       void removeSavedCard(button.dataset.paymentMethodId).finally(() => {
@@ -287,13 +310,13 @@ function bindRemoveCardButtons() {
   });
 }
 
-function bindWalletHistoryPagination() {
+function bindWalletHistoryPagination(): void {
   const pagination = document.getElementById("walletHistoryPagination");
   const pageInput = document.getElementById("walletHistoryPageInput");
   const goBtn = document.getElementById("walletHistoryGoPage");
 
   if (pagination instanceof HTMLElement) {
-    pagination.addEventListener("click", (event) => {
+    pagination.addEventListener("click", (event: MouseEvent) => {
       const target = event.target;
       if (!(target instanceof HTMLButtonElement)) {
         return;
@@ -304,7 +327,7 @@ function bindWalletHistoryPagination() {
   }
 
   if (pageInput instanceof HTMLInputElement) {
-    pageInput.addEventListener("keydown", (event) => {
+    pageInput.addEventListener("keydown", (event: KeyboardEvent) => {
       if (event.key === "Enter") {
         event.preventDefault();
         void loadTransactionsPage(pageInput.value);

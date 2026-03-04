@@ -29,7 +29,7 @@ export interface StripePaymentIntentRef {
 export interface StripeCheckoutSession {
   id: string;
   url?: string;
-  mode?: "payment" | "setup" | string;
+  mode?: "payment" | "setup" | "subscription";
   payment_status?: string;
   amount_total?: number;
   metadata?: Record<string, string>;
@@ -104,10 +104,18 @@ export class StripeClient {
 
     const response = await fetch(url, requestInit);
 
-    const payload = (await response.json()) as Record<string, unknown>;
+    const raw: unknown = await response.json();
+    if (typeof raw !== "object" || raw === null) {
+      throw new Error(`Stripe API returned non-object response (${response.status})`);
+    }
+
+    const payload = raw as Record<string, unknown>;
     if (!response.ok) {
-      const errorObj = payload.error as { message?: string } | undefined;
-      const msg = errorObj?.message || `Stripe API error (${response.status})`;
+      const errorObj = payload.error;
+      const msg =
+        typeof errorObj === "object" && errorObj !== null && "message" in errorObj
+          ? String((errorObj as Record<string, unknown>).message)
+          : `Stripe API error (${response.status})`;
       throw new Error(msg);
     }
 

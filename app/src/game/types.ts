@@ -1,4 +1,4 @@
-import type { ApiError, ApiSuccess } from "../types/domain.js";
+import type { ApiError, ApiSuccess, GameModeName, RewardModeName } from "../types/domain.js";
 
 export const REEL_COUNT = 5;
 export const SYMBOL_COUNT = 22;
@@ -11,8 +11,17 @@ export const JOKER_SYMBOL = "jok";
 export type RewardModeId = 1 | 2;
 export type GameModeId = 1 | 2 | 3 | 4 | 5;
 export type PaylineState = 0 | 1;
-export type GameModeName = "numbers" | "roman" | "fruits" | "animals" | "emoji";
-export type RewardModeName = "single" | "multi";
+export type { GameModeName, RewardModeName };
+
+const VALID_GAME_MODE_IDS: readonly GameModeId[] = [1, 2, 3, 4, 5];
+
+export function isGameModeId(value: number): value is GameModeId {
+  return (VALID_GAME_MODE_IDS as readonly number[]).includes(value);
+}
+
+/** Extract the type of any SpinRequest field by key. */
+export type SpinRequestField<K extends keyof SpinRequest> = SpinRequest[K];
+
 type OddsMatchCount = 2 | 3 | 4 | 5;
 
 export interface SpinRequest {
@@ -75,13 +84,17 @@ const NUMBERS_TARGET_RTP = 0.86;
 const NUMBERS_GROUP_COEFFICIENTS: readonly number[] = [
   1.85, 1.75, 1.65, 1.55, 1.45, 1.35, 1.25, 1.15, 1.05, 0.95, 0.85,
 ];
-const GAME_MODE_ODDS_COEFFICIENT: Readonly<Record<GameModeId, number>> = {
+const GAME_MODE_ODDS_COEFFICIENT = {
   1: 1.0,
   2: 0.94,
   3: 1.08,
   4: 1.03,
   5: 0.98,
-};
+} as const satisfies Record<GameModeId, number>;
+
+/** Derive coefficient lookup type from the const map using typeof + keyof. */
+type GameModeOddsCoefficient = typeof GAME_MODE_ODDS_COEFFICIENT;
+type OddsCoefficientForMode<M extends GameModeId> = GameModeOddsCoefficient[M];
 
 function exactMatchProbability(symbolCount: number, matchCount: OddsMatchCount): number {
   if (matchCount === 5) {
@@ -167,27 +180,28 @@ export function validateJoker(request: SpinRequest): boolean {
   return request.vrednostDzokera === 0;
 }
 
+const GAME_MODE_NAME_MAP = {
+  1: "numbers",
+  2: "roman",
+  3: "fruits",
+  4: "animals",
+  5: "emoji",
+} as const satisfies Record<GameModeId, GameModeName>;
+
+const REWARD_MODE_NAME_MAP = {
+  1: "multi",
+  2: "single",
+} as const satisfies Record<RewardModeId, RewardModeName>;
+
+export type GameModeNameOf<Id extends GameModeId> = (typeof GAME_MODE_NAME_MAP)[Id];
+export type RewardModeNameOf<Id extends RewardModeId> = (typeof REWARD_MODE_NAME_MAP)[Id];
+
 export function gameModeName(request: SpinRequest): GameModeName {
-  switch (request.igra) {
-    case 2:
-      return "roman";
-    case 3:
-      return "fruits";
-    case 4:
-      return "animals";
-    case 5:
-      return "emoji";
-    case 1:
-    default:
-      return "numbers";
-  }
+  return GAME_MODE_NAME_MAP[request.igra];
 }
 
 export function rewardModeName(request: SpinRequest): RewardModeName {
-  if (request.nacin === 1) {
-    return "multi";
-  }
-  return "single";
+  return REWARD_MODE_NAME_MAP[request.nacin];
 }
 
 export function winLineToPhpArray(winLine: WinLine): PhpWinLine {

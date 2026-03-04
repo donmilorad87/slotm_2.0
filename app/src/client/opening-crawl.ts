@@ -7,14 +7,54 @@
 // (perspective + rotateX) so text never blinks or stretches.
 // ============================================================
 
-(function () {
+interface CrawlSettings {
+  scrollSpeed: number;
+  fontSize: number;
+  perspective: number;
+  vanishPoint: number;
+  textWidth: number;
+  fadeZone: number;
+  tiltAngle: number;
+  introDuration: number;
+  logoDuration: number;
+  crawlDelay: number;
+}
+
+type CrawlBlock =
+  | { type: "episode" | "title" | "body"; text: string }
+  | { type: "gap" };
+
+interface ConfigBinding {
+  id: string;
+  key: keyof CrawlSettings;
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+}
+
+interface BlazingCrawlApi {
+  start: () => void;
+  stop: () => void;
+  isRunning: () => boolean;
+  engine: CrawlEngine;
+}
+
+declare global {
+  interface Window {
+    __closeCrawlPanel?: () => void;
+    __blazingCrawl?: BlazingCrawlApi;
+  }
+}
+
+(function (): void {
   "use strict";
 
   // ---- Storage ----
-  var STORAGE_KEY = "slotm-crawl-settings";
+  const STORAGE_KEY = "slotm-crawl-settings";
 
   // ---- Default settings ----
-  var DEFAULTS = {
+  const DEFAULTS = Object.freeze({
     scrollSpeed: 104,
     fontSize: 49,
     perspective: 1.05,
@@ -25,10 +65,10 @@
     introDuration: 3.0,
     logoDuration: 6.0,
     crawlDelay: 10.0,
-  };
+  }) satisfies CrawlSettings;
 
   // ---- Crawl story content ----
-  var CRAWL_BLOCKS = [
+  const CRAWL_BLOCKS: readonly CrawlBlock[] = [
     { type: "episode", text: "Episode IV" },
     { type: "title", text: "THE CODE AWAKENS" },
     { type: "gap" },
@@ -39,7 +79,7 @@
     { type: "gap" },
     {
       type: "body",
-      text: "His name is MILORAD ĐUKOVIĆ. A master of the vanilla arts \u2014 pure JavaScript, raw HTML, and hand-forged CSS \u2014 he has always believed that the truest power lies not in frameworks, but in the language itself.",
+      text: "His name is MILORAD \u0110UKOVI\u0106. A master of the vanilla arts \u2014 pure JavaScript, raw HTML, and hand-forged CSS \u2014 he has always believed that the truest power lies not in frameworks, but in the language itself.",
     },
     { type: "gap" },
     {
@@ -79,43 +119,39 @@
   ];
 
   // ---- Settings persistence ----
-  function loadSettings() {
+  function loadSettings(): Partial<CrawlSettings> | null {
     try {
-      var raw = localStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return null;
-      return JSON.parse(raw);
-    } catch (_) {
+      return JSON.parse(raw) as Partial<CrawlSettings>;
+    } catch {
       return null;
     }
   }
 
-  function saveSettings(s) {
+  function saveSettings(s: CrawlSettings): void {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
-    } catch (_) {
+    } catch {
       // ignore
     }
   }
 
   // ---- Utility ----
-  function merge(base, override) {
-    var out = {};
-    for (var k in base) {
-      if (base.hasOwnProperty(k)) out[k] = base[k];
-    }
-    if (override) {
-      for (var k2 in override) {
-        if (override.hasOwnProperty(k2) && base.hasOwnProperty(k2)) {
-          out[k2] = override[k2];
-        }
+  function merge(base: CrawlSettings, override: Partial<CrawlSettings> | null): CrawlSettings {
+    if (!override) return { ...base };
+    const filtered: Partial<CrawlSettings> = {};
+    for (const k2 of Object.keys(override) as (keyof CrawlSettings)[]) {
+      if (k2 in base && override[k2] !== undefined) {
+        filtered[k2] = override[k2];
       }
     }
-    return out;
+    return { ...base, ...filtered };
   }
 
   // ---- Logo gradient for canvas (Phase 2) ----
-  function createLogoGradient(ctx, y, h) {
-    var g = ctx.createLinearGradient(0, y, 0, y + h);
+  function createLogoGradient(ctx: CanvasRenderingContext2D, y: number, h: number): CanvasGradient {
+    const g = ctx.createLinearGradient(0, y, 0, y + h);
     g.addColorStop(0, "#ffe880");
     g.addColorStop(0.18, "#f5d060");
     g.addColorStop(0.38, "#c8a020");
@@ -128,306 +164,309 @@
   // ============================================================
   // CRAWL ENGINE
   // ============================================================
-  function CrawlEngine(canvas) {
-    this.canvas = canvas;
-    this.ctx = canvas.getContext("2d");
-    this.settings = merge(DEFAULTS, loadSettings());
-    this.running = false;
-    this.startTime = 0;
-    this.rafId = null;
-    this.onEnd = null;
-    this.cssW = 0;
-    this.cssH = 0;
-    this.dpr = 1;
+  class CrawlEngine {
+    canvas: HTMLCanvasElement;
+    ctx: CanvasRenderingContext2D;
+    settings: CrawlSettings;
+    running: boolean;
+    startTime: number;
+    rafId: number | null;
+    onEnd: (() => void) | null;
+    cssW: number;
+    cssH: number;
+    dpr: number;
+    crawlContainer: HTMLDivElement;
+    crawlBoard: HTMLDivElement;
+    crawlContent: HTMLDivElement;
+    crawlFade: HTMLDivElement;
+    crawlPhaseActive: boolean;
+    crawlY: number;
 
-    // HTML crawl DOM references
-    this.crawlContainer = null;
-    this.crawlBoard = null;
-    this.crawlContent = null;
-    this.crawlFade = null;
-    this.crawlPhaseActive = false;
-    this.crawlY = 0;
+    constructor(canvas: HTMLCanvasElement) {
+      this.canvas = canvas;
+      this.ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
+      this.settings = merge(DEFAULTS, loadSettings());
+      this.running = false;
+      this.startTime = 0;
+      this.rafId = null;
+      this.onEnd = null;
+      this.cssW = 0;
+      this.cssH = 0;
+      this.dpr = 1;
 
-    this._tick = this._tick.bind(this);
-    this._initCrawlDOM();
-  }
+      // HTML crawl DOM references
+      this.crawlContainer = null as unknown as HTMLDivElement;
+      this.crawlBoard = null as unknown as HTMLDivElement;
+      this.crawlContent = null as unknown as HTMLDivElement;
+      this.crawlFade = null as unknown as HTMLDivElement;
+      this.crawlPhaseActive = false;
+      this.crawlY = 0;
 
-  // ---- Build HTML DOM for crawl phase ----
-  CrawlEngine.prototype._initCrawlDOM = function () {
-    // Container — fixed, full viewport, hidden by default
-    var container = document.createElement("div");
-    container.className = "sw-crawl-html";
+      this._tick = this._tick.bind(this);
+      this._initCrawlDOM();
+    }
 
-    // Board — the perspective-transformed rectangle
-    var board = document.createElement("div");
-    board.className = "sw-crawl-board";
+    // ---- Build HTML DOM for crawl phase ----
+    private _initCrawlDOM(): void {
+      const container = document.createElement("div");
+      container.className = "sw-crawl-html";
 
-    // Content — holds the text, translated upward each frame
-    var content = document.createElement("div");
-    content.className = "sw-crawl-content";
+      const board = document.createElement("div");
+      board.className = "sw-crawl-board";
 
-    // Build text elements from CRAWL_BLOCKS
-    for (var i = 0; i < CRAWL_BLOCKS.length; i++) {
-      var block = CRAWL_BLOCKS[i];
-      var el;
+      const content = document.createElement("div");
+      content.className = "sw-crawl-content";
 
-      if (block.type === "episode") {
-        el = document.createElement("div");
-        el.className = "sw-crawl-episode";
-        el.textContent = block.text;
-      } else if (block.type === "title") {
-        el = document.createElement("div");
-        el.className = "sw-crawl-title";
-        el.textContent = block.text;
-      } else if (block.type === "gap") {
-        el = document.createElement("div");
-        el.className = "sw-crawl-gap";
-      } else {
-        el = document.createElement("p");
-        el.className = "sw-crawl-body";
-        el.textContent = block.text;
+      for (let i = 0; i < CRAWL_BLOCKS.length; i++) {
+        const block = CRAWL_BLOCKS[i];
+        let el: HTMLElement;
+
+        if (block.type === "episode") {
+          el = document.createElement("div");
+          el.className = "sw-crawl-episode";
+          el.textContent = block.text || "";
+        } else if (block.type === "title") {
+          el = document.createElement("div");
+          el.className = "sw-crawl-title";
+          el.textContent = block.text || "";
+        } else if (block.type === "gap") {
+          el = document.createElement("div");
+          el.className = "sw-crawl-gap";
+        } else {
+          el = document.createElement("p");
+          el.className = "sw-crawl-body";
+          el.textContent = block.text || "";
+        }
+
+        content.appendChild(el);
       }
 
-      content.appendChild(el);
+      const fade = document.createElement("div");
+      fade.className = "sw-crawl-fade";
+
+      board.appendChild(content);
+      container.appendChild(board);
+      container.appendChild(fade);
+      document.body.appendChild(container);
+
+      this.crawlContainer = container;
+      this.crawlBoard = board;
+      this.crawlContent = content;
+      this.crawlFade = fade;
     }
 
-    // Gradient fade overlay
-    var fade = document.createElement("div");
-    fade.className = "sw-crawl-fade";
+    // ---- Apply current settings to the crawl DOM ----
+    private _applyCrawlCSS(): void {
+      const s = this.settings;
+      const vh = window.innerHeight;
+      const vw = window.innerWidth;
 
-    board.appendChild(content);
-    container.appendChild(board);
-    container.appendChild(fade);
-    document.body.appendChild(container);
+      const boardW = vw;
+      const boardH = vh * 3;
+      this.crawlBoard.style.width = boardW + "px";
+      this.crawlBoard.style.height = boardH + "px";
+      this.crawlBoard.style.marginLeft = (-boardW / 2) + "px";
 
-    this.crawlContainer = container;
-    this.crawlBoard = board;
-    this.crawlContent = content;
-    this.crawlFade = fade;
-  };
+      const perspPx = Math.round(300 / s.perspective);
+      const rotDeg = (s.tiltAngle * 0.45).toFixed(1);
+      this.crawlBoard.style.transform =
+        "perspective(" + perspPx + "px) rotateX(" + rotDeg + "deg)";
 
-  // ---- Apply current settings to the crawl DOM ----
-  CrawlEngine.prototype._applyCrawlCSS = function () {
-    var s = this.settings;
-    var vh = window.innerHeight;
-    var vw = window.innerWidth;
+      const contentW = Math.round(boardW * s.textWidth);
+      this.crawlContent.style.width = contentW + "px";
+      this.crawlContent.style.left = ((boardW - contentW) / 2) + "px";
 
-    // Board dimensions — full width, 3x viewport height so text
-    // travels far enough through the perspective plane
-    var boardW = vw;
-    var boardH = vh * 3;
-    this.crawlBoard.style.width = boardW + "px";
-    this.crawlBoard.style.height = boardH + "px";
-    this.crawlBoard.style.marginLeft = (-boardW / 2) + "px";
+      this.crawlContent.style.fontSize = s.fontSize + "px";
+      this.crawlContent.style.top = boardH + "px";
 
-    // CSS perspective and rotateX from settings
-    var perspPx = Math.round(300 / s.perspective);
-    var rotDeg = (s.tiltAngle * 0.45).toFixed(1);
-    this.crawlBoard.style.transform =
-      "perspective(" + perspPx + "px) rotateX(" + rotDeg + "deg)";
-
-    // Text content width
-    var contentW = Math.round(boardW * s.textWidth);
-    this.crawlContent.style.width = contentW + "px";
-    this.crawlContent.style.left = ((boardW - contentW) / 2) + "px";
-
-    // Font size
-    this.crawlContent.style.fontSize = s.fontSize + "px";
-
-    // Content starts below the visible board area, will scroll up
-    this.crawlContent.style.top = boardH + "px";
-
-    // Fade overlay height
-    var fadeH = Math.round(vh * s.fadeZone);
-    this.crawlFade.style.height = fadeH + "px";
-  };
-
-  // ---- Show / hide crawl HTML ----
-  CrawlEngine.prototype._showCrawlDOM = function () {
-    if (this.crawlPhaseActive) return;
-    this.crawlPhaseActive = true;
-    this._applyCrawlCSS();
-    this.crawlContainer.style.display = "block";
-    this.crawlY = 0;
-  };
-
-  CrawlEngine.prototype._hideCrawlDOM = function () {
-    this.crawlPhaseActive = false;
-    this.crawlContainer.style.display = "none";
-    this.crawlY = 0;
-    this.crawlContent.style.transform = "";
-  };
-
-  // ---- Start / stop / resize ----
-  CrawlEngine.prototype.start = function () {
-    this.running = true;
-    this.resize();
-    this._hideCrawlDOM();
-    this.startTime = performance.now();
-    this.canvas.style.display = "";
-    this._tick();
-  };
-
-  CrawlEngine.prototype.stop = function () {
-    this.running = false;
-    if (this.rafId) {
-      cancelAnimationFrame(this.rafId);
-      this.rafId = null;
+      const fadeH = Math.round(vh * s.fadeZone);
+      this.crawlFade.style.height = fadeH + "px";
     }
-    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    this.ctx.clearRect(0, 0, this.cssW, this.cssH);
-    this.canvas.style.display = "none";
-    this._hideCrawlDOM();
-    if (this.onEnd) this.onEnd();
-  };
 
-  CrawlEngine.prototype.resize = function () {
-    this.dpr = window.devicePixelRatio || 1;
-    this.cssW = this.canvas.clientWidth;
-    this.cssH = this.canvas.clientHeight;
-    this.canvas.width = this.cssW * this.dpr;
-    this.canvas.height = this.cssH * this.dpr;
-    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    if (this.crawlPhaseActive) {
+    // ---- Show / hide crawl HTML ----
+    private _showCrawlDOM(): void {
+      if (this.crawlPhaseActive) return;
+      this.crawlPhaseActive = true;
       this._applyCrawlCSS();
+      this.crawlContainer.style.display = "block";
+      this.crawlY = 0;
     }
-  };
 
-  CrawlEngine.prototype.setSettings = function (s) {
-    this.settings = merge(DEFAULTS, s);
-    saveSettings(this.settings);
-    if (this.crawlPhaseActive) {
-      this._applyCrawlCSS();
+    private _hideCrawlDOM(): void {
+      this.crawlPhaseActive = false;
+      this.crawlContainer.style.display = "none";
+      this.crawlY = 0;
+      this.crawlContent.style.transform = "";
     }
-  };
 
-  CrawlEngine.prototype.getSettings = function () {
-    return merge(this.settings, null);
-  };
+    // ---- Start / stop / resize ----
+    start(): void {
+      this.running = true;
+      this.resize();
+      this._hideCrawlDOM();
+      this.startTime = performance.now();
+      this.canvas.style.display = "";
+      this._tick();
+    }
 
-  // ---- Animation tick ----
-  CrawlEngine.prototype._tick = function () {
-    if (!this.running) return;
+    stop(): void {
+      this.running = false;
+      if (this.rafId) {
+        cancelAnimationFrame(this.rafId);
+        this.rafId = null;
+      }
+      this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      this.ctx.clearRect(0, 0, this.cssW, this.cssH);
+      this.canvas.style.display = "none";
+      this._hideCrawlDOM();
+      if (this.onEnd) this.onEnd();
+    }
 
-    var now = performance.now();
-    var elapsed = (now - this.startTime) / 1000;
-    var s = this.settings;
-    var ctx = this.ctx;
-    var cw = this.cssW;
-    var ch = this.cssH;
+    resize(): void {
+      this.dpr = window.devicePixelRatio || 1;
+      this.cssW = this.canvas.clientWidth;
+      this.cssH = this.canvas.clientHeight;
+      this.canvas.width = this.cssW * this.dpr;
+      this.canvas.height = this.cssH * this.dpr;
+      this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      if (this.crawlPhaseActive) {
+        this._applyCrawlCSS();
+      }
+    }
 
-    // Determine phase
-    if (elapsed < s.introDuration) {
-      // Phase 1: intro text on canvas
-      ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-      ctx.clearRect(0, 0, cw, ch);
-      this._drawIntro(ctx, cw, ch, elapsed, s);
-    } else if (elapsed < s.crawlDelay) {
-      // Phase 2: logo shrink on canvas
-      ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-      ctx.clearRect(0, 0, cw, ch);
-      this._drawLogo(ctx, cw, ch, elapsed, s);
-    } else {
-      // Phase 3: HTML/CSS 3D crawl
-      // Hide canvas, show HTML
-      if (!this.crawlPhaseActive) {
+    setSettings(s: Partial<CrawlSettings>): void {
+      this.settings = merge(DEFAULTS, s);
+      saveSettings(this.settings);
+      if (this.crawlPhaseActive) {
+        this._applyCrawlCSS();
+      }
+    }
+
+    getSettings(): CrawlSettings {
+      return merge(this.settings, null);
+    }
+
+    // ---- Animation tick ----
+    _tick(): void {
+      if (!this.running) return;
+
+      const now = performance.now();
+      const elapsed = (now - this.startTime) / 1000;
+      const s = this.settings;
+      const ctx = this.ctx;
+      const cw = this.cssW;
+      const ch = this.cssH;
+
+      if (elapsed < s.introDuration) {
         ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
         ctx.clearRect(0, 0, cw, ch);
-        this.canvas.style.display = "none";
-        this._showCrawlDOM();
+        this._drawIntro(ctx, cw, ch, elapsed, s);
+      } else if (elapsed < s.crawlDelay) {
+        ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+        ctx.clearRect(0, 0, cw, ch);
+        this._drawLogo(ctx, cw, ch, elapsed, s);
+      } else {
+        if (!this.crawlPhaseActive) {
+          ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+          ctx.clearRect(0, 0, cw, ch);
+          this.canvas.style.display = "none";
+          this._showCrawlDOM();
+        }
+
+        const crawlT = elapsed - s.crawlDelay;
+        this.crawlY = crawlT * s.scrollSpeed;
+        this.crawlContent.style.transform = "translateY(-" + this.crawlY.toFixed(1) + "px)";
+
+        const contentH = this.crawlContent.offsetHeight;
+        const viewH = window.innerHeight;
+        if (this.crawlY > contentH + viewH * 0.5) {
+          this.stop();
+          return;
+        }
       }
 
-      var crawlT = elapsed - s.crawlDelay;
-      this.crawlY = crawlT * s.scrollSpeed;
-      this.crawlContent.style.transform = "translateY(-" + this.crawlY.toFixed(1) + "px)";
+      this.rafId = requestAnimationFrame(this._tick);
+    }
 
-      // End detection: stop when last text has passed the
-      // middle of the viewport (content is done scrolling through)
-      var contentH = this.crawlContent.offsetHeight;
-      var viewH = window.innerHeight;
-      if (this.crawlY > contentH + viewH * 0.5) {
-        this.stop();
-        return;
+    // ---- Phase 1: Blue intro text ----
+    private _drawIntro(
+      ctx: CanvasRenderingContext2D, cw: number, ch: number, t: number, s: CrawlSettings,
+    ): void {
+      const dur = s.introDuration;
+      const progress = t / dur;
+      let alpha: number;
+      if (progress < 0.12) {
+        alpha = progress / 0.12;
+      } else if (progress < 0.82) {
+        alpha = 1;
+      } else {
+        alpha = 1 - (progress - 0.82) / 0.18;
       }
+      alpha = Math.max(0, Math.min(1, alpha));
+
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = "#4bd5ee";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      const fontSize = Math.min(cw * 0.045, 28);
+      ctx.font = "400 " + fontSize + "px 'Trebuchet MS', 'Segoe UI', sans-serif";
+      ctx.fillText("A long time ago, in a galaxy far, far away\u2026.", cw / 2, ch / 2);
+      ctx.globalAlpha = 1;
     }
 
-    this.rafId = requestAnimationFrame(this._tick);
-  };
+    // ---- Phase 2: Logo shrink ----
+    private _drawLogo(
+      ctx: CanvasRenderingContext2D, cw: number, ch: number, t: number, s: CrawlSettings,
+    ): void {
+      const logoStart = s.introDuration;
+      const dur = s.logoDuration;
+      let lt = (t - logoStart) / dur;
+      lt = Math.max(0, Math.min(1, lt));
 
-  // ---- Phase 1: Blue intro text ----
-  CrawlEngine.prototype._drawIntro = function (ctx, cw, ch, t, s) {
-    var dur = s.introDuration;
-    var progress = t / dur;
-    var alpha;
-    if (progress < 0.12) {
-      alpha = progress / 0.12;
-    } else if (progress < 0.82) {
-      alpha = 1;
-    } else {
-      alpha = 1 - (progress - 0.82) / 0.18;
+      let scale: number;
+      if (lt < 0.1) {
+        scale = 1.15 - 0.15 * (lt / 0.1);
+      } else if (lt < 0.82) {
+        const shrinkT = (lt - 0.1) / 0.72;
+        scale = 1 - shrinkT * 0.68;
+      } else {
+        const fadeT = (lt - 0.82) / 0.18;
+        scale = 0.32 * (1 - fadeT);
+      }
+
+      let alpha = lt < 0.82 ? 1 : 1 - (lt - 0.82) / 0.18;
+      alpha = Math.max(0, Math.min(1, alpha));
+      scale = Math.max(0, scale);
+
+      if (scale < 0.01) return;
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(cw / 2, ch / 2);
+      ctx.scale(scale, scale);
+
+      const fontSize = Math.min(cw * 0.14, 120);
+      ctx.font = "900 " + fontSize + "px 'Trebuchet MS', 'Segoe UI', sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+
+      const grad = createLogoGradient(ctx, -fontSize, fontSize * 2);
+      ctx.fillStyle = grad;
+
+      ctx.fillText("BLAZING", 0, -fontSize * 0.48);
+      ctx.fillText("SUN", 0, fontSize * 0.52);
+
+      ctx.restore();
     }
-    alpha = Math.max(0, Math.min(1, alpha));
-
-    ctx.globalAlpha = alpha;
-    ctx.fillStyle = "#4bd5ee";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    var fontSize = Math.min(cw * 0.045, 28);
-    ctx.font = "400 " + fontSize + "px 'Trebuchet MS', 'Segoe UI', sans-serif";
-    ctx.fillText("A long time ago, in a galaxy far, far away\u2026.", cw / 2, ch / 2);
-    ctx.globalAlpha = 1;
-  };
-
-  // ---- Phase 2: Logo shrink ----
-  CrawlEngine.prototype._drawLogo = function (ctx, cw, ch, t, s) {
-    var logoStart = s.introDuration;
-    var dur = s.logoDuration;
-    var lt = (t - logoStart) / dur;
-    lt = Math.max(0, Math.min(1, lt));
-
-    var scale;
-    if (lt < 0.1) {
-      scale = 1.15 - 0.15 * (lt / 0.1);
-    } else if (lt < 0.82) {
-      var shrinkT = (lt - 0.1) / 0.72;
-      scale = 1 - shrinkT * 0.68;
-    } else {
-      var fadeT = (lt - 0.82) / 0.18;
-      scale = 0.32 * (1 - fadeT);
-    }
-
-    var alpha = lt < 0.82 ? 1 : 1 - (lt - 0.82) / 0.18;
-    alpha = Math.max(0, Math.min(1, alpha));
-    scale = Math.max(0, scale);
-
-    if (scale < 0.01) return;
-
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.translate(cw / 2, ch / 2);
-    ctx.scale(scale, scale);
-
-    var fontSize = Math.min(cw * 0.14, 120);
-    ctx.font = "900 " + fontSize + "px 'Trebuchet MS', 'Segoe UI', sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-
-    var grad = createLogoGradient(ctx, -fontSize, fontSize * 2);
-    ctx.fillStyle = grad;
-
-    ctx.fillText("BLAZING", 0, -fontSize * 0.48);
-    ctx.fillText("SUN", 0, fontSize * 0.52);
-
-    ctx.restore();
-  };
+  }
 
   // ============================================================
   // CONFIGURATION PANEL
   // ============================================================
-  var PANEL_ID = "crawlConfigDropdown";
-  var PANEL_BTN_ID = "crawlConfigBtn";
+  const PANEL_ID = "crawlConfigDropdown";
+  const PANEL_BTN_ID = "crawlConfigBtn";
 
-  var CONFIG_BINDINGS = [
+  const CONFIG_BINDINGS: ConfigBinding[] = [
     { id: "sw-cfg-scrollSpeed", key: "scrollSpeed", label: "Scroll Speed", min: 1, max: 500, step: 1 },
     { id: "sw-cfg-fontSize", key: "fontSize", label: "Font Size", min: 4, max: 200, step: 1 },
     { id: "sw-cfg-perspective", key: "perspective", label: "Perspective", min: 0.01, max: 10.0, step: 0.01 },
@@ -440,10 +479,10 @@
     { id: "sw-cfg-crawlDelay", key: "crawlDelay", label: "Crawl Delay", min: 1, max: 120, step: 0.5 },
   ];
 
-  function buildConfigPanel() {
-    var rows = "";
-    for (var i = 0; i < CONFIG_BINDINGS.length; i++) {
-      var b = CONFIG_BINDINGS[i];
+  function buildConfigPanel(): string {
+    let rows = "";
+    for (let i = 0; i < CONFIG_BINDINGS.length; i++) {
+      const b = CONFIG_BINDINGS[i];
       rows +=
         '<label class="svemir-row" for="' + b.id + '">' +
         "<span>" + b.label + "</span>" +
@@ -471,25 +510,25 @@
     );
   }
 
-  function ensureConfigPanel() {
+  function ensureConfigPanel(): void {
     if (document.getElementById(PANEL_ID)) return;
 
-    var temp = document.createElement("template");
+    const temp = document.createElement("template");
     temp.innerHTML = buildConfigPanel();
-    var panel = temp.content.firstElementChild;
+    const panel = temp.content.firstElementChild as HTMLElement | null;
 
-    var controls = document.querySelectorAll(".svemir-control");
-    if (controls.length > 0) {
+    const controls = document.querySelectorAll(".svemir-control");
+    if (controls.length > 0 && panel) {
       controls[controls.length - 1].after(panel);
-    } else {
+    } else if (panel) {
       document.body.appendChild(panel);
     }
   }
 
   // Close crawl panel from outside (called by other panels)
-  function closeCrawlPanel() {
-    var panel = document.getElementById(PANEL_ID);
-    var btn = document.getElementById(PANEL_BTN_ID);
+  function closeCrawlPanel(): void {
+    const panel = document.getElementById(PANEL_ID);
+    const btn = document.getElementById(PANEL_BTN_ID);
     if (panel && !panel.hidden) {
       panel.hidden = true;
       if (btn) btn.setAttribute("aria-expanded", "false");
@@ -500,27 +539,26 @@
   // Expose globally so blazing-background.ts can call it
   window.__closeCrawlPanel = closeCrawlPanel;
 
-  function bindConfigPanel(engine) {
-    var panel = document.getElementById(PANEL_ID);
+  function bindConfigPanel(engine: CrawlEngine): void {
+    const panel = document.getElementById(PANEL_ID);
     if (!panel) return;
 
-    var toggleBtn = document.getElementById(PANEL_BTN_ID);
+    const toggleBtn = document.getElementById(PANEL_BTN_ID);
 
-    // Close other config panels when opening crawl config
-    function closeOtherPanels() {
-      var ids = ["svemirDropdown", "winDropdown", "ringDropdown"];
-      var btnIds = ["spaceControll", "winControll"];
-      for (var i = 0; i < ids.length; i++) {
-        var p = document.getElementById(ids[i]);
+    function closeOtherPanels(): void {
+      const ids = ["svemirDropdown", "winDropdown", "ringDropdown"];
+      const btnIds = ["spaceControll", "winControll"];
+      for (let i = 0; i < ids.length; i++) {
+        const p = document.getElementById(ids[i]);
         if (p && !p.hidden) p.hidden = true;
       }
-      for (var j = 0; j < btnIds.length; j++) {
-        var b = document.getElementById(btnIds[j]);
+      for (let j = 0; j < btnIds.length; j++) {
+        const b = document.getElementById(btnIds[j]);
         if (b) b.setAttribute("aria-expanded", "false");
       }
     }
 
-    function setCrawlPanelOpen(open) {
+    function setCrawlPanelOpen(open: boolean): void {
       if (open) closeOtherPanels();
       panel.hidden = !open;
       if (toggleBtn) toggleBtn.setAttribute("aria-expanded", String(open));
@@ -528,59 +566,58 @@
     }
 
     if (toggleBtn) {
-      toggleBtn.addEventListener("click", function (e) {
+      toggleBtn.addEventListener("click", function (e: Event): void {
         e.preventDefault();
         e.stopPropagation();
         setCrawlPanelOpen(panel.hidden);
       });
     }
 
-    // Stop clicks inside panel from closing it
-    panel.addEventListener("click", function (e) {
+    panel.addEventListener("click", function (e: Event): void {
       e.stopPropagation();
     });
 
-    var closeBtn = panel.querySelector('[data-action="close-crawl-panel"]');
+    const closeBtn = panel.querySelector('[data-action="close-crawl-panel"]');
     if (closeBtn) {
-      closeBtn.addEventListener("click", function () {
+      closeBtn.addEventListener("click", function (): void {
         setCrawlPanelOpen(false);
       });
     }
 
-    var current = engine.getSettings();
-    for (var i = 0; i < CONFIG_BINDINGS.length; i++) {
-      var b = CONFIG_BINDINGS[i];
-      var range = document.getElementById(b.id);
-      var num = document.getElementById(b.id + "-num");
+    const current = engine.getSettings();
+    for (let i = 0; i < CONFIG_BINDINGS.length; i++) {
+      const b = CONFIG_BINDINGS[i];
+      const range = document.getElementById(b.id) as HTMLInputElement | null;
+      const num = document.getElementById(b.id + "-num") as HTMLInputElement | null;
       if (range) range.value = String(current[b.key]);
       if (num) num.value = String(current[b.key]);
     }
 
-    function collectAndApply() {
-      var newSettings = {};
-      for (var j = 0; j < CONFIG_BINDINGS.length; j++) {
-        var bind = CONFIG_BINDINGS[j];
-        var range = document.getElementById(bind.id);
+    function collectAndApply(): void {
+      const newSettings: Partial<CrawlSettings> = {};
+      for (let j = 0; j < CONFIG_BINDINGS.length; j++) {
+        const bind = CONFIG_BINDINGS[j];
+        const range = document.getElementById(bind.id) as HTMLInputElement | null;
         if (range) {
-          newSettings[bind.key] = parseFloat(range.value);
+          (newSettings as Record<string, number>)[bind.key] = Number.parseFloat(range.value);
         }
       }
       engine.setSettings(newSettings);
     }
 
     // Bidirectional sync: range <-> number input
-    for (var k = 0; k < CONFIG_BINDINGS.length; k++) {
-      (function (bind) {
-        var range = document.getElementById(bind.id);
-        var num = document.getElementById(bind.id + "-num");
+    for (let k = 0; k < CONFIG_BINDINGS.length; k++) {
+      (function (bind: ConfigBinding): void {
+        const range = document.getElementById(bind.id) as HTMLInputElement | null;
+        const num = document.getElementById(bind.id + "-num") as HTMLInputElement | null;
         if (range && num) {
-          range.addEventListener("input", function () {
+          range.addEventListener("input", function (): void {
             num.value = range.value;
             collectAndApply();
           });
-          num.addEventListener("input", function () {
-            var v = parseFloat(num.value);
-            if (!isNaN(v)) {
+          num.addEventListener("input", function (): void {
+            const v = Number.parseFloat(num.value);
+            if (!Number.isNaN(v)) {
               range.value = String(v);
               collectAndApply();
             }
@@ -589,36 +626,34 @@
       })(CONFIG_BINDINGS[k]);
     }
 
-    var resetBtn = panel.querySelector('[data-action="reset-crawl"]');
+    const resetBtn = panel.querySelector('[data-action="reset-crawl"]');
     if (resetBtn) {
-      resetBtn.addEventListener("click", function () {
+      resetBtn.addEventListener("click", function (): void {
         engine.setSettings(DEFAULTS);
-        for (var r = 0; r < CONFIG_BINDINGS.length; r++) {
-          var rb = CONFIG_BINDINGS[r];
-          var ri = document.getElementById(rb.id);
-          var rn = document.getElementById(rb.id + "-num");
+        for (let r = 0; r < CONFIG_BINDINGS.length; r++) {
+          const rb = CONFIG_BINDINGS[r];
+          const ri = document.getElementById(rb.id) as HTMLInputElement | null;
+          const rn = document.getElementById(rb.id + "-num") as HTMLInputElement | null;
           if (ri) ri.value = String(DEFAULTS[rb.key]);
           if (rn) rn.value = String(DEFAULTS[rb.key]);
         }
       });
     }
 
-    // Preview button — starts the crawl animation
-    var previewBtn = panel.querySelector('[data-action="preview-crawl"]');
+    const previewBtn = panel.querySelector('[data-action="preview-crawl"]');
     if (previewBtn) {
-      previewBtn.addEventListener("click", function () {
-        var api = window.__blazingCrawl;
+      previewBtn.addEventListener("click", function (): void {
+        const api = window.__blazingCrawl;
         if (api && !api.isRunning()) {
           api.start();
         }
       });
     }
 
-    // Stop button — stops the crawl animation
-    var stopBtn = panel.querySelector('[data-action="stop-crawl"]');
+    const stopBtn = panel.querySelector('[data-action="stop-crawl"]');
     if (stopBtn) {
-      stopBtn.addEventListener("click", function () {
-        var api = window.__blazingCrawl;
+      stopBtn.addEventListener("click", function (): void {
+        const api = window.__blazingCrawl;
         if (api && api.isRunning()) {
           api.stop();
         }
@@ -629,68 +664,61 @@
   // ============================================================
   // INITIALIZATION
   // ============================================================
-  function init() {
-    var crawlCanvas = document.getElementById("swCrawlCanvas");
+  function init(): void {
+    const crawlCanvas = document.getElementById("swCrawlCanvas") as HTMLCanvasElement | null;
     if (!crawlCanvas) return;
 
-    var skipBtn = document.getElementById("swSkip");
-    var body = document.body;
+    const skipBtn = document.getElementById("swSkip");
+    const body = document.body;
 
-    var engine = new CrawlEngine(crawlCanvas);
+    const engine = new CrawlEngine(crawlCanvas);
 
-    // End callback: reveal page content
-    engine.onEnd = function () {
+    engine.onEnd = function (): void {
       body.classList.remove("sw-active");
     };
 
-    // Skip button
     if (skipBtn) {
-      skipBtn.addEventListener("click", function (e) {
+      skipBtn.addEventListener("click", function (e: Event): void {
         e.preventDefault();
         e.stopPropagation();
         if (engine.running) engine.stop();
       });
     }
 
-    // Also allow clicking anywhere on the crawl canvas or HTML container to skip
-    crawlCanvas.addEventListener("click", function () {
+    crawlCanvas.addEventListener("click", function (): void {
       if (engine.running) engine.stop();
     });
     if (engine.crawlContainer) {
-      engine.crawlContainer.addEventListener("click", function () {
+      engine.crawlContainer.addEventListener("click", function (): void {
         if (engine.running) engine.stop();
       });
     }
 
-    // Handle resize
-    var resizeTimer = null;
-    window.addEventListener("resize", function () {
+    let resizeTimer: ReturnType<typeof setTimeout> | null = null;
+    window.addEventListener("resize", function (): void {
       if (resizeTimer) clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(function () {
+      resizeTimer = setTimeout(function (): void {
         if (engine.running) engine.resize();
       }, 100);
     });
 
-    // Config panel
     ensureConfigPanel();
     bindConfigPanel(engine);
 
-    // Start the crawl
     engine.start();
 
-    // Expose API for replay button
     window.__blazingCrawl = {
-      start: function () {
+      start: function (): void {
         if (!engine.running) {
           crawlCanvas.style.display = "";
           body.classList.add("sw-active");
           engine.start();
         }
       },
-      stop: function () {
+      stop: function (): void {
         if (engine.running) engine.stop();
       },
-      isRunning: function () {
+      isRunning: function (): boolean {
         return engine.running;
       },
       engine: engine,

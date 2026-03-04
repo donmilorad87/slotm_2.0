@@ -1,8 +1,153 @@
-const CANVAS_ID = "space";
-const CONTROL_BUTTON_ID = "spaceControll";
-const CONTROL_PANEL_ID = "svemirDropdown";
-const WIN_BUTTON_ID = "winControll";
-const WIN_PANEL_ID = "winDropdown";
+import type { RingSettings } from "./types.js";
+
+/* -------------------------------------------------------------------------- */
+/*  Interfaces & Types                                                        */
+/* -------------------------------------------------------------------------- */
+
+interface StarSettings {
+  movingStars: number;
+  staticStars: number;
+  staticStarRadius: number;
+  staticIllumination: boolean;
+  starRadius: number;
+  focalLength: number;
+  farness: number;
+  brightness: number;
+  speed: number;
+  gravity: number;
+  drift: number;
+  turbulence: number;
+}
+
+type WinMode = "magic_stars" | "magic_confetti";
+
+interface WinSettings {
+  mode: WinMode;
+  msCount: number;
+  msSpeed: number;
+  msDrift: number;
+  msTurbulence: number;
+  msSize: number;
+  msBrightness: number;
+  msDuration: number;
+  msHueSpeed: number;
+  msFocalLength: number;
+  msGravity: number;
+  mcCount: number;
+  mcSpeed: number;
+  mcDrift: number;
+  mcTurbulence: number;
+  mcSize: number;
+  mcBrightness: number;
+  mcDuration: number;
+  mcDamping: number;
+}
+
+// RingSettings imported from ./types.ts
+
+type ControlBindingType = "integer" | "float" | "boolean";
+
+interface ControlBinding {
+  id: string;
+  setting: string;
+  type: ControlBindingType;
+}
+
+interface RingControlBinding {
+  id: string;
+  setting: string;
+  type: "float";
+}
+
+interface RingColorBinding {
+  id: string;
+  setting: string;
+}
+
+interface MovingLocations {
+  aWorld: number;
+  aBaseSize: number;
+  aPhase: number;
+  uResolution: WebGLUniformLocation | null;
+  uCenter: WebGLUniformLocation | null;
+  uFocal: WebGLUniformLocation | null;
+  uMaxDepth: WebGLUniformLocation | null;
+  uRadiusScale: WebGLUniformLocation | null;
+  uBrightness: WebGLUniformLocation | null;
+  uTime: WebGLUniformLocation | null;
+  uScrollY: WebGLUniformLocation | null;
+}
+
+interface StaticLocations {
+  aPosition: number;
+  aRadius: number;
+  aAlpha: number;
+  aPhase: number;
+  aSpeed: number;
+  aAmp: number;
+  uResolution: WebGLUniformLocation | null;
+  uRadiusScale: WebGLUniformLocation | null;
+  uBrightness: WebGLUniformLocation | null;
+  uTime: WebGLUniformLocation | null;
+  uIllum: WebGLUniformLocation | null;
+  uScrollY: WebGLUniformLocation | null;
+  uMinY: WebGLUniformLocation | null;
+  uSpanY: WebGLUniformLocation | null;
+}
+
+interface MagicStarsLocations {
+  aWorld: number;
+  aBaseSize: number;
+  aPhase: number;
+  aHue: number;
+  uResolution: WebGLUniformLocation | null;
+  uCenter: WebGLUniformLocation | null;
+  uFocal: WebGLUniformLocation | null;
+  uMaxDepth: WebGLUniformLocation | null;
+  uRadiusScale: WebGLUniformLocation | null;
+  uBrightness: WebGLUniformLocation | null;
+  uTime: WebGLUniformLocation | null;
+  uHueSpeed: WebGLUniformLocation | null;
+  uFadeAlpha: WebGLUniformLocation | null;
+}
+
+interface MagicConfettiLocations {
+  aPosition: number;
+  aSize: number;
+  aRotation: number;
+  aShape: number;
+  aHuePhase: number;
+  aAlpha: number;
+  uResolution: WebGLUniformLocation | null;
+  uTime: WebGLUniformLocation | null;
+}
+
+interface BoundRangeControl<B = ControlBinding> {
+  input: HTMLInputElement;
+  numberInput: HTMLInputElement | null;
+  binding: B;
+}
+
+type BoundControl = BoundRangeControl<ControlBinding>;
+type BoundWinControl = BoundRangeControl<ControlBinding>;
+type BoundRingRangeControl = BoundRangeControl<RingControlBinding>;
+
+interface BoundRingColorControl {
+  input: HTMLInputElement;
+  binding: RingColorBinding;
+}
+
+// __closeCrawlPanel Window augmentation imported from ./types.ts
+
+/* -------------------------------------------------------------------------- */
+/*  Constants                                                                 */
+/* -------------------------------------------------------------------------- */
+
+const CANVAS_ID: string = "space";
+const CONTROL_BUTTON_ID: string = "spaceControll";
+const CONTROL_PANEL_ID: string = "svemirDropdown";
+const WIN_BUTTON_ID: string = "winControll";
+const WIN_PANEL_ID: string = "winDropdown";
 
 const DEFAULT_STAR_SETTINGS = Object.freeze({
   movingStars: 1400,
@@ -17,9 +162,9 @@ const DEFAULT_STAR_SETTINGS = Object.freeze({
   gravity: 0.6,
   drift: 0.8,
   turbulence: 0.15,
-});
+}) satisfies StarSettings;
 
-const CONTROL_BINDINGS = [
+const CONTROL_BINDINGS: readonly ControlBinding[] = [
   { id: "sv-control-movingStars", setting: "movingStars", type: "integer" },
   { id: "sv-control-staticStars", setting: "staticStars", type: "integer" },
   { id: "sv-control-staticRadius", setting: "staticStarRadius", type: "float" },
@@ -38,14 +183,14 @@ const CONTROL_BINDINGS = [
   { id: "sv-control-turbulence", setting: "turbulence", type: "float" },
 ];
 
-const PARALLAX_STATIC_FACTOR = 0.08;
-const PARALLAX_MOVING_FACTOR = 0.2;
-const PARALLAX_SMOOTHING = 0.16;
-const STAR_SETTINGS_STORAGE_KEY = "slotm.space.settings.v1";
+const PARALLAX_STATIC_FACTOR: number = 0.08;
+const PARALLAX_MOVING_FACTOR: number = 0.2;
+const PARALLAX_SMOOTHING: number = 0.16;
+const STAR_SETTINGS_STORAGE_KEY: string = "slotm.space.settings.v1";
 
-const WIN_SETTINGS_STORAGE_KEY = "slotm.win.settings.v1";
-const RING_SETTINGS_STORAGE_KEY = "slotm.ring.settings.v1";
-const RING_PANEL_ID = "ringDropdown";
+const WIN_SETTINGS_STORAGE_KEY: string = "slotm.win.settings.v1";
+const RING_SETTINGS_STORAGE_KEY: string = "slotm.ring.settings.v1";
+const RING_PANEL_ID: string = "ringDropdown";
 
 const DEFAULT_RING_SETTINGS = Object.freeze({
   cellFillColor: "rgba(208, 156, 61, 0.2)",
@@ -68,9 +213,9 @@ const DEFAULT_RING_SETTINGS = Object.freeze({
   swingAmplitude: 40,
   cameraZoom: -34,
   cameraPitch: -0.08,
-});
+}) satisfies RingSettings;
 
-const RING_CONTROL_BINDINGS = [
+const RING_CONTROL_BINDINGS: readonly RingControlBinding[] = [
   { id: "sv-ring-cellFillAlpha", setting: "cellFillAlpha", type: "float" },
   { id: "sv-ring-gapFillAlpha", setting: "gapFillAlpha", type: "float" },
   { id: "sv-ring-pulseMinAlpha", setting: "innerRingPulseMinAlpha", type: "float" },
@@ -82,7 +227,7 @@ const RING_CONTROL_BINDINGS = [
   { id: "sv-ring-cameraPitch", setting: "cameraPitch", type: "float" },
 ];
 
-const RING_COLOR_BINDINGS = [
+const RING_COLOR_BINDINGS: readonly RingColorBinding[] = [
   { id: "sv-ring-cellFillColor", setting: "cellFillColor" },
   { id: "sv-ring-borderColor", setting: "borderColor" },
   { id: "sv-ring-contourColor", setting: "contourColor" },
@@ -97,7 +242,7 @@ const RING_COLOR_BINDINGS = [
 ];
 
 const DEFAULT_WIN_SETTINGS = Object.freeze({
-  mode: "magic_stars",
+  mode: "magic_stars" as WinMode,
   msCount: 1000,
   msSpeed: 2.5,
   msDrift: 2.8,
@@ -116,9 +261,9 @@ const DEFAULT_WIN_SETTINGS = Object.freeze({
   mcBrightness: 1.0,
   mcDuration: 20,
   mcDamping: 0.994,
-});
+}) satisfies WinSettings;
 
-const WIN_CONTROL_BINDINGS = [
+const WIN_CONTROL_BINDINGS: readonly ControlBinding[] = [
   { id: "sv-win-msCount", setting: "msCount", type: "integer" },
   { id: "sv-win-msSpeed", setting: "msSpeed", type: "float" },
   { id: "sv-win-msDrift", setting: "msDrift", type: "float" },
@@ -139,7 +284,7 @@ const WIN_CONTROL_BINDINGS = [
   { id: "sv-win-mcDamping", setting: "mcDamping", type: "float" },
 ];
 
-const SPACE_BUTTON_TEMPLATE = `<button
+const SPACE_BUTTON_TEMPLATE: string = `<button
   id="spaceControll"
   type="button"
   class="svemir-toggle"
@@ -148,7 +293,7 @@ const SPACE_BUTTON_TEMPLATE = `<button
   aria-controls="svemirDropdown"
 >Space Controlls</button>`;
 
-const WIN_BUTTON_TEMPLATE = `<button
+const WIN_BUTTON_TEMPLATE: string = `<button
   id="winControll"
   type="button"
   class="svemir-toggle"
@@ -157,7 +302,7 @@ const WIN_BUTTON_TEMPLATE = `<button
   aria-controls="winDropdown"
 >Win Animation</button>`;
 
-const SVEMIR_DROPDOWN_TEMPLATE = `<div id="svemirDropdown" class="space-configuration svemir-control" hidden>
+const SVEMIR_DROPDOWN_TEMPLATE: string = `<div id="svemirDropdown" class="space-configuration svemir-control" hidden>
   <button type="button" class="svemir-close" data-action="close-panel" aria-label="Close">\u2715</button>
   <h2>Star Commands</h2>
 
@@ -236,7 +381,7 @@ const SVEMIR_DROPDOWN_TEMPLATE = `<div id="svemirDropdown" class="space-configur
   <button type="button" class="svemir-reset" data-action="reset-stars">Restore default stars</button>
 </div>`;
 
-const WIN_DROPDOWN_TEMPLATE = `<div id="winDropdown" class="space-configuration svemir-control" hidden>
+const WIN_DROPDOWN_TEMPLATE: string = `<div id="winDropdown" class="space-configuration svemir-control" hidden>
   <button type="button" class="svemir-close" data-action="close-win-panel" aria-label="Close">\u2715</button>
   <h2>Win Animation</h2>
 
@@ -367,7 +512,7 @@ const WIN_DROPDOWN_TEMPLATE = `<div id="winDropdown" class="space-configuration 
   </div>
 </div>`;
 
-const RING_DROPDOWN_TEMPLATE = `<div id="ringDropdown" class="space-configuration svemir-control" hidden>
+const RING_DROPDOWN_TEMPLATE: string = `<div id="ringDropdown" class="space-configuration svemir-control" hidden>
   <button type="button" class="svemir-close" data-action="close-ring-panel" aria-label="Close">\u2715</button>
   <h2>Ring Configuration</h2>
 
@@ -489,7 +634,11 @@ const RING_DROPDOWN_TEMPLATE = `<div id="ringDropdown" class="space-configuratio
   <button type="button" class="svemir-reset" data-action="reset-ring">Restore default ring</button>
 </div>`;
 
-const MOVING_VERTEX_SHADER = `
+/* -------------------------------------------------------------------------- */
+/*  WebGL Shaders                                                             */
+/* -------------------------------------------------------------------------- */
+
+const MOVING_VERTEX_SHADER: string = `
 attribute vec3 a_world;
 attribute float a_base_size;
 attribute float a_phase;
@@ -522,7 +671,7 @@ void main() {
 }
 `;
 
-const MOVING_FRAGMENT_SHADER = `
+const MOVING_FRAGMENT_SHADER: string = `
 precision mediump float;
 varying float v_alpha;
 
@@ -536,7 +685,7 @@ void main() {
 }
 `;
 
-const STATIC_VERTEX_SHADER = `
+const STATIC_VERTEX_SHADER: string = `
 attribute vec2 a_position;
 attribute float a_radius;
 attribute float a_alpha;
@@ -590,7 +739,7 @@ void main() {
 }
 `;
 
-const STATIC_FRAGMENT_SHADER = `
+const STATIC_FRAGMENT_SHADER: string = `
 precision mediump float;
 varying float v_alpha;
 varying float v_illum;
@@ -614,7 +763,7 @@ void main() {
 }
 `;
 
-const CELEBRATION_VERTEX_SHADER = `
+const CELEBRATION_VERTEX_SHADER: string = `
 attribute vec2 a_position;
 attribute float a_size;
 attribute float a_rotation;
@@ -642,7 +791,7 @@ void main() {
 }
 `;
 
-const CELEBRATION_FRAGMENT_SHADER = `
+const CELEBRATION_FRAGMENT_SHADER: string = `
 precision mediump float;
 varying float v_rotation;
 varying float v_shape;
@@ -694,7 +843,7 @@ void main() {
 }
 `;
 
-const MAGIC_STARS_VERTEX_SHADER = `
+const MAGIC_STARS_VERTEX_SHADER: string = `
 attribute vec3 a_world;
 attribute float a_base_size;
 attribute float a_phase;
@@ -732,7 +881,7 @@ void main() {
 }
 `;
 
-const MAGIC_STARS_FRAGMENT_SHADER = `
+const MAGIC_STARS_FRAGMENT_SHADER: string = `
 precision mediump float;
 varying float v_alpha;
 varying float v_hue;
@@ -777,8 +926,12 @@ void main() {
 }
 `;
 
-function createShader(gl, type, source) {
-  const shader = gl.createShader(type);
+/* -------------------------------------------------------------------------- */
+/*  WebGL Helpers                                                             */
+/* -------------------------------------------------------------------------- */
+
+function createShader(gl: WebGLRenderingContext, type: number, source: string): WebGLShader | null {
+  const shader: WebGLShader | null = gl.createShader(type);
   if (!shader) {
     return null;
   }
@@ -795,9 +948,9 @@ function createShader(gl, type, source) {
   return shader;
 }
 
-function createProgram(gl, vertexSource, fragmentSource) {
-  const vertex = createShader(gl, gl.VERTEX_SHADER, vertexSource);
-  const fragment = createShader(gl, gl.FRAGMENT_SHADER, fragmentSource);
+function createProgram(gl: WebGLRenderingContext, vertexSource: string, fragmentSource: string): WebGLProgram | null {
+  const vertex: WebGLShader | null = createShader(gl, gl.VERTEX_SHADER, vertexSource);
+  const fragment: WebGLShader | null = createShader(gl, gl.FRAGMENT_SHADER, fragmentSource);
 
   if (!vertex || !fragment) {
     if (vertex) {
@@ -809,7 +962,7 @@ function createProgram(gl, vertexSource, fragmentSource) {
     return null;
   }
 
-  const program = gl.createProgram();
+  const program: WebGLProgram | null = gl.createProgram();
   if (!program) {
     gl.deleteShader(vertex);
     gl.deleteShader(fragment);
@@ -832,8 +985,73 @@ function createProgram(gl, vertexSource, fragmentSource) {
   return program;
 }
 
+/* -------------------------------------------------------------------------- */
+/*  BlazingStarfield Class                                                    */
+/* -------------------------------------------------------------------------- */
+
 class BlazingStarfield {
-  constructor(canvas, initialSettings = {}) {
+  canvas: HTMLCanvasElement;
+  gl: WebGLRenderingContext | null;
+  running: boolean;
+  rafId: number;
+  centerX: number;
+  centerY: number;
+  maxDepth: number;
+  settings: StarSettings;
+
+  movingCount: number;
+  staticCount: number;
+
+  movingRenderData: Float32Array;
+  movingDriftX: Float32Array;
+  movingDriftY: Float32Array;
+  movingVelocity: Float32Array;
+
+  staticRenderData: Float32Array;
+  staticBufferDirty: boolean;
+
+  movingProgram: WebGLProgram | null;
+  staticProgram: WebGLProgram | null;
+  movingBuffer: WebGLBuffer | null;
+  staticBuffer: WebGLBuffer | null;
+
+  movingLocations: MovingLocations | null;
+  staticLocations: StaticLocations | null;
+
+  scrollTargetY: number;
+  scrollRenderY: number;
+  staticMinY: number;
+  staticSpanY: number;
+
+  winSettings: WinSettings;
+  winActive: boolean;
+  winStartTime: number;
+  winMode: WinMode;
+
+  magicStarsProgram: WebGLProgram | null;
+  magicStarsBuffer: WebGLBuffer | null;
+  magicStarsLocations: MagicStarsLocations | null;
+  winStarsCount: number;
+  winStarsRenderData: Float32Array;
+  winStarsDriftX: Float32Array;
+  winStarsDriftY: Float32Array;
+  winStarsVelocity: Float32Array;
+
+  magicConfettiProgram: WebGLProgram | null;
+  magicConfettiBuffer: WebGLBuffer | null;
+  magicConfettiLocations: MagicConfettiLocations | null;
+  confettiCount: number;
+  confettiRenderData: Float32Array;
+  confettiVx: Float32Array;
+  confettiVy: Float32Array;
+  confettiRotSpeed: Float32Array;
+  confettiAlpha: Float32Array;
+
+  handleResize: () => void;
+  handleScroll: () => void;
+  loop: () => void;
+
+  constructor(canvas: HTMLCanvasElement, initialSettings: Partial<StarSettings> = {}) {
     this.canvas = canvas;
     this.gl = canvas.getContext("webgl", {
       alpha: true,
@@ -898,9 +1116,9 @@ class BlazingStarfield {
     this.confettiRotSpeed = new Float32Array(0);
     this.confettiAlpha = new Float32Array(0);
 
-    this.handleResize = this.handleResize.bind(this);
-    this.handleScroll = this.handleScroll.bind(this);
-    this.loop = this.loop.bind(this);
+    this.handleResize = this._handleResize.bind(this);
+    this.handleScroll = this._handleScroll.bind(this);
+    this.loop = this._loop.bind(this);
 
     if (this.gl) {
       this.initWebGL();
@@ -911,18 +1129,18 @@ class BlazingStarfield {
     this.setSettings(initialSettings);
   }
 
-  numberOrDefault(value, fallback) {
-    const parsed = Number(value);
+  numberOrDefault(value: unknown, fallback: number): number {
+    const parsed: number = Number(value);
     return Number.isFinite(parsed) ? parsed : fallback;
   }
 
-  clamp(value, min, max) {
+  clamp(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, value));
   }
 
-  normalizeSettings(nextSettings = {}) {
-    const merged = { ...this.settings, ...nextSettings };
-    const staticIllumination =
+  normalizeSettings(nextSettings: Partial<StarSettings> = {}): StarSettings {
+    const merged: StarSettings = { ...this.settings, ...nextSettings };
+    const staticIllumination: boolean =
       merged.staticIllumination === undefined
         ? DEFAULT_STAR_SETTINGS.staticIllumination
         : Boolean(merged.staticIllumination);
@@ -996,9 +1214,9 @@ class BlazingStarfield {
     };
   }
 
-  normalizeWinSettings(nextSettings = {}) {
-    const merged = { ...this.winSettings, ...nextSettings };
-    const mode = merged.mode === "magic_confetti" ? "magic_confetti" : "magic_stars";
+  normalizeWinSettings(nextSettings: Partial<WinSettings> = {}): WinSettings {
+    const merged: WinSettings = { ...this.winSettings, ...nextSettings };
+    const mode: WinMode = merged.mode === "magic_confetti" ? "magic_confetti" : "magic_stars";
 
     return {
       mode,
@@ -1059,23 +1277,23 @@ class BlazingStarfield {
     };
   }
 
-  computeMaxDepth() {
-    const depthScale = Math.max(0.05, this.settings.farness);
+  computeMaxDepth(): number {
+    const depthScale: number = Math.max(0.05, this.settings.farness);
     return Math.max(60, this.canvas.width * depthScale);
   }
 
-  initWebGL() {
-    const gl = this.gl;
+  initWebGL(): void {
+    const gl: WebGLRenderingContext | null = this.gl;
     if (!gl) {
       return;
     }
 
-    const movingProgram = createProgram(
+    const movingProgram: WebGLProgram | null = createProgram(
       gl,
       MOVING_VERTEX_SHADER,
       MOVING_FRAGMENT_SHADER,
     );
-    const staticProgram = createProgram(
+    const staticProgram: WebGLProgram | null = createProgram(
       gl,
       STATIC_VERTEX_SHADER,
       STATIC_FRAGMENT_SHADER,
@@ -1123,7 +1341,7 @@ class BlazingStarfield {
     this.movingBuffer = gl.createBuffer();
     this.staticBuffer = gl.createBuffer();
 
-    const magicStarsProgram = createProgram(
+    const magicStarsProgram: WebGLProgram | null = createProgram(
       gl,
       MAGIC_STARS_VERTEX_SHADER,
       MAGIC_STARS_FRAGMENT_SHADER,
@@ -1148,7 +1366,7 @@ class BlazingStarfield {
       this.magicStarsBuffer = gl.createBuffer();
     }
 
-    const magicConfettiProgram = createProgram(
+    const magicConfettiProgram: WebGLProgram | null = createProgram(
       gl,
       CELEBRATION_VERTEX_SHADER,
       CELEBRATION_FRAGMENT_SHADER,
@@ -1173,10 +1391,10 @@ class BlazingStarfield {
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
   }
 
-  setSettings(nextSettings = {}) {
-    const normalized = this.normalizeSettings(nextSettings);
-    const movingCountChanged = normalized.movingStars !== this.settings.movingStars;
-    const staticCountChanged = normalized.staticStars !== this.settings.staticStars;
+  setSettings(nextSettings: Partial<StarSettings> = {}): void {
+    const normalized: StarSettings = this.normalizeSettings(nextSettings);
+    const movingCountChanged: boolean = normalized.movingStars !== this.settings.movingStars;
+    const staticCountChanged: boolean = normalized.staticStars !== this.settings.staticStars;
 
     this.settings = normalized;
     this.maxDepth = this.computeMaxDepth();
@@ -1192,53 +1410,53 @@ class BlazingStarfield {
     }
   }
 
-  getSettings() {
+  getSettings(): StarSettings {
     return { ...this.settings };
   }
 
-  resetDefaults() {
+  resetDefaults(): void {
     this.setSettings(DEFAULT_STAR_SETTINGS);
   }
 
-  setWinSettings(nextSettings = {}) {
+  setWinSettings(nextSettings: Partial<WinSettings> = {}): void {
     this.winSettings = this.normalizeWinSettings(nextSettings);
   }
 
-  getWinSettings() {
+  getWinSettings(): WinSettings {
     return { ...this.winSettings };
   }
 
-  resetWinDefaults() {
+  resetWinDefaults(): void {
     this.winSettings = { ...DEFAULT_WIN_SETTINGS };
   }
 
-  fillMovingStar(index, spawnFar = false) {
-    const offset = index * 5;
+  fillMovingStar(index: number, spawnFar: boolean = false): void {
+    const offset: number = index * 5;
     if (spawnFar) {
-      const spawnPadX = Math.max(24, this.canvas.width * 0.18);
-      const spawnPadY = Math.max(24, this.canvas.height * 0.18);
-      const spawnOnVerticalSides = Math.random() < 0.5;
-      let px = 0;
-      let py = 0;
+      const spawnPadX: number = Math.max(24, this.canvas.width * 0.18);
+      const spawnPadY: number = Math.max(24, this.canvas.height * 0.18);
+      const spawnOnVerticalSides: boolean = Math.random() < 0.5;
+      let px: number = 0;
+      let py: number = 0;
 
       if (spawnOnVerticalSides) {
-        const leftSide = Math.random() < 0.5;
-        const sideOffset = 0.35 + Math.random() * 0.9;
+        const leftSide: boolean = Math.random() < 0.5;
+        const sideOffset: number = 0.35 + Math.random() * 0.9;
         px = leftSide
           ? -spawnPadX * sideOffset
           : this.canvas.width + spawnPadX * sideOffset;
         py = -spawnPadY * 0.4 + Math.random() * (this.canvas.height + spawnPadY * 0.8);
       } else {
-        const topSide = Math.random() < 0.5;
-        const sideOffset = 0.35 + Math.random() * 0.9;
+        const topSide: boolean = Math.random() < 0.5;
+        const sideOffset: number = 0.35 + Math.random() * 0.9;
         py = topSide
           ? -spawnPadY * sideOffset
           : this.canvas.height + spawnPadY * sideOffset;
         px = -spawnPadX * 0.4 + Math.random() * (this.canvas.width + spawnPadX * 0.8);
       }
 
-      const z = Math.max(12, this.maxDepth * (0.35 + Math.random() * 0.65));
-      const focal = Math.max(12, this.settings.focalLength);
+      const z: number = Math.max(12, this.maxDepth * (0.35 + Math.random() * 0.65));
+      const focal: number = Math.max(12, this.settings.focalLength);
 
       this.movingRenderData[offset] =
         this.centerX + ((px - this.centerX) * z) / focal;
@@ -1258,7 +1476,7 @@ class BlazingStarfield {
     this.movingVelocity[index] = 0.7 + Math.random() * 1.4;
   }
 
-  initMovingStars() {
+  initMovingStars(): void {
     this.movingCount = this.settings.movingStars;
 
     this.movingRenderData = new Float32Array(this.movingCount * 5);
@@ -1266,49 +1484,49 @@ class BlazingStarfield {
     this.movingDriftY = new Float32Array(this.movingCount);
     this.movingVelocity = new Float32Array(this.movingCount);
 
-    for (let i = 0; i < this.movingCount; i += 1) {
+    for (let i: number = 0; i < this.movingCount; i += 1) {
       this.fillMovingStar(i, false);
     }
   }
 
-  keepMovingStarsWithinDepth() {
-    for (let i = 0; i < this.movingCount; i += 1) {
-      const offset = i * 5;
+  keepMovingStarsWithinDepth(): void {
+    for (let i: number = 0; i < this.movingCount; i += 1) {
+      const offset: number = i * 5;
       if (this.movingRenderData[offset + 2] > this.maxDepth) {
         this.movingRenderData[offset + 2] = Math.max(1, Math.random() * this.maxDepth);
       }
     }
   }
 
-  updateStaticCoverageRange() {
-    const viewportHeight = Math.max(1, this.canvas.height || window.innerHeight || 1);
-    const doc = document.documentElement;
-    const body = document.body;
-    const documentHeight = Math.max(
+  updateStaticCoverageRange(): void {
+    const viewportHeight: number = Math.max(1, this.canvas.height || window.innerHeight || 1);
+    const doc: HTMLElement = document.documentElement;
+    const body: HTMLElement | null = document.body;
+    const documentHeight: number = Math.max(
       doc ? doc.scrollHeight : 0,
       body ? body.scrollHeight : 0,
       viewportHeight,
     );
-    const maxScrollable = Math.max(0, documentHeight - viewportHeight);
-    const parallaxTravel = maxScrollable * PARALLAX_STATIC_FACTOR;
-    const padding = Math.max(120, viewportHeight * 0.25, parallaxTravel + viewportHeight * 0.15);
+    const maxScrollable: number = Math.max(0, documentHeight - viewportHeight);
+    const parallaxTravel: number = maxScrollable * PARALLAX_STATIC_FACTOR;
+    const padding: number = Math.max(120, viewportHeight * 0.25, parallaxTravel + viewportHeight * 0.15);
 
     this.staticMinY = -padding;
     this.staticSpanY = Math.max(viewportHeight + padding * 2, viewportHeight + 1);
   }
 
-  initStaticStars() {
+  initStaticStars(): void {
     this.updateStaticCoverageRange();
     this.staticCount = this.settings.staticStars;
     this.staticRenderData = new Float32Array(this.staticCount * 7);
 
-    for (let i = 0; i < this.staticCount; i += 1) {
-      const offset = i * 7;
+    for (let i: number = 0; i < this.staticCount; i += 1) {
+      const offset: number = i * 7;
       this.staticRenderData[offset] = Math.random() * this.canvas.width;
       this.staticRenderData[offset + 1] = this.staticMinY + Math.random() * this.staticSpanY;
       // Every ~100th star gets a random size coefficient (2x-4x),
       // the rest stay at base size (1.0 × staticStarRadius).
-      const isBig = (i % 100 === 0) || (Math.random() < 0.01);
+      const isBig: boolean = (i % 100 === 0) || (Math.random() < 0.01);
       this.staticRenderData[offset + 2] = isBig
         ? 2.0 + Math.random() * 2.0
         : 1.0;
@@ -1321,9 +1539,9 @@ class BlazingStarfield {
     this.staticBufferDirty = true;
   }
 
-  handleResize() {
-    const cssW = this.canvas.clientWidth || window.innerWidth;
-    const cssH = this.canvas.clientHeight || window.innerHeight;
+  _handleResize(): void {
+    const cssW: number = this.canvas.clientWidth || window.innerWidth;
+    const cssH: number = this.canvas.clientHeight || window.innerHeight;
     this.canvas.width = cssW;
     this.canvas.height = cssH;
     this.centerX = cssW / 2;
@@ -1337,51 +1555,51 @@ class BlazingStarfield {
       this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
     }
 
-    this.handleScroll();
+    this._handleScroll();
   }
 
-  handleScroll() {
+  _handleScroll(): void {
     this.scrollTargetY = window.scrollY || window.pageYOffset || 0;
-    const previousSpan = this.staticSpanY;
+    const previousSpan: number = this.staticSpanY;
     this.updateStaticCoverageRange();
     if (this.staticCount > 0 && this.staticSpanY > previousSpan + 1) {
       this.initStaticStars();
     }
   }
 
-  updateParallax() {
-    const delta = this.scrollTargetY - this.scrollRenderY;
+  updateParallax(): void {
+    const delta: number = this.scrollTargetY - this.scrollRenderY;
     this.scrollRenderY += delta * PARALLAX_SMOOTHING;
     if (Math.abs(delta) < 0.01) {
       this.scrollRenderY = this.scrollTargetY;
     }
   }
 
-  moveStars() {
+  moveStars(): void {
     if (this.movingCount === 0) {
       return;
     }
 
-    const width = this.canvas.width;
-    const height = this.canvas.height;
-    const outXMin = -width * 0.35;
-    const outXMax = width * 1.35;
-    const outYMin = -height * 0.35;
-    const outYMax = height * 1.35;
+    const width: number = this.canvas.width;
+    const height: number = this.canvas.height;
+    const outXMin: number = -width * 0.35;
+    const outXMax: number = width * 1.35;
+    const outYMin: number = -height * 0.35;
+    const outYMax: number = height * 1.35;
 
-    const speed = this.settings.speed;
-    const gravity = this.settings.gravity * 0.0026 * speed;
-    const driftScale = this.settings.drift * speed;
-    const turbulence = this.settings.turbulence * speed;
+    const speed: number = this.settings.speed;
+    const gravity: number = this.settings.gravity * 0.0026 * speed;
+    const driftScale: number = this.settings.drift * speed;
+    const turbulence: number = this.settings.turbulence * speed;
 
-    for (let i = 0; i < this.movingCount; i += 1) {
-      const offset = i * 5;
-      let x = this.movingRenderData[offset];
-      let y = this.movingRenderData[offset + 1];
-      let z = this.movingRenderData[offset + 2];
+    for (let i: number = 0; i < this.movingCount; i += 1) {
+      const offset: number = i * 5;
+      let x: number = this.movingRenderData[offset];
+      let y: number = this.movingRenderData[offset + 1];
+      let z: number = this.movingRenderData[offset + 2];
 
-      const depthRatio = 1 - z / this.maxDepth;
-      const zVelocity =
+      const depthRatio: number = 1 - z / this.maxDepth;
+      const zVelocity: number =
         (0.6 + this.movingVelocity[i] + depthRatio * (this.settings.focalLength / 120)) *
         speed;
       z -= zVelocity;
@@ -1394,7 +1612,7 @@ class BlazingStarfield {
         y += (Math.random() - 0.5) * turbulence;
       }
 
-      const outside = x < outXMin || x > outXMax || y < outYMin || y > outYMax;
+      const outside: boolean = x < outXMin || x > outXMax || y < outYMin || y > outYMax;
       if (z <= 1 || outside) {
         this.fillMovingStar(i, true);
         continue;
@@ -1406,36 +1624,36 @@ class BlazingStarfield {
     }
   }
 
-  fillWinStar(index, spawnFar = false) {
-    const offset = index * 6;
-    const ws = this.winSettings;
-    const winMaxDepth = Math.max(60, this.canvas.width * 1.2);
+  fillWinStar(index: number, spawnFar: boolean = false): void {
+    const offset: number = index * 6;
+    const ws: WinSettings = this.winSettings;
+    const winMaxDepth: number = Math.max(60, this.canvas.width * 1.2);
 
     if (spawnFar) {
-      const spawnPadX = Math.max(24, this.canvas.width * 0.18);
-      const spawnPadY = Math.max(24, this.canvas.height * 0.18);
-      const spawnOnVerticalSides = Math.random() < 0.5;
-      let px = 0;
-      let py = 0;
+      const spawnPadX: number = Math.max(24, this.canvas.width * 0.18);
+      const spawnPadY: number = Math.max(24, this.canvas.height * 0.18);
+      const spawnOnVerticalSides: boolean = Math.random() < 0.5;
+      let px: number = 0;
+      let py: number = 0;
 
       if (spawnOnVerticalSides) {
-        const leftSide = Math.random() < 0.5;
-        const sideOffset = 0.35 + Math.random() * 0.9;
+        const leftSide: boolean = Math.random() < 0.5;
+        const sideOffset: number = 0.35 + Math.random() * 0.9;
         px = leftSide
           ? -spawnPadX * sideOffset
           : this.canvas.width + spawnPadX * sideOffset;
         py = -spawnPadY * 0.4 + Math.random() * (this.canvas.height + spawnPadY * 0.8);
       } else {
-        const topSide = Math.random() < 0.5;
-        const sideOffset = 0.35 + Math.random() * 0.9;
+        const topSide: boolean = Math.random() < 0.5;
+        const sideOffset: number = 0.35 + Math.random() * 0.9;
         py = topSide
           ? -spawnPadY * sideOffset
           : this.canvas.height + spawnPadY * sideOffset;
         px = -spawnPadX * 0.4 + Math.random() * (this.canvas.width + spawnPadX * 0.8);
       }
 
-      const z = Math.max(12, winMaxDepth * (0.35 + Math.random() * 0.65));
-      const focal = Math.max(12, ws.msFocalLength);
+      const z: number = Math.max(12, winMaxDepth * (0.35 + Math.random() * 0.65));
+      const focal: number = Math.max(12, ws.msFocalLength);
 
       this.winStarsRenderData[offset] =
         this.centerX + ((px - this.centerX) * z) / focal;
@@ -1457,8 +1675,8 @@ class BlazingStarfield {
     this.winStarsVelocity[index] = 0.7 + Math.random() * 1.4;
   }
 
-  initMagicStars() {
-    const ws = this.winSettings;
+  initMagicStars(): void {
+    const ws: WinSettings = this.winSettings;
     this.winStarsCount = ws.msCount;
 
     this.winStarsRenderData = new Float32Array(this.winStarsCount * 6);
@@ -1466,7 +1684,7 @@ class BlazingStarfield {
     this.winStarsDriftY = new Float32Array(this.winStarsCount);
     this.winStarsVelocity = new Float32Array(this.winStarsCount);
 
-    for (let i = 0; i < this.winStarsCount; i += 1) {
+    for (let i: number = 0; i < this.winStarsCount; i += 1) {
       this.fillWinStar(i, false);
     }
 
@@ -1475,13 +1693,13 @@ class BlazingStarfield {
     this.winMode = "magic_stars";
   }
 
-  moveWinStars() {
+  moveWinStars(): void {
     if (!this.winActive || this.winMode !== "magic_stars") {
       return;
     }
 
-    const elapsed = performance.now() * 0.001 - this.winStartTime;
-    const ws = this.winSettings;
+    const elapsed: number = performance.now() * 0.001 - this.winStartTime;
+    const ws: WinSettings = this.winSettings;
 
     if (elapsed >= ws.msDuration) {
       this.winActive = false;
@@ -1489,29 +1707,29 @@ class BlazingStarfield {
       return;
     }
 
-    const width = this.canvas.width;
-    const height = this.canvas.height;
-    const winMaxDepth = Math.max(60, width * 1.2);
-    const outXMin = -width * 0.35;
-    const outXMax = width * 1.35;
-    const outYMin = -height * 0.35;
-    const outYMax = height * 1.35;
+    const width: number = this.canvas.width;
+    const height: number = this.canvas.height;
+    const winMaxDepth: number = Math.max(60, width * 1.2);
+    const outXMin: number = -width * 0.35;
+    const outXMax: number = width * 1.35;
+    const outYMin: number = -height * 0.35;
+    const outYMax: number = height * 1.35;
 
-    const speed = ws.msSpeed;
-    const gravity = ws.msGravity * 0.0026 * speed;
-    const driftScale = ws.msDrift * speed;
-    const turbulence = ws.msTurbulence * speed;
-    const progress = elapsed / ws.msDuration;
-    const respawnCutoff = 0.7;
+    const speed: number = ws.msSpeed;
+    const gravity: number = ws.msGravity * 0.0026 * speed;
+    const driftScale: number = ws.msDrift * speed;
+    const turbulence: number = ws.msTurbulence * speed;
+    const progress: number = elapsed / ws.msDuration;
+    const respawnCutoff: number = 0.7;
 
-    for (let i = 0; i < this.winStarsCount; i += 1) {
-      const offset = i * 6;
-      let x = this.winStarsRenderData[offset];
-      let y = this.winStarsRenderData[offset + 1];
-      let z = this.winStarsRenderData[offset + 2];
+    for (let i: number = 0; i < this.winStarsCount; i += 1) {
+      const offset: number = i * 6;
+      let x: number = this.winStarsRenderData[offset];
+      let y: number = this.winStarsRenderData[offset + 1];
+      let z: number = this.winStarsRenderData[offset + 2];
 
-      const depthRatio = 1 - z / winMaxDepth;
-      const zVelocity =
+      const depthRatio: number = 1 - z / winMaxDepth;
+      const zVelocity: number =
         (0.6 + this.winStarsVelocity[i] + depthRatio * (ws.msFocalLength / 120)) * speed;
       z -= zVelocity;
 
@@ -1523,7 +1741,7 @@ class BlazingStarfield {
         y += (Math.random() - 0.5) * turbulence;
       }
 
-      const outside = x < outXMin || x > outXMax || y < outYMin || y > outYMax;
+      const outside: boolean = x < outXMin || x > outXMax || y < outYMin || y > outYMax;
       if (z <= 1 || outside) {
         if (progress < respawnCutoff) {
           this.fillWinStar(i, true);
@@ -1537,12 +1755,12 @@ class BlazingStarfield {
     }
   }
 
-  drawWinStars(timeSec) {
+  drawWinStars(timeSec: number): void {
     if (!this.winActive || this.winMode !== "magic_stars") {
       return;
     }
 
-    const gl = this.gl;
+    const gl: WebGLRenderingContext | null = this.gl;
     if (!gl || !this.magicStarsProgram || !this.magicStarsBuffer || !this.magicStarsLocations) {
       return;
     }
@@ -1551,15 +1769,15 @@ class BlazingStarfield {
       return;
     }
 
-    const ws = this.winSettings;
-    const elapsed = timeSec - this.winStartTime;
-    const progress = Math.min(1, elapsed / ws.msDuration);
-    let fadeAlpha = 1.0;
+    const ws: WinSettings = this.winSettings;
+    const elapsed: number = timeSec - this.winStartTime;
+    const progress: number = Math.min(1, elapsed / ws.msDuration);
+    let fadeAlpha: number = 1.0;
     if (progress > 0.7) {
       fadeAlpha = 1.0 - (progress - 0.7) / 0.3;
     }
 
-    const winMaxDepth = Math.max(60, this.canvas.width * 1.2);
+    const winMaxDepth: number = Math.max(60, this.canvas.width * 1.2);
 
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
 
@@ -1567,8 +1785,8 @@ class BlazingStarfield {
     gl.bindBuffer(gl.ARRAY_BUFFER, this.magicStarsBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, this.winStarsRenderData, gl.DYNAMIC_DRAW);
 
-    const stride = 6 * 4;
-    const loc = this.magicStarsLocations;
+    const stride: number = 6 * 4;
+    const loc: MagicStarsLocations = this.magicStarsLocations;
 
     gl.enableVertexAttribArray(loc.aWorld);
     gl.vertexAttribPointer(loc.aWorld, 3, gl.FLOAT, false, stride, 0);
@@ -1597,14 +1815,14 @@ class BlazingStarfield {
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
   }
 
-  initMagicConfetti() {
+  initMagicConfetti(): void {
     if (!this.gl || !this.magicConfettiProgram) {
       return;
     }
 
-    const ws = this.winSettings;
-    const count = ws.mcCount;
-    const floatsPerParticle = 6;
+    const ws: WinSettings = this.winSettings;
+    const count: number = ws.mcCount;
+    const floatsPerParticle: number = 6;
 
     this.confettiCount = count;
     this.confettiRenderData = new Float32Array(count * floatsPerParticle);
@@ -1613,18 +1831,18 @@ class BlazingStarfield {
     this.confettiRotSpeed = new Float32Array(count);
     this.confettiAlpha = new Float32Array(count);
 
-    const cx = this.canvas.width * 0.5;
-    const cy = this.canvas.height * 0.5;
+    const cx: number = this.canvas.width * 0.5;
+    const cy: number = this.canvas.height * 0.5;
 
-    for (let i = 0; i < count; i += 1) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = (0.4 + Math.random() * 1.44) * ws.mcSpeed;
+    for (let i: number = 0; i < count; i += 1) {
+      const angle: number = Math.random() * Math.PI * 2;
+      const speed: number = (0.4 + Math.random() * 1.44) * ws.mcSpeed;
       this.confettiVx[i] = Math.cos(angle) * speed + (Math.random() - 0.5) * 2.0;
       this.confettiVy[i] = Math.sin(angle) * speed + (Math.random() - 0.5) * 2.0;
       this.confettiRotSpeed[i] = (Math.random() - 0.5) * 0.12;
       this.confettiAlpha[i] = 1.0;
 
-      const offset = i * floatsPerParticle;
+      const offset: number = i * floatsPerParticle;
       this.confettiRenderData[offset] = cx + (Math.random() - 0.5) * 20;
       this.confettiRenderData[offset + 1] = cy + (Math.random() - 0.5) * 20;
       this.confettiRenderData[offset + 2] = ws.mcSize * (0.44 + Math.random() * 1.56);
@@ -1638,13 +1856,13 @@ class BlazingStarfield {
     this.winMode = "magic_confetti";
   }
 
-  moveConfetti() {
+  moveConfetti(): void {
     if (!this.winActive || this.winMode !== "magic_confetti") {
       return;
     }
 
-    const ws = this.winSettings;
-    const elapsed = performance.now() * 0.001 - this.winStartTime;
+    const ws: WinSettings = this.winSettings;
+    const elapsed: number = performance.now() * 0.001 - this.winStartTime;
 
     if (elapsed >= ws.mcDuration) {
       this.winActive = false;
@@ -1652,14 +1870,14 @@ class BlazingStarfield {
       return;
     }
 
-    const count = this.confettiCount;
-    const floatsPerParticle = 6;
-    const width = this.canvas.width;
-    const height = this.canvas.height;
-    const progress = elapsed / ws.mcDuration;
+    const count: number = this.confettiCount;
+    const floatsPerParticle: number = 6;
+    const width: number = this.canvas.width;
+    const height: number = this.canvas.height;
+    const progress: number = elapsed / ws.mcDuration;
 
-    for (let i = 0; i < count; i += 1) {
-      const offset = i * floatsPerParticle;
+    for (let i: number = 0; i < count; i += 1) {
+      const offset: number = i * floatsPerParticle;
 
       this.confettiRenderData[offset] += this.confettiVx[i];
       this.confettiRenderData[offset + 1] += this.confettiVy[i];
@@ -1672,17 +1890,17 @@ class BlazingStarfield {
 
       this.confettiRenderData[offset + 3] += this.confettiRotSpeed[i];
 
-      let alpha = 1.0;
+      let alpha: number = 1.0;
       if (progress < 0.7) {
         alpha = 1.0 - progress * 0.35;
       } else {
-        const fadeProgress = (progress - 0.7) / 0.3;
+        const fadeProgress: number = (progress - 0.7) / 0.3;
         alpha = (1.0 - 0.7 * 0.35) * (1.0 - fadeProgress);
       }
       this.confettiAlpha[i] = Math.max(0, alpha);
 
-      let px = this.confettiRenderData[offset];
-      let py = this.confettiRenderData[offset + 1];
+      let px: number = this.confettiRenderData[offset];
+      let py: number = this.confettiRenderData[offset + 1];
       if (px < -60) px += width + 120;
       else if (px > width + 60) px -= width + 120;
       if (py < -60) py += height + 120;
@@ -1692,23 +1910,23 @@ class BlazingStarfield {
     }
   }
 
-  drawConfetti(timeSec) {
+  drawConfetti(timeSec: number): void {
     if (!this.winActive || this.winMode !== "magic_confetti") {
       return;
     }
 
-    const gl = this.gl;
+    const gl: WebGLRenderingContext | null = this.gl;
     if (!gl || !this.magicConfettiProgram || !this.magicConfettiBuffer || !this.magicConfettiLocations) {
       return;
     }
 
-    const count = this.confettiCount;
-    const floatsPerParticle = 6;
-    const uploadData = new Float32Array(count * 7);
+    const count: number = this.confettiCount;
+    const floatsPerParticle: number = 6;
+    const uploadData: Float32Array = new Float32Array(count * 7);
 
-    for (let i = 0; i < count; i += 1) {
-      const srcOff = i * floatsPerParticle;
-      const dstOff = i * 7;
+    for (let i: number = 0; i < count; i += 1) {
+      const srcOff: number = i * floatsPerParticle;
+      const dstOff: number = i * 7;
       uploadData[dstOff] = this.confettiRenderData[srcOff];
       uploadData[dstOff + 1] = this.confettiRenderData[srcOff + 1];
       uploadData[dstOff + 2] = this.confettiRenderData[srcOff + 2];
@@ -1724,8 +1942,8 @@ class BlazingStarfield {
     gl.bindBuffer(gl.ARRAY_BUFFER, this.magicConfettiBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, uploadData, gl.DYNAMIC_DRAW);
 
-    const stride = 7 * 4;
-    const loc = this.magicConfettiLocations;
+    const stride: number = 7 * 4;
+    const loc: MagicConfettiLocations = this.magicConfettiLocations;
 
     gl.enableVertexAttribArray(loc.aPosition);
     gl.vertexAttribPointer(loc.aPosition, 2, gl.FLOAT, false, stride, 0);
@@ -1753,11 +1971,11 @@ class BlazingStarfield {
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
   }
 
-  triggerWin() {
+  triggerWin(): void {
     this.winActive = false;
     this.canvas.classList.add("win-overlay");
 
-    const mode = this.winSettings.mode;
+    const mode: WinMode = this.winSettings.mode;
     if (mode === "magic_confetti") {
       this.initMagicConfetti();
     } else {
@@ -1765,13 +1983,13 @@ class BlazingStarfield {
     }
   }
 
-  cancelWin() {
+  cancelWin(): void {
     this.winActive = false;
     this.canvas.classList.remove("win-overlay");
   }
 
-  drawStaticStars(timeSec) {
-    const gl = this.gl;
+  drawStaticStars(timeSec: number): void {
+    const gl: WebGLRenderingContext | null = this.gl;
     if (!gl || !this.staticProgram || !this.staticBuffer || !this.staticLocations) {
       return;
     }
@@ -1788,7 +2006,7 @@ class BlazingStarfield {
       this.staticBufferDirty = false;
     }
 
-    const stride = 7 * 4;
+    const stride: number = 7 * 4;
 
     gl.enableVertexAttribArray(this.staticLocations.aPosition);
     gl.vertexAttribPointer(this.staticLocations.aPosition, 2, gl.FLOAT, false, stride, 0);
@@ -1826,8 +2044,8 @@ class BlazingStarfield {
     gl.drawArrays(gl.POINTS, 0, this.staticCount);
   }
 
-  drawMovingStars(timeSec) {
-    const gl = this.gl;
+  drawMovingStars(timeSec: number): void {
+    const gl: WebGLRenderingContext | null = this.gl;
     if (!gl || !this.movingProgram || !this.movingBuffer || !this.movingLocations) {
       return;
     }
@@ -1840,7 +2058,7 @@ class BlazingStarfield {
     gl.bindBuffer(gl.ARRAY_BUFFER, this.movingBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, this.movingRenderData, gl.DYNAMIC_DRAW);
 
-    const stride = 5 * 4;
+    const stride: number = 5 * 4;
 
     gl.enableVertexAttribArray(this.movingLocations.aWorld);
     gl.vertexAttribPointer(this.movingLocations.aWorld, 3, gl.FLOAT, false, stride, 0);
@@ -1866,13 +2084,13 @@ class BlazingStarfield {
     gl.drawArrays(gl.POINTS, 0, this.movingCount);
   }
 
-  drawStars() {
-    const gl = this.gl;
+  drawStars(): void {
+    const gl: WebGLRenderingContext | null = this.gl;
     if (!gl) {
       return;
     }
 
-    const timeSec = performance.now() * 0.001;
+    const timeSec: number = performance.now() * 0.001;
 
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
     gl.clearColor(18 / 255, 21 / 255, 22 / 255, 0.9);
@@ -1884,7 +2102,7 @@ class BlazingStarfield {
     this.drawConfetti(timeSec);
   }
 
-  loop() {
+  _loop(): void {
     if (!this.running) {
       return;
     }
@@ -1897,20 +2115,20 @@ class BlazingStarfield {
     this.rafId = window.requestAnimationFrame(this.loop);
   }
 
-  start() {
+  start(): void {
     if (!this.gl || this.running) {
       return;
     }
 
     this.running = true;
-    this.handleResize();
-    this.handleScroll();
-    this.loop();
+    this._handleResize();
+    this._handleScroll();
+    this._loop();
     window.addEventListener("resize", this.handleResize);
     window.addEventListener("scroll", this.handleScroll, { passive: true });
   }
 
-  stop() {
+  stop(): void {
     if (!this.running) {
       return;
     }
@@ -1925,42 +2143,50 @@ class BlazingStarfield {
   }
 }
 
-function formatControlValue(input) {
+/* -------------------------------------------------------------------------- */
+/*  Utility Functions                                                         */
+/* -------------------------------------------------------------------------- */
+
+function formatControlValue(input: HTMLInputElement): string {
   if (input.type === "checkbox") {
     return input.checked ? "ON" : "OFF";
   }
 
-  const value = Number(input.value);
+  const value: number = Number(input.value);
   if (!Number.isFinite(value)) {
     return input.value;
   }
 
-  const stepText = input.step || "1";
-  const decimalPart = stepText.includes(".") ? stepText.split(".")[1] : "";
+  const stepText: string = input.step || "1";
+  const decimalPart: string = stepText.includes(".") ? stepText.split(".")[1] : "";
   if (!decimalPart) {
     return String(Math.round(value));
   }
   return value.toFixed(decimalPart.length);
 }
 
-function loadSavedStarSettings() {
+/* -------------------------------------------------------------------------- */
+/*  Settings Persistence                                                      */
+/* -------------------------------------------------------------------------- */
+
+function loadSavedStarSettings(): Partial<StarSettings> | null {
   try {
-    const raw = window.localStorage.getItem(STAR_SETTINGS_STORAGE_KEY);
+    const raw: string | null = window.localStorage.getItem(STAR_SETTINGS_STORAGE_KEY);
     if (!raw) {
       return null;
     }
 
-    const parsed = JSON.parse(raw);
+    const parsed: unknown = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       return null;
     }
 
-    const allowed = Object.keys(DEFAULT_STAR_SETTINGS);
-    const sanitized = {};
+    const allowed: string[] = Object.keys(DEFAULT_STAR_SETTINGS);
+    const sanitized: Record<string, number | boolean> = {};
 
-    for (let i = 0; i < allowed.length; i += 1) {
-      const key = allowed[i];
-      const value = parsed[key];
+    for (let i: number = 0; i < allowed.length; i += 1) {
+      const key: string = allowed[i];
+      const value: unknown = (parsed as Record<string, unknown>)[key];
       if (typeof value === "number" && Number.isFinite(value)) {
         sanitized[key] = value;
       } else if (key === "staticIllumination" && typeof value === "boolean") {
@@ -1968,13 +2194,13 @@ function loadSavedStarSettings() {
       }
     }
 
-    return sanitized;
+    return sanitized as Partial<StarSettings>;
   } catch {
     return null;
   }
 }
 
-function saveStarSettings(settings) {
+function saveStarSettings(settings: StarSettings): void {
   try {
     window.localStorage.setItem(
       STAR_SETTINGS_STORAGE_KEY,
@@ -1985,7 +2211,7 @@ function saveStarSettings(settings) {
   }
 }
 
-function clearSavedStarSettings() {
+function clearSavedStarSettings(): void {
   try {
     window.localStorage.removeItem(STAR_SETTINGS_STORAGE_KEY);
   } catch {
@@ -1993,24 +2219,24 @@ function clearSavedStarSettings() {
   }
 }
 
-function loadSavedWinSettings() {
+function loadSavedWinSettings(): Partial<WinSettings> | null {
   try {
-    const raw = window.localStorage.getItem(WIN_SETTINGS_STORAGE_KEY);
+    const raw: string | null = window.localStorage.getItem(WIN_SETTINGS_STORAGE_KEY);
     if (!raw) {
       return null;
     }
 
-    const parsed = JSON.parse(raw);
+    const parsed: unknown = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       return null;
     }
 
-    const allowed = Object.keys(DEFAULT_WIN_SETTINGS);
-    const sanitized = {};
+    const allowed: string[] = Object.keys(DEFAULT_WIN_SETTINGS);
+    const sanitized: Record<string, number | string> = {};
 
-    for (let i = 0; i < allowed.length; i += 1) {
-      const key = allowed[i];
-      const value = parsed[key];
+    for (let i: number = 0; i < allowed.length; i += 1) {
+      const key: string = allowed[i];
+      const value: unknown = (parsed as Record<string, unknown>)[key];
       if (key === "mode" && (value === "magic_stars" || value === "magic_confetti")) {
         sanitized[key] = value;
       } else if (typeof value === "number" && Number.isFinite(value)) {
@@ -2018,13 +2244,13 @@ function loadSavedWinSettings() {
       }
     }
 
-    return sanitized;
+    return sanitized as Partial<WinSettings>;
   } catch {
     return null;
   }
 }
 
-function saveWinSettings(settings) {
+function saveWinSettings(settings: WinSettings): void {
   try {
     window.localStorage.setItem(
       WIN_SETTINGS_STORAGE_KEY,
@@ -2035,7 +2261,7 @@ function saveWinSettings(settings) {
   }
 }
 
-function clearSavedWinSettings() {
+function clearSavedWinSettings(): void {
   try {
     window.localStorage.removeItem(WIN_SETTINGS_STORAGE_KEY);
   } catch {
@@ -2043,43 +2269,43 @@ function clearSavedWinSettings() {
   }
 }
 
-function rgbaToHex(rgba) {
-  const match = rgba.match(/[\d.]+/g);
+function rgbaToHex(rgba: string): string {
+  const match: RegExpMatchArray | null = rgba.match(/[\d.]+/g);
   if (!match || match.length < 3) return "#000000";
-  const r = Math.round(Number(match[0]));
-  const g = Math.round(Number(match[1]));
-  const b = Math.round(Number(match[2]));
-  return "#" + [r, g, b].map(c => c.toString(16).padStart(2, "0")).join("");
+  const r: number = Math.round(Number(match[0]));
+  const g: number = Math.round(Number(match[1]));
+  const b: number = Math.round(Number(match[2]));
+  return "#" + [r, g, b].map((c: number) => c.toString(16).padStart(2, "0")).join("");
 }
 
-function rgbaAlpha(rgba) {
-  const match = rgba.match(/[\d.]+/g);
+function rgbaAlpha(rgba: string): number {
+  const match: RegExpMatchArray | null = rgba.match(/[\d.]+/g);
   if (!match || match.length < 4) return 1;
   return Number(match[3]);
 }
 
-function hexToRgba(hex, alpha = 1) {
-  const h = hex.replace("#", "");
-  const r = parseInt(h.substring(0, 2), 16);
-  const g = parseInt(h.substring(2, 4), 16);
-  const b = parseInt(h.substring(4, 6), 16);
+function hexToRgba(hex: string, alpha: number = 1): string {
+  const h: string = hex.replace("#", "");
+  const r: number = Number.parseInt(h.substring(0, 2), 16);
+  const g: number = Number.parseInt(h.substring(2, 4), 16);
+  const b: number = Number.parseInt(h.substring(4, 6), 16);
   return `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(2)})`;
 }
 
-function loadSavedRingSettings() {
+function loadSavedRingSettings(): Partial<RingSettings> | null {
   try {
-    const raw = window.localStorage.getItem(RING_SETTINGS_STORAGE_KEY);
+    const raw: string | null = window.localStorage.getItem(RING_SETTINGS_STORAGE_KEY);
     if (!raw) return null;
 
-    const parsed = JSON.parse(raw);
+    const parsed: unknown = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
 
-    const allowed = Object.keys(DEFAULT_RING_SETTINGS);
-    const sanitized = {};
+    const allowed: string[] = Object.keys(DEFAULT_RING_SETTINGS);
+    const sanitized: Record<string, number | string> = {};
 
-    for (let i = 0; i < allowed.length; i += 1) {
-      const key = allowed[i];
-      const value = parsed[key];
+    for (let i: number = 0; i < allowed.length; i += 1) {
+      const key: string = allowed[i];
+      const value: unknown = (parsed as Record<string, unknown>)[key];
       if (typeof value === "number" && Number.isFinite(value)) {
         sanitized[key] = value;
       } else if (typeof value === "string" && value.length < 80) {
@@ -2087,13 +2313,13 @@ function loadSavedRingSettings() {
       }
     }
 
-    return sanitized;
+    return sanitized as Partial<RingSettings>;
   } catch {
     return null;
   }
 }
 
-function saveRingSettings(settings) {
+function saveRingSettings(settings: Record<string, number | string>): void {
   try {
     window.localStorage.setItem(
       RING_SETTINGS_STORAGE_KEY,
@@ -2104,7 +2330,7 @@ function saveRingSettings(settings) {
   }
 }
 
-function clearSavedRingSettings() {
+function clearSavedRingSettings(): void {
   try {
     window.localStorage.removeItem(RING_SETTINGS_STORAGE_KEY);
   } catch {
@@ -2112,18 +2338,22 @@ function clearSavedRingSettings() {
   }
 }
 
-function createSpaceLoader() {
-  const wrap = document.createElement("div");
+/* -------------------------------------------------------------------------- */
+/*  DOM Helpers                                                               */
+/* -------------------------------------------------------------------------- */
+
+function createSpaceLoader(): HTMLDivElement {
+  const wrap: HTMLDivElement = document.createElement("div");
   wrap.className = "space-loader-wrap";
   wrap.setAttribute("aria-hidden", "true");
-  const spinner = document.createElement("span");
+  const spinner: HTMLSpanElement = document.createElement("span");
   spinner.className = "space-loader";
   wrap.appendChild(spinner);
   document.body.prepend(wrap);
   return wrap;
 }
 
-function fadeOutLoader(loader) {
+function fadeOutLoader(loader: HTMLDivElement | null): void {
   if (!loader || !loader.parentElement) {
     return;
   }
@@ -2133,71 +2363,71 @@ function fadeOutLoader(loader) {
   }, { once: true });
 }
 
-function ensureBackgroundCanvas() {
-  const existing = document.getElementById(CANVAS_ID);
+function ensureBackgroundCanvas(): HTMLCanvasElement {
+  const existing: HTMLElement | null = document.getElementById(CANVAS_ID);
   if (existing instanceof HTMLCanvasElement) {
     return existing;
   }
 
-  const canvas = document.createElement("canvas");
+  const canvas: HTMLCanvasElement = document.createElement("canvas");
   canvas.id = CANVAS_ID;
   canvas.setAttribute("aria-hidden", "true");
   document.body.appendChild(canvas);
   return canvas;
 }
 
-function ensureSvemirControlPanel() {
-  const hasButton = document.getElementById(CONTROL_BUTTON_ID);
-  const hasDropdown = document.getElementById(CONTROL_PANEL_ID);
+function ensureSvemirControlPanel(): void {
+  const hasButton: HTMLElement | null = document.getElementById(CONTROL_BUTTON_ID);
+  const hasDropdown: HTMLElement | null = document.getElementById(CONTROL_PANEL_ID);
   if (hasButton && hasDropdown) {
     return;
   }
 
   // Place button in topbar next to logo
   if (!hasButton) {
-    const logo = document.querySelector(".blazing-sun-logo");
+    const logo: Element | null = document.querySelector(".blazing-sun-logo");
     if (logo && logo.parentElement) {
-      const temp = document.createElement("template");
+      const temp: HTMLTemplateElement = document.createElement("template");
       temp.innerHTML = SPACE_BUTTON_TEMPLATE;
-      logo.after(temp.content.firstElementChild);
+      logo.after(temp.content.firstElementChild!);
     }
   }
 
   // Place dropdown panel at body level
   if (!hasDropdown) {
-    const temp = document.createElement("template");
+    const temp: HTMLTemplateElement = document.createElement("template");
     temp.innerHTML = SVEMIR_DROPDOWN_TEMPLATE;
-    document.body.appendChild(temp.content.firstElementChild);
+    document.body.appendChild(temp.content.firstElementChild!);
   }
 }
 
-function ensureWinControlPanel() {
-  const hasButton = document.getElementById(WIN_BUTTON_ID);
-  const hasDropdown = document.getElementById(WIN_PANEL_ID);
+function ensureWinControlPanel(): void {
+  const hasButton: HTMLElement | null = document.getElementById(WIN_BUTTON_ID);
+  const hasDropdown: HTMLElement | null = document.getElementById(WIN_PANEL_ID);
   if (hasButton && hasDropdown) {
     return;
   }
 
   // Place win button next to spaceControll button
   if (!hasButton) {
-    const spaceBtn = document.getElementById(CONTROL_BUTTON_ID);
+    const spaceBtn: HTMLElement | null = document.getElementById(CONTROL_BUTTON_ID);
     if (spaceBtn) {
-      const temp = document.createElement("template");
+      const temp: HTMLTemplateElement = document.createElement("template");
       temp.innerHTML = WIN_BUTTON_TEMPLATE;
-      spaceBtn.after(temp.content.firstElementChild);
+      spaceBtn.after(temp.content.firstElementChild!);
     }
   }
 
   // Place win dropdown right after the space controls dropdown
   if (!hasDropdown) {
-    const temp = document.createElement("template");
+    const temp: HTMLTemplateElement = document.createElement("template");
     temp.innerHTML = WIN_DROPDOWN_TEMPLATE;
-    const winEl = temp.content.firstElementChild;
-    const spaceDropdown = document.getElementById(CONTROL_PANEL_ID);
+    const winEl: Element = temp.content.firstElementChild!;
+    const spaceDropdown: HTMLElement | null = document.getElementById(CONTROL_PANEL_ID);
     if (spaceDropdown) {
       spaceDropdown.after(winEl);
     } else {
-      const topbar = document.querySelector(".topbar");
+      const topbar: Element | null = document.querySelector(".topbar");
       if (topbar) {
         topbar.after(winEl);
       } else {
@@ -2207,16 +2437,16 @@ function ensureWinControlPanel() {
   }
 }
 
-function ensureRingControlPanel() {
-  const hasDropdown = document.getElementById(RING_PANEL_ID);
+function ensureRingControlPanel(): void {
+  const hasDropdown: HTMLElement | null = document.getElementById(RING_PANEL_ID);
   if (hasDropdown) {
     return;
   }
 
-  const temp = document.createElement("template");
+  const temp: HTMLTemplateElement = document.createElement("template");
   temp.innerHTML = RING_DROPDOWN_TEMPLATE;
-  const ringEl = temp.content.firstElementChild;
-  const winDropdown = document.getElementById(WIN_PANEL_ID);
+  const ringEl: Element = temp.content.firstElementChild!;
+  const winDropdown: HTMLElement | null = document.getElementById(WIN_PANEL_ID);
   if (winDropdown) {
     winDropdown.after(ringEl);
   } else {
@@ -2224,23 +2454,27 @@ function ensureRingControlPanel() {
   }
 }
 
-function bindSvemirControlPanel(starfield) {
-  const button = document.getElementById(CONTROL_BUTTON_ID);
-  const dropdown = document.getElementById(CONTROL_PANEL_ID);
+/* -------------------------------------------------------------------------- */
+/*  Control Panel Bindings                                                    */
+/* -------------------------------------------------------------------------- */
+
+function bindSvemirControlPanel(starfield: BlazingStarfield): void {
+  const button: HTMLElement | null = document.getElementById(CONTROL_BUTTON_ID);
+  const dropdown: HTMLElement | null = document.getElementById(CONTROL_PANEL_ID);
 
   if (!(button instanceof HTMLButtonElement) || !(dropdown instanceof HTMLElement)) {
     return;
   }
 
-  const controls = [];
-  for (let i = 0; i < CONTROL_BINDINGS.length; i += 1) {
-    const binding = CONTROL_BINDINGS[i];
-    const input = document.getElementById(binding.id);
+  const controls: BoundControl[] = [];
+  for (let i: number = 0; i < CONTROL_BINDINGS.length; i += 1) {
+    const binding: ControlBinding = CONTROL_BINDINGS[i];
+    const input: HTMLElement | null = document.getElementById(binding.id);
     if (input instanceof HTMLInputElement) {
-      let numberInput = null;
+      let numberInput: HTMLInputElement | null = null;
       if (binding.type !== "boolean" && input.type === "range") {
-        const numberId = `${binding.id}-input`;
-        const existing = document.getElementById(numberId);
+        const numberId: string = `${binding.id}-input`;
+        const existing: HTMLElement | null = document.getElementById(numberId);
         if (existing instanceof HTMLInputElement) {
           numberInput = existing;
         } else {
@@ -2252,7 +2486,7 @@ function bindSvemirControlPanel(starfield) {
           numberInput.max = input.max;
           numberInput.step = input.step || (binding.type === "integer" ? "1" : "0.01");
           numberInput.value = input.value;
-          const labelText = input
+          const labelText: string | undefined = input
             .closest("label")
             ?.querySelector("span")
             ?.textContent?.trim();
@@ -2270,10 +2504,10 @@ function bindSvemirControlPanel(starfield) {
     }
   }
 
-  function normalizeForInputRange(value, inputEl, type) {
-    let next = value;
-    const min = Number(inputEl.min);
-    const max = Number(inputEl.max);
+  function normalizeForInputRange(value: number, inputEl: HTMLInputElement, type: ControlBindingType): number {
+    let next: number = value;
+    const min: number = Number(inputEl.min);
+    const max: number = Number(inputEl.max);
     if (Number.isFinite(min)) {
       next = Math.max(min, next);
     }
@@ -2286,17 +2520,17 @@ function bindSvemirControlPanel(starfield) {
     return next;
   }
 
-  function readSettingsFromInputs() {
-    const next = {};
-    for (let i = 0; i < controls.length; i += 1) {
-      const item = controls[i];
+  function readSettingsFromInputs(): Partial<StarSettings> {
+    const next: Record<string, number | boolean> = {};
+    for (let i: number = 0; i < controls.length; i += 1) {
+      const item: BoundControl = controls[i];
 
       if (item.binding.type === "boolean") {
         next[item.binding.setting] = item.input.checked;
         continue;
       }
 
-      const parsed =
+      const parsed: number =
         item.binding.type === "integer"
           ? Number.parseInt(item.input.value, 10)
           : Number.parseFloat(item.input.value);
@@ -2306,28 +2540,28 @@ function bindSvemirControlPanel(starfield) {
       }
     }
 
-    return next;
+    return next as Partial<StarSettings>;
   }
 
-  function syncOutputs() {
-    for (let i = 0; i < controls.length; i += 1) {
-      const item = controls[i];
-      const outputId = item.input.dataset.output;
+  function syncOutputs(): void {
+    for (let i: number = 0; i < controls.length; i += 1) {
+      const item: BoundControl = controls[i];
+      const outputId: string | undefined = item.input.dataset.output;
       if (!outputId) {
         continue;
       }
 
-      const output = document.getElementById(outputId);
+      const output: HTMLElement | null = document.getElementById(outputId);
       if (output) {
         output.textContent = formatControlValue(item.input);
       }
     }
   }
 
-  function writeSettingsToInputs(settings) {
-    for (let i = 0; i < controls.length; i += 1) {
-      const item = controls[i];
-      const value = settings[item.binding.setting];
+  function writeSettingsToInputs(settings: StarSettings): void {
+    for (let i: number = 0; i < controls.length; i += 1) {
+      const item: BoundControl = controls[i];
+      const value: unknown = (settings as Record<string, unknown>)[item.binding.setting];
 
       if (item.binding.type === "boolean") {
         item.input.checked = Boolean(value);
@@ -2335,7 +2569,7 @@ function bindSvemirControlPanel(starfield) {
       }
 
       if (typeof value === "number") {
-        const normalized = normalizeForInputRange(
+        const normalized: number = normalizeForInputRange(
           value,
           item.input,
           item.binding.type,
@@ -2350,14 +2584,14 @@ function bindSvemirControlPanel(starfield) {
     syncOutputs();
   }
 
-  function applyInputSettings() {
+  function applyInputSettings(): void {
     starfield.setSettings(readSettingsFromInputs());
     saveStarSettings(starfield.getSettings());
   }
 
-  function closeWinPanel() {
-    const winDropdown = document.getElementById(WIN_PANEL_ID);
-    const winBtn = document.getElementById(WIN_BUTTON_ID);
+  function closeWinPanel(): void {
+    const winDropdown: HTMLElement | null = document.getElementById(WIN_PANEL_ID);
+    const winBtn: HTMLElement | null = document.getElementById(WIN_BUTTON_ID);
     if (winDropdown && !winDropdown.hidden) {
       winDropdown.hidden = true;
       if (winBtn) {
@@ -2366,14 +2600,14 @@ function bindSvemirControlPanel(starfield) {
     }
   }
 
-  function closeRingPanel() {
-    const ringDd = document.getElementById(RING_PANEL_ID);
+  function closeRingPanel(): void {
+    const ringDd: HTMLElement | null = document.getElementById(RING_PANEL_ID);
     if (ringDd && !ringDd.hidden) {
       ringDd.hidden = true;
     }
   }
 
-  function setPanelOpen(open) {
+  function setPanelOpen(open: boolean): void {
     if (open) {
       closeWinPanel();
       closeRingPanel();
@@ -2387,9 +2621,9 @@ function bindSvemirControlPanel(starfield) {
   writeSettingsToInputs(starfield.getSettings());
   applyInputSettings();
 
-  for (let i = 0; i < controls.length; i += 1) {
-    const item = controls[i];
-    const eventName = item.input.type === "checkbox" ? "change" : "input";
+  for (let i: number = 0; i < controls.length; i += 1) {
+    const item: BoundControl = controls[i];
+    const eventName: string = item.input.type === "checkbox" ? "change" : "input";
     item.input.addEventListener(eventName, () => {
       if (item.numberInput) {
         item.numberInput.value = item.input.value;
@@ -2399,18 +2633,18 @@ function bindSvemirControlPanel(starfield) {
     });
 
     if (item.numberInput) {
-      const syncFromNumber = () => {
-        const parsed = Number.parseFloat(item.numberInput.value);
+      const syncFromNumber = (): void => {
+        const parsed: number = Number.parseFloat(item.numberInput!.value);
         if (!Number.isFinite(parsed)) {
           return;
         }
-        const normalized = normalizeForInputRange(
+        const normalized: number = normalizeForInputRange(
           parsed,
           item.input,
           item.binding.type,
         );
         item.input.value = String(normalized);
-        item.numberInput.value = String(normalized);
+        item.numberInput!.value = String(normalized);
         syncOutputs();
         applyInputSettings();
       };
@@ -2420,13 +2654,13 @@ function bindSvemirControlPanel(starfield) {
     }
   }
 
-  button.addEventListener("click", (event) => {
+  button.addEventListener("click", (event: MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
     setPanelOpen(dropdown.hidden);
   });
 
-  dropdown.addEventListener("click", (event) => {
+  dropdown.addEventListener("click", (event: MouseEvent) => {
     event.stopPropagation();
   });
 
@@ -2436,21 +2670,21 @@ function bindSvemirControlPanel(starfield) {
     }
   });
 
-  document.addEventListener("keydown", (event) => {
+  document.addEventListener("keydown", (event: KeyboardEvent) => {
     if (event.key === "Escape") {
       setPanelOpen(false);
     }
   });
 
-  const closeButton = dropdown.querySelector("[data-action='close-panel']");
+  const closeButton: Element | null = dropdown.querySelector("[data-action='close-panel']");
   if (closeButton instanceof HTMLButtonElement) {
-    closeButton.addEventListener("click", (event) => {
+    closeButton.addEventListener("click", (event: MouseEvent) => {
       event.stopPropagation();
       setPanelOpen(false);
     });
   }
 
-  const resetButton = dropdown.querySelector("[data-action='reset-stars']");
+  const resetButton: Element | null = dropdown.querySelector("[data-action='reset-stars']");
   if (resetButton instanceof HTMLButtonElement) {
     resetButton.addEventListener("click", () => {
       clearSavedStarSettings();
@@ -2460,16 +2694,16 @@ function bindSvemirControlPanel(starfield) {
   }
 }
 
-function bindWinControlPanel(starfield) {
-  const winButton = document.getElementById(WIN_BUTTON_ID);
-  const dropdown = document.getElementById(WIN_PANEL_ID);
+function bindWinControlPanel(starfield: BlazingStarfield): void {
+  const winButton: HTMLElement | null = document.getElementById(WIN_BUTTON_ID);
+  const dropdown: HTMLElement | null = document.getElementById(WIN_PANEL_ID);
   if (!(dropdown instanceof HTMLElement)) {
     return;
   }
 
-  function closeSpacePanel() {
-    const spaceDropdown = document.getElementById(CONTROL_PANEL_ID);
-    const spaceBtn = document.getElementById(CONTROL_BUTTON_ID);
+  function closeSpacePanel(): void {
+    const spaceDropdown: HTMLElement | null = document.getElementById(CONTROL_PANEL_ID);
+    const spaceBtn: HTMLElement | null = document.getElementById(CONTROL_BUTTON_ID);
     if (spaceDropdown && !spaceDropdown.hidden) {
       spaceDropdown.hidden = true;
       if (spaceBtn) {
@@ -2478,14 +2712,14 @@ function bindWinControlPanel(starfield) {
     }
   }
 
-  function closeRingPanelFromWin() {
-    const ringDd = document.getElementById(RING_PANEL_ID);
+  function closeRingPanelFromWin(): void {
+    const ringDd: HTMLElement | null = document.getElementById(RING_PANEL_ID);
     if (ringDd && !ringDd.hidden) {
       ringDd.hidden = true;
     }
   }
 
-  function setWinPanelOpen(open) {
+  function setWinPanelOpen(open: boolean): void {
     if (open) {
       closeSpacePanel();
       closeRingPanelFromWin();
@@ -2499,14 +2733,14 @@ function bindWinControlPanel(starfield) {
   }
 
   if (winButton instanceof HTMLButtonElement) {
-    winButton.addEventListener("click", (event) => {
+    winButton.addEventListener("click", (event: MouseEvent) => {
       event.preventDefault();
       event.stopPropagation();
       setWinPanelOpen(dropdown.hidden);
     });
   }
 
-  dropdown.addEventListener("click", (event) => {
+  dropdown.addEventListener("click", (event: MouseEvent) => {
     event.stopPropagation();
   });
 
@@ -2516,37 +2750,37 @@ function bindWinControlPanel(starfield) {
     }
   });
 
-  document.addEventListener("keydown", (event) => {
+  document.addEventListener("keydown", (event: KeyboardEvent) => {
     if (event.key === "Escape" && !dropdown.hidden) {
       setWinPanelOpen(false);
     }
   });
 
-  const closeBtn = dropdown.querySelector("[data-action='close-win-panel']");
+  const closeBtn: Element | null = dropdown.querySelector("[data-action='close-win-panel']");
   if (closeBtn instanceof HTMLButtonElement) {
-    closeBtn.addEventListener("click", (event) => {
+    closeBtn.addEventListener("click", (event: MouseEvent) => {
       event.stopPropagation();
       setWinPanelOpen(false);
     });
   }
 
-  const modeSelect = document.getElementById("sv-win-mode");
-  const msGroup = document.getElementById("sv-win-ms-group");
-  const mcGroup = document.getElementById("sv-win-mc-group");
+  const modeSelect: HTMLElement | null = document.getElementById("sv-win-mode");
+  const msGroup: HTMLElement | null = document.getElementById("sv-win-ms-group");
+  const mcGroup: HTMLElement | null = document.getElementById("sv-win-mc-group");
 
   if (!(modeSelect instanceof HTMLSelectElement)) {
     return;
   }
 
-  const controls = [];
-  for (let i = 0; i < WIN_CONTROL_BINDINGS.length; i += 1) {
-    const binding = WIN_CONTROL_BINDINGS[i];
-    const input = document.getElementById(binding.id);
+  const controls: BoundWinControl[] = [];
+  for (let i: number = 0; i < WIN_CONTROL_BINDINGS.length; i += 1) {
+    const binding: ControlBinding = WIN_CONTROL_BINDINGS[i];
+    const input: HTMLElement | null = document.getElementById(binding.id);
     if (input instanceof HTMLInputElement) {
-      let numberInput = null;
+      let numberInput: HTMLInputElement | null = null;
       if (input.type === "range") {
-        const numberId = `${binding.id}-input`;
-        const existing = document.getElementById(numberId);
+        const numberId: string = `${binding.id}-input`;
+        const existing: HTMLElement | null = document.getElementById(numberId);
         if (existing instanceof HTMLInputElement) {
           numberInput = existing;
         } else {
@@ -2558,7 +2792,7 @@ function bindWinControlPanel(starfield) {
           numberInput.max = input.max;
           numberInput.step = input.step || (binding.type === "integer" ? "1" : "0.01");
           numberInput.value = input.value;
-          const labelText = input
+          const labelText: string | undefined = input
             .closest("label")
             ?.querySelector("span")
             ?.textContent?.trim();
@@ -2576,7 +2810,7 @@ function bindWinControlPanel(starfield) {
     }
   }
 
-  function toggleGroupVisibility(mode) {
+  function toggleGroupVisibility(mode: string): void {
     if (msGroup) {
       msGroup.hidden = mode !== "magic_stars";
     }
@@ -2585,25 +2819,25 @@ function bindWinControlPanel(starfield) {
     }
   }
 
-  function syncWinOutputs() {
-    for (let i = 0; i < controls.length; i += 1) {
-      const item = controls[i];
-      const outputId = item.input.dataset.output;
+  function syncWinOutputs(): void {
+    for (let i: number = 0; i < controls.length; i += 1) {
+      const item: BoundWinControl = controls[i];
+      const outputId: string | undefined = item.input.dataset.output;
       if (!outputId) {
         continue;
       }
-      const output = document.getElementById(outputId);
+      const output: HTMLElement | null = document.getElementById(outputId);
       if (output) {
         output.textContent = formatControlValue(item.input);
       }
     }
   }
 
-  function readWinSettingsFromInputs() {
-    const next = { mode: modeSelect.value };
-    for (let i = 0; i < controls.length; i += 1) {
-      const item = controls[i];
-      const parsed =
+  function readWinSettingsFromInputs(): Partial<WinSettings> {
+    const next: Record<string, number | string> = { mode: modeSelect.value };
+    for (let i: number = 0; i < controls.length; i += 1) {
+      const item: BoundWinControl = controls[i];
+      const parsed: number =
         item.binding.type === "integer"
           ? Number.parseInt(item.input.value, 10)
           : Number.parseFloat(item.input.value);
@@ -2611,13 +2845,13 @@ function bindWinControlPanel(starfield) {
         next[item.binding.setting] = parsed;
       }
     }
-    return next;
+    return next as Partial<WinSettings>;
   }
 
-  function normalizeForWinRange(value, inputEl, type) {
-    let next = value;
-    const min = Number(inputEl.min);
-    const max = Number(inputEl.max);
+  function normalizeForWinRange(value: number, inputEl: HTMLInputElement, type: ControlBindingType): number {
+    let next: number = value;
+    const min: number = Number(inputEl.min);
+    const max: number = Number(inputEl.max);
     if (Number.isFinite(min)) {
       next = Math.max(min, next);
     }
@@ -2630,15 +2864,15 @@ function bindWinControlPanel(starfield) {
     return next;
   }
 
-  function writeWinSettingsToInputs(settings) {
+  function writeWinSettingsToInputs(settings: WinSettings): void {
     modeSelect.value = settings.mode || "magic_stars";
     toggleGroupVisibility(modeSelect.value);
 
-    for (let i = 0; i < controls.length; i += 1) {
-      const item = controls[i];
-      const value = settings[item.binding.setting];
+    for (let i: number = 0; i < controls.length; i += 1) {
+      const item: BoundWinControl = controls[i];
+      const value: unknown = (settings as Record<string, unknown>)[item.binding.setting];
       if (typeof value === "number") {
-        const normalized = normalizeForWinRange(
+        const normalized: number = normalizeForWinRange(
           value,
           item.input,
           item.binding.type,
@@ -2653,7 +2887,7 @@ function bindWinControlPanel(starfield) {
     syncWinOutputs();
   }
 
-  function applyWinSettings() {
+  function applyWinSettings(): void {
     starfield.setWinSettings(readWinSettingsFromInputs());
     saveWinSettings(starfield.getWinSettings());
   }
@@ -2665,8 +2899,8 @@ function bindWinControlPanel(starfield) {
     applyWinSettings();
   });
 
-  for (let i = 0; i < controls.length; i += 1) {
-    const item = controls[i];
+  for (let i: number = 0; i < controls.length; i += 1) {
+    const item: BoundWinControl = controls[i];
     item.input.addEventListener("input", () => {
       if (item.numberInput) {
         item.numberInput.value = item.input.value;
@@ -2676,18 +2910,18 @@ function bindWinControlPanel(starfield) {
     });
 
     if (item.numberInput) {
-      const syncFromNumber = () => {
-        const parsed = Number.parseFloat(item.numberInput.value);
+      const syncFromNumber = (): void => {
+        const parsed: number = Number.parseFloat(item.numberInput!.value);
         if (!Number.isFinite(parsed)) {
           return;
         }
-        const normalized = normalizeForWinRange(
+        const normalized: number = normalizeForWinRange(
           parsed,
           item.input,
           item.binding.type,
         );
         item.input.value = String(normalized);
-        item.numberInput.value = String(normalized);
+        item.numberInput!.value = String(normalized);
         syncWinOutputs();
         applyWinSettings();
       };
@@ -2697,7 +2931,7 @@ function bindWinControlPanel(starfield) {
     }
   }
 
-  const resetWinBtn = dropdown.querySelector("[data-action='reset-win']");
+  const resetWinBtn: Element | null = dropdown.querySelector("[data-action='reset-win']");
   if (resetWinBtn instanceof HTMLButtonElement) {
     resetWinBtn.addEventListener("click", () => {
       clearSavedWinSettings();
@@ -2706,14 +2940,14 @@ function bindWinControlPanel(starfield) {
     });
   }
 
-  const previewWinBtn = dropdown.querySelector("[data-action='preview-win']");
+  const previewWinBtn: Element | null = dropdown.querySelector("[data-action='preview-win']");
   if (previewWinBtn instanceof HTMLButtonElement) {
     previewWinBtn.addEventListener("click", () => {
       starfield.triggerWin();
     });
   }
 
-  const stopWinBtn = dropdown.querySelector("[data-action='stop-win']");
+  const stopWinBtn: Element | null = dropdown.querySelector("[data-action='stop-win']");
   if (stopWinBtn instanceof HTMLButtonElement) {
     stopWinBtn.addEventListener("click", () => {
       starfield.cancelWin();
@@ -2721,19 +2955,19 @@ function bindWinControlPanel(starfield) {
   }
 }
 
-function bindRingControlPanel() {
-  const dropdown = document.getElementById(RING_PANEL_ID);
+function bindRingControlPanel(): void {
+  const dropdown: HTMLElement | null = document.getElementById(RING_PANEL_ID);
   if (!(dropdown instanceof HTMLElement)) return;
 
-  const rangeControls = [];
-  for (let i = 0; i < RING_CONTROL_BINDINGS.length; i += 1) {
-    const binding = RING_CONTROL_BINDINGS[i];
-    const input = document.getElementById(binding.id);
+  const rangeControls: BoundRingRangeControl[] = [];
+  for (let i: number = 0; i < RING_CONTROL_BINDINGS.length; i += 1) {
+    const binding: RingControlBinding = RING_CONTROL_BINDINGS[i];
+    const input: HTMLElement | null = document.getElementById(binding.id);
     if (input instanceof HTMLInputElement) {
-      let numberInput = null;
+      let numberInput: HTMLInputElement | null = null;
       if (input.type === "range") {
-        const numberId = `${binding.id}-input`;
-        const existing = document.getElementById(numberId);
+        const numberId: string = `${binding.id}-input`;
+        const existing: HTMLElement | null = document.getElementById(numberId);
         if (existing instanceof HTMLInputElement) {
           numberInput = existing;
         } else {
@@ -2745,7 +2979,7 @@ function bindRingControlPanel() {
           numberInput.max = input.max;
           numberInput.step = input.step || "0.01";
           numberInput.value = input.value;
-          const labelText = input
+          const labelText: string | undefined = input
             .closest("label")
             ?.querySelector("span")
             ?.textContent?.trim();
@@ -2760,34 +2994,34 @@ function bindRingControlPanel() {
     }
   }
 
-  const colorControls = [];
-  for (let i = 0; i < RING_COLOR_BINDINGS.length; i += 1) {
-    const binding = RING_COLOR_BINDINGS[i];
-    const input = document.getElementById(binding.id);
+  const colorControls: BoundRingColorControl[] = [];
+  for (let i: number = 0; i < RING_COLOR_BINDINGS.length; i += 1) {
+    const binding: RingColorBinding = RING_COLOR_BINDINGS[i];
+    const input: HTMLElement | null = document.getElementById(binding.id);
     if (input instanceof HTMLInputElement) {
       colorControls.push({ input, binding });
     }
   }
 
-  function closeSpacePanel() {
-    const spaceDropdown = document.getElementById(CONTROL_PANEL_ID);
-    const spaceBtn = document.getElementById(CONTROL_BUTTON_ID);
+  function closeSpacePanel(): void {
+    const spaceDropdown: HTMLElement | null = document.getElementById(CONTROL_PANEL_ID);
+    const spaceBtn: HTMLElement | null = document.getElementById(CONTROL_BUTTON_ID);
     if (spaceDropdown && !spaceDropdown.hidden) {
       spaceDropdown.hidden = true;
       if (spaceBtn) spaceBtn.setAttribute("aria-expanded", "false");
     }
   }
 
-  function closeWinPanel() {
-    const winDropdown = document.getElementById(WIN_PANEL_ID);
-    const winBtn = document.getElementById(WIN_BUTTON_ID);
+  function closeWinPanel(): void {
+    const winDropdown: HTMLElement | null = document.getElementById(WIN_PANEL_ID);
+    const winBtn: HTMLElement | null = document.getElementById(WIN_BUTTON_ID);
     if (winDropdown && !winDropdown.hidden) {
       winDropdown.hidden = true;
       if (winBtn) winBtn.setAttribute("aria-expanded", "false");
     }
   }
 
-  function setRingPanelOpen(open) {
+  function setRingPanelOpen(open: boolean): void {
     if (open) {
       closeSpacePanel();
       closeWinPanel();
@@ -2797,53 +3031,53 @@ function bindRingControlPanel() {
     document.body.classList.toggle("svemir-focus-mode", open);
   }
 
-  function syncRingOutputs() {
-    for (let i = 0; i < rangeControls.length; i += 1) {
-      const item = rangeControls[i];
-      const outputId = item.input.dataset.output;
+  function syncRingOutputs(): void {
+    for (let i: number = 0; i < rangeControls.length; i += 1) {
+      const item: BoundRingRangeControl = rangeControls[i];
+      const outputId: string | undefined = item.input.dataset.output;
       if (!outputId) continue;
-      const output = document.getElementById(outputId);
+      const output: HTMLElement | null = document.getElementById(outputId);
       if (output) {
         output.textContent = formatControlValue(item.input);
       }
     }
   }
 
-  function readRingSettingsFromInputs() {
-    const next = {};
-    for (let i = 0; i < rangeControls.length; i += 1) {
-      const item = rangeControls[i];
-      const parsed = Number.parseFloat(item.input.value);
+  function readRingSettingsFromInputs(): Record<string, number | string> {
+    const next: Record<string, number | string> = {};
+    for (let i: number = 0; i < rangeControls.length; i += 1) {
+      const item: BoundRingRangeControl = rangeControls[i];
+      const parsed: number = Number.parseFloat(item.input.value);
       if (Number.isFinite(parsed)) {
         next[item.binding.setting] = parsed;
       }
     }
-    for (let i = 0; i < colorControls.length; i += 1) {
-      const item = colorControls[i];
-      const defaultRgba = DEFAULT_RING_SETTINGS[item.binding.setting];
-      const alpha = rgbaAlpha(defaultRgba);
+    for (let i: number = 0; i < colorControls.length; i += 1) {
+      const item: BoundRingColorControl = colorControls[i];
+      const defaultRgba: string = (DEFAULT_RING_SETTINGS as Record<string, string | number>)[item.binding.setting] as string;
+      const alpha: number = rgbaAlpha(defaultRgba);
       next[item.binding.setting] = hexToRgba(item.input.value, alpha);
     }
     return next;
   }
 
-  function writeRingSettingsToInputs(settings) {
-    for (let i = 0; i < rangeControls.length; i += 1) {
-      const item = rangeControls[i];
-      const value = settings[item.binding.setting];
+  function writeRingSettingsToInputs(settings: Record<string, number | string>): void {
+    for (let i: number = 0; i < rangeControls.length; i += 1) {
+      const item: BoundRingRangeControl = rangeControls[i];
+      const value: number | string | undefined = settings[item.binding.setting];
       if (typeof value === "number") {
-        const min = Number(item.input.min);
-        const max = Number(item.input.max);
-        let normalized = value;
+        const min: number = Number(item.input.min);
+        const max: number = Number(item.input.max);
+        let normalized: number = value;
         if (Number.isFinite(min)) normalized = Math.max(min, normalized);
         if (Number.isFinite(max)) normalized = Math.min(max, normalized);
         item.input.value = String(normalized);
         if (item.numberInput) item.numberInput.value = String(normalized);
       }
     }
-    for (let i = 0; i < colorControls.length; i += 1) {
-      const item = colorControls[i];
-      const value = settings[item.binding.setting];
+    for (let i: number = 0; i < colorControls.length; i += 1) {
+      const item: BoundRingColorControl = colorControls[i];
+      const value: number | string | undefined = settings[item.binding.setting];
       if (typeof value === "string") {
         item.input.value = rgbaToHex(value);
       }
@@ -2851,8 +3085,8 @@ function bindRingControlPanel() {
     syncRingOutputs();
   }
 
-  function applyRingSettings() {
-    const settings = readRingSettingsFromInputs();
+  function applyRingSettings(): void {
+    const settings: Record<string, number | string> = readRingSettingsFromInputs();
     document.dispatchEvent(
       new CustomEvent("slotm:ring-settings", { detail: settings }),
     );
@@ -2860,13 +3094,13 @@ function bindRingControlPanel() {
   }
 
   // Load initial values
-  const saved = loadSavedRingSettings();
-  const initial = { ...DEFAULT_RING_SETTINGS, ...(saved || {}) };
+  const saved: Partial<RingSettings> | null = loadSavedRingSettings();
+  const initial: Record<string, number | string> = { ...(DEFAULT_RING_SETTINGS as unknown as Record<string, number | string>), ...(saved || {}) };
   writeRingSettingsToInputs(initial);
 
   // Range input listeners
-  for (let i = 0; i < rangeControls.length; i += 1) {
-    const item = rangeControls[i];
+  for (let i: number = 0; i < rangeControls.length; i += 1) {
+    const item: BoundRingRangeControl = rangeControls[i];
     item.input.addEventListener("input", () => {
       if (item.numberInput) item.numberInput.value = item.input.value;
       syncRingOutputs();
@@ -2874,16 +3108,16 @@ function bindRingControlPanel() {
     });
 
     if (item.numberInput) {
-      const syncFromNumber = () => {
-        const parsed = Number.parseFloat(item.numberInput.value);
+      const syncFromNumber = (): void => {
+        const parsed: number = Number.parseFloat(item.numberInput!.value);
         if (!Number.isFinite(parsed)) return;
-        const min = Number(item.input.min);
-        const max = Number(item.input.max);
-        let normalized = parsed;
+        const min: number = Number(item.input.min);
+        const max: number = Number(item.input.max);
+        let normalized: number = parsed;
         if (Number.isFinite(min)) normalized = Math.max(min, normalized);
         if (Number.isFinite(max)) normalized = Math.min(max, normalized);
         item.input.value = String(normalized);
-        item.numberInput.value = String(normalized);
+        item.numberInput!.value = String(normalized);
         syncRingOutputs();
         applyRingSettings();
       };
@@ -2893,28 +3127,28 @@ function bindRingControlPanel() {
   }
 
   // Color input listeners
-  for (let i = 0; i < colorControls.length; i += 1) {
-    const item = colorControls[i];
+  for (let i: number = 0; i < colorControls.length; i += 1) {
+    const item: BoundRingColorControl = colorControls[i];
     item.input.addEventListener("input", () => {
       applyRingSettings();
     });
   }
 
   // Close button
-  const closeBtn = dropdown.querySelector("[data-action='close-ring-panel']");
+  const closeBtn: Element | null = dropdown.querySelector("[data-action='close-ring-panel']");
   if (closeBtn instanceof HTMLButtonElement) {
-    closeBtn.addEventListener("click", (event) => {
+    closeBtn.addEventListener("click", (event: MouseEvent) => {
       event.stopPropagation();
       setRingPanelOpen(false);
     });
   }
 
   // Reset button
-  const resetBtn = dropdown.querySelector("[data-action='reset-ring']");
+  const resetBtn: Element | null = dropdown.querySelector("[data-action='reset-ring']");
   if (resetBtn instanceof HTMLButtonElement) {
     resetBtn.addEventListener("click", () => {
       clearSavedRingSettings();
-      writeRingSettingsToInputs(DEFAULT_RING_SETTINGS);
+      writeRingSettingsToInputs(DEFAULT_RING_SETTINGS as unknown as Record<string, number | string>);
       document.dispatchEvent(
         new CustomEvent("slotm:ring-settings", { detail: { ...DEFAULT_RING_SETTINGS } }),
       );
@@ -2922,7 +3156,7 @@ function bindRingControlPanel() {
   }
 
   // Click outside closes
-  dropdown.addEventListener("click", (event) => {
+  dropdown.addEventListener("click", (event: MouseEvent) => {
     event.stopPropagation();
   });
 
@@ -2932,7 +3166,7 @@ function bindRingControlPanel() {
     }
   });
 
-  document.addEventListener("keydown", (event) => {
+  document.addEventListener("keydown", (event: KeyboardEvent) => {
     if (event.key === "Escape" && !dropdown.hidden) {
       setRingPanelOpen(false);
     }
@@ -2944,16 +3178,20 @@ function bindRingControlPanel() {
   );
 }
 
-function ensureCrawlConfigButton() {
+/* -------------------------------------------------------------------------- */
+/*  Crawl Config Button                                                       */
+/* -------------------------------------------------------------------------- */
+
+function ensureCrawlConfigButton(): void {
   // Only on homepage (where the crawl canvas exists)
   if (!document.getElementById("swCrawlCanvas")) return;
   if (document.getElementById("crawlConfigBtn")) return;
 
   // Place crawl config button right after Space Controls button
-  const spaceBtn = document.getElementById(CONTROL_BUTTON_ID);
+  const spaceBtn: HTMLElement | null = document.getElementById(CONTROL_BUTTON_ID);
   if (!spaceBtn) return;
 
-  const cfgBtn = document.createElement("button");
+  const cfgBtn: HTMLButtonElement = document.createElement("button");
   cfgBtn.id = "crawlConfigBtn";
   cfgBtn.type = "button";
   cfgBtn.className = "svemir-toggle";
@@ -2964,19 +3202,23 @@ function ensureCrawlConfigButton() {
   spaceBtn.after(cfgBtn);
 }
 
-function initBlazingBackground() {
-  const isGamePage = !!document.getElementById("slotMachineRoot");
-  const loader = isGamePage ? createSpaceLoader() : null;
-  const canvas = ensureBackgroundCanvas();
+/* -------------------------------------------------------------------------- */
+/*  Initialization                                                            */
+/* -------------------------------------------------------------------------- */
+
+function initBlazingBackground(): void {
+  const isGamePage: boolean = !!document.getElementById("slotMachineRoot");
+  const loader: HTMLDivElement | null = isGamePage ? createSpaceLoader() : null;
+  const canvas: HTMLCanvasElement = ensureBackgroundCanvas();
   ensureSvemirControlPanel();
   if (isGamePage) {
     ensureWinControlPanel();
     ensureRingControlPanel();
   }
 
-  const starfield = new BlazingStarfield(canvas, loadSavedStarSettings() || {});
+  const starfield: BlazingStarfield = new BlazingStarfield(canvas, loadSavedStarSettings() || {});
 
-  const savedWin = loadSavedWinSettings();
+  const savedWin: Partial<WinSettings> | null = loadSavedWinSettings();
   if (savedWin) {
     starfield.setWinSettings(savedWin);
   }

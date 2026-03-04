@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { transform } from "esbuild";
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(SCRIPT_DIR, "..");
@@ -46,7 +47,13 @@ async function copyTree(currentPath) {
       return;
     }
     const source = await fs.readFile(currentPath, "utf8");
-    await fs.writeFile(outputPath, source, "utf8");
+    const result = await transform(source, {
+      loader: "ts",
+      target: "es2022",
+      format: "esm",
+      sourcefile: currentPath,
+    });
+    await fs.writeFile(outputPath, result.code, "utf8");
     return;
   }
 

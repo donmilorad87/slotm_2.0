@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * ImageCache - Utility class for caching images to localStorage
  * Provides faster loading for frequently used images like joker, symbols, etc.
@@ -9,11 +8,8 @@ export default class ImageCache {
 
   /**
    * Get an image from cache or store it if not cached
-   * @param {string} key - Unique identifier for the image
-   * @param {string} base64Data - Base64 encoded image data (with or without data URI prefix)
-   * @returns {string} - The base64 image data
    */
-  static getImage(key, base64Data) {
+  static getImage(key: string, base64Data: string): string {
     const cacheKey = this.CACHE_PREFIX + key;
 
     try {
@@ -28,7 +24,7 @@ export default class ImageCache {
       }
 
       return base64Data;
-    } catch (e) {
+    } catch (e: unknown) {
       console.warn('[ImageCache] localStorage error:', e);
       return base64Data;
     }
@@ -36,10 +32,8 @@ export default class ImageCache {
 
   /**
    * Store an image in cache
-   * @param {string} key - Unique identifier for the image
-   * @param {string} base64Data - Base64 encoded image data
    */
-  static setImage(key, base64Data) {
+  static setImage(key: string, base64Data: string): void {
     const cacheKey = this.CACHE_PREFIX + key;
 
     try {
@@ -47,7 +41,7 @@ export default class ImageCache {
       if (base64Data && base64Data.length < this.MAX_CACHE_SIZE) {
         localStorage.setItem(cacheKey, base64Data);
       }
-    } catch (e) {
+    } catch (e: unknown) {
       // localStorage might be full, try to clear old cache entries
       console.warn('[ImageCache] Failed to cache image:', e);
       this.clearOldEntries();
@@ -56,27 +50,24 @@ export default class ImageCache {
 
   /**
    * Check if an image is cached
-   * @param {string} key - Unique identifier for the image
-   * @returns {boolean}
    */
-  static isCached(key) {
+  static isCached(key: string): boolean {
     const cacheKey = this.CACHE_PREFIX + key;
     try {
       return localStorage.getItem(cacheKey) !== null;
-    } catch (e) {
+    } catch {
       return false;
     }
   }
 
   /**
    * Remove an image from cache
-   * @param {string} key - Unique identifier for the image
    */
-  static removeImage(key) {
+  static removeImage(key: string): void {
     const cacheKey = this.CACHE_PREFIX + key;
     try {
       localStorage.removeItem(cacheKey);
-    } catch (e) {
+    } catch (e: unknown) {
       console.warn('[ImageCache] Failed to remove image:', e);
     }
   }
@@ -84,17 +75,17 @@ export default class ImageCache {
   /**
    * Clear all cached images
    */
-  static clearAll() {
+  static clearAll(): void {
     try {
-      const keysToRemove = [];
+      const keysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (key && key.startsWith(this.CACHE_PREFIX)) {
           keysToRemove.push(key);
         }
       }
-      keysToRemove.forEach(key => localStorage.removeItem(key));
-    } catch (e) {
+      keysToRemove.forEach((key: string) => localStorage.removeItem(key));
+    } catch (e: unknown) {
       console.warn('[ImageCache] Failed to clear cache:', e);
     }
   }
@@ -102,29 +93,29 @@ export default class ImageCache {
   /**
    * Clear oldest cache entries when storage is full
    */
-  static clearOldEntries() {
+  static clearOldEntries(): void {
     try {
       // Remove all slot machine image cache entries
       this.clearAll();
-    } catch (e) {
+    } catch (e: unknown) {
       console.warn('[ImageCache] Failed to clear old entries:', e);
     }
   }
 
   /**
    * Preload an image and call callback when ready
-   * @param {string} src - Image source (URL or base64)
-   * @param {Function} callback - Called with loaded Image element
-   * @returns {HTMLImageElement}
    */
-  static preloadToImage(src, callback) {
+  static preloadToImage(
+    src: string,
+    callback: ((img: HTMLImageElement | null) => void) | null,
+  ): HTMLImageElement {
     const img = new Image();
 
-    img.onload = () => {
+    img.onload = (): void => {
       if (callback) callback(img);
     };
 
-    img.onerror = () => {
+    img.onerror = (): void => {
       console.warn('[ImageCache] Failed to load image:', src.substring(0, 50) + '...');
       if (callback) callback(null);
     };
@@ -135,15 +126,12 @@ export default class ImageCache {
 
   /**
    * Load image from cache or URL, returning a Promise
-   * @param {string} key - Cache key
-   * @param {string} src - Image source if not cached
-   * @returns {Promise<HTMLImageElement>}
    */
-  static loadImage(key, src) {
+  static loadImage(key: string, src: string): Promise<HTMLImageElement> {
     return new Promise((resolve, reject) => {
       const cachedSrc = this.getImage(key, src);
 
-      this.preloadToImage(cachedSrc, (img) => {
+      this.preloadToImage(cachedSrc, (img: HTMLImageElement | null) => {
         if (img) {
           resolve(img);
         } else {
@@ -155,9 +143,8 @@ export default class ImageCache {
 
   /**
    * Get the size of all cached images in bytes
-   * @returns {number}
    */
-  static getCacheSize() {
+  static getCacheSize(): number {
     let totalSize = 0;
     try {
       for (let i = 0; i < localStorage.length; i++) {
@@ -169,7 +156,7 @@ export default class ImageCache {
           }
         }
       }
-    } catch (e) {
+    } catch (e: unknown) {
       console.warn('[ImageCache] Failed to calculate cache size:', e);
     }
     return totalSize;

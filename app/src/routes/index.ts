@@ -1,53 +1,51 @@
 import type { Application, RequestHandler } from "express";
 import type multer from "multer";
 
+import type { AuthController } from "../controllers/AuthController.js";
+import type { GameController } from "../controllers/GameController.js";
+import type { PageController } from "../controllers/PageController.js";
+import type { ProfileController } from "../controllers/ProfileController.js";
+import type { WalletController } from "../controllers/WalletController.js";
+
 import { buildAuthRoutes } from "./auth.routes.js";
 import { buildGameRoutes } from "./game.routes.js";
 import { buildPageRoutes } from "./page.routes.js";
 import { buildProfileRoutes } from "./profile.routes.js";
 import { buildWalletRoutes } from "./wallet.routes.js";
 
-interface RegisterRoutesDeps {
+/** Middleware deps shared across route groups. */
+interface RoutesMiddleware {
   optionalJwt: RequestHandler;
   requireJwt: RequestHandler;
   authLimiter: RequestHandler;
   upload: multer.Multer;
-  handleRootPage: RequestHandler;
-  handleGamesPage: RequestHandler;
-  handleLoginPage: RequestHandler;
-  handleRegisterPage: RequestHandler;
-  handleLogoutPage: RequestHandler;
-  handleAuthRegister: RequestHandler;
-  handleAuthLogin: RequestHandler;
-  handleAuthLogout: RequestHandler;
-  handleGamePage: RequestHandler;
-  handleWalletPage: RequestHandler;
-  handleProfilePage: RequestHandler;
-  handleUpdateProfile: RequestHandler;
-  handleChangePassword: RequestHandler;
-  handleUploadProfilePicture: RequestHandler;
-  handleApiGames: RequestHandler;
-  handleHistoryApi: RequestHandler;
-  handleWalletCreateTopup: RequestHandler;
-  handleWalletCreateSetup: RequestHandler;
-  handleWalletRemoveCard: RequestHandler;
-  handleWalletBalance: RequestHandler;
-  handleWalletTransactions: RequestHandler;
 }
+
+/** Controller deps grouped by domain. */
+interface RoutesControllers {
+  authController: AuthController;
+  pageController: PageController;
+  gameController: GameController;
+  walletController: WalletController;
+  profileController: ProfileController;
+}
+
+/** Composed from middleware + controllers using intersection. */
+export type RegisterRoutesDeps = RoutesMiddleware & RoutesControllers;
 
 export function registerRoutes(app: Application, deps: RegisterRoutesDeps): void {
   app.use(
     buildPageRoutes({
       optionalJwt: deps.optionalJwt,
       requireJwt: deps.requireJwt,
-      handleRootPage: deps.handleRootPage,
-      handleGamesPage: deps.handleGamesPage,
-      handleLoginPage: deps.handleLoginPage,
-      handleRegisterPage: deps.handleRegisterPage,
-      handleLogoutPage: deps.handleLogoutPage,
-      handleGamePage: deps.handleGamePage,
-      handleWalletPage: deps.handleWalletPage,
-      handleProfilePage: deps.handleProfilePage,
+      handleRootPage: deps.pageController.handleRootPage,
+      handleGamesPage: deps.pageController.handleGamesPage,
+      handleLoginPage: deps.pageController.handleLoginPage,
+      handleRegisterPage: deps.pageController.handleRegisterPage,
+      handleLogoutPage: deps.authController.handleLogoutPage,
+      handleGamePage: deps.pageController.handleGamePage,
+      handleWalletPage: deps.pageController.handleWalletPage,
+      handleProfilePage: deps.pageController.handleProfilePage,
     }),
   );
 
@@ -55,9 +53,9 @@ export function registerRoutes(app: Application, deps: RegisterRoutesDeps): void
     "/api/auth",
     buildAuthRoutes({
       authLimiter: deps.authLimiter,
-      handleAuthRegister: deps.handleAuthRegister,
-      handleAuthLogin: deps.handleAuthLogin,
-      handleAuthLogout: deps.handleAuthLogout,
+      handleAuthRegister: deps.authController.handleRegister,
+      handleAuthLogin: deps.authController.handleLogin,
+      handleAuthLogout: deps.authController.handleLogout,
     }),
   );
 
@@ -65,8 +63,8 @@ export function registerRoutes(app: Application, deps: RegisterRoutesDeps): void
     "/api/games",
     buildGameRoutes({
       requireJwt: deps.requireJwt,
-      handleApiGames: deps.handleApiGames,
-      handleHistoryApi: deps.handleHistoryApi,
+      handleApiGames: deps.gameController.handleApiGames,
+      handleHistoryApi: deps.gameController.handleHistoryApi,
     }),
   );
 
@@ -75,9 +73,9 @@ export function registerRoutes(app: Application, deps: RegisterRoutesDeps): void
     buildProfileRoutes({
       requireJwt: deps.requireJwt,
       upload: deps.upload,
-      handleUpdateProfile: deps.handleUpdateProfile,
-      handleChangePassword: deps.handleChangePassword,
-      handleUploadProfilePicture: deps.handleUploadProfilePicture,
+      handleUpdateProfile: deps.profileController.handleUpdateProfile,
+      handleChangePassword: deps.profileController.handleChangePassword,
+      handleUploadProfilePicture: deps.profileController.handleUploadProfilePicture,
     }),
   );
 
@@ -85,11 +83,11 @@ export function registerRoutes(app: Application, deps: RegisterRoutesDeps): void
     "/api/wallet",
     buildWalletRoutes({
       requireJwt: deps.requireJwt,
-      handleWalletCreateTopup: deps.handleWalletCreateTopup,
-      handleWalletCreateSetup: deps.handleWalletCreateSetup,
-      handleWalletRemoveCard: deps.handleWalletRemoveCard,
-      handleWalletBalance: deps.handleWalletBalance,
-      handleWalletTransactions: deps.handleWalletTransactions,
+      handleWalletCreateTopup: deps.walletController.handleCreateTopup,
+      handleWalletCreateSetup: deps.walletController.handleCreateSetup,
+      handleWalletRemoveCard: deps.walletController.handleRemoveCard,
+      handleWalletBalance: deps.walletController.handleBalance,
+      handleWalletTransactions: deps.walletController.handleTransactions,
     }),
   );
 }

@@ -1,6 +1,10 @@
 # Build output
 app/dist/
 
+# Generated (Prisma client)
+app/src/generated/
+app/prisma/generated/
+
 # Dependencies
 app/node_modules/
 node_modules/

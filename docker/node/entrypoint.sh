@@ -44,6 +44,15 @@ if [ ! -f "${APP_DIR}/node_modules/.package-lock.json" ]; then
 fi
 
 # ------------------------------------------------
+# 3b. Prisma: generate client + deploy migrations
+# ------------------------------------------------
+echo "[slotm-node] Generating Prisma client..."
+gosu node sh -c "cd ${APP_DIR} && ./node_modules/.bin/prisma generate"
+
+echo "[slotm-node] Running Prisma migrations..."
+gosu node sh -c "cd ${APP_DIR} && ./node_modules/.bin/prisma migrate deploy"
+
+# ------------------------------------------------
 # 4. Mode switch:
 #    - dev: run npm run dev directly (no PM2)
 #    - prod: build dist once, then delegate to PM2 CMD

@@ -1,18 +1,239 @@
-// @ts-nocheck
 import { fetchWithCsrf } from "./http.js";
+import type { RingSettings } from "./types.js";
 
-const HISTORY_PAGE_SIZE = 20;
-const CLASSIC_SYMBOL_COUNT = 22;
-const ODDS_MATCH_ORDER = [5, 4, 3, 2];
-const NUMBERS_TARGET_RTP = 0.86;
-const BASE_GROUP_COEFFICIENTS = [1.85, 1.75, 1.65, 1.55, 1.45, 1.35, 1.25, 1.15, 1.05, 0.95, 0.85];
+// ─── Point / geometry types ──────────────────────────────────────────────────
+interface Point2D {
+  x: number;
+  y: number;
+}
+
+interface ProjectedPoint extends Point2D {
+  scale: number;
+}
+
+interface ProjectedWorldPoint extends ProjectedPoint {
+  viewZ: number;
+}
+
+interface ContourPoint extends Point2D {
+  normalViewZ: number;
+}
+
+// ─── Hit-region rectangle ────────────────────────────────────────────────────
+interface HitRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+interface BetHitRect extends HitRect {
+  value: number;
+}
+
+interface GameTypeHitRect extends HitRect {
+  value: number;
+  name: string;
+}
+
+interface LineHitRect extends HitRect {
+  index: number;
+}
+
+interface FullscreenHitRects {
+  start?: HitRect;
+  stop?: HitRect;
+  joker?: HitRect;
+  svemir?: HitRect;
+  winAnim?: HitRect;
+  ringCfg?: HitRect;
+  betCycle?: HitRect;
+  gtCycle?: HitRect;
+  bets?: BetHitRect[];
+  gameTypes?: GameTypeHitRect[];
+  lines?: LineHitRect[];
+}
+
+// ─── Bingo mini-game types ───────────────────────────────────────────────────
+interface BingoOddsEntry {
+  played: number;
+  matches: number;
+  odds: number;
+  prob: number;
+}
+
+interface BingoTicketResult {
+  numbers_played: number;
+  matches: number;
+  payout: number;
+}
+
+interface BingoServerResults {
+  drawn_numbers: number[];
+  ticket_results: BingoTicketResult[];
+  total_payout: number;
+  total_bet: number;
+  new_balance?: number;
+}
+
+type BingoOnCompleteCallback = (winAmount: number) => void;
+
+type BingoBetMultipliers = Readonly<Record<number, number>>;
+
+type BingoPayoutTable = Readonly<Record<number, Readonly<Record<number, number>> | undefined>>;
+
+// ─── Slot machine types ─────────────────────────────────────────────────────
+
+type SymbolValue = number | string;
+
+interface SlotMachineOptions {
+  balance?: number | string;
+  jwtToken?: string;
+}
+
+// RingSettings imported from ./types.ts
+
+interface PrecomputedEdges {
+  leftEdge: ProjectedPoint[] | ProjectedWorldPoint[];
+  rightEdge: ProjectedPoint[] | ProjectedWorldPoint[];
+  centerEdge: Point2D[];
+}
+
+interface ReelCellData {
+  symbol?: SymbolValue;
+  depthWeight: number;
+  baseCellWidth: number;
+  baseCellHeight: number;
+  paylineHighlight?: number;
+  hue?: number;
+  // Flat cell fields
+  points?: Point2D[];
+  // Curved cell fields
+  curved?: boolean;
+  angleRad?: number;
+  angleSpanRad?: number;
+  radius?: number;
+  reelCenterX?: number;
+  reelCenterY?: number;
+  perspective?: number;
+  // World-space precomputed fields
+  precomputedEdges?: PrecomputedEdges;
+  totalYawRad?: number;
+  isBackSide?: boolean;
+  // Sorting fields
+  unitIndex?: number;
+  reelIndex?: number;
+  z?: number;
+  faceTowardsCamera?: number;
+}
+
+type RenderPass = 'full' | 'geometry' | 'overlay';
+
+interface CurvedDiamondBadgeParams {
+  angleRad: number;
+  angleSpanRad: number;
+  radius: number;
+  reelCenterX: number;
+  reelCenterY: number;
+  perspective: number;
+  baseCellWidth: number;
+  baseCellHeight: number;
+  depthWeight: number;
+  paylineHighlight?: number;
+}
+
+interface CurvedDiamondBadgeWorldParams extends CurvedDiamondBadgeParams {
+  yawRad: number;
+  pitchRad: number;
+  depthOffset: number;
+  symbolScale?: number;
+  centerShiftMultiplier?: number;
+}
+
+interface ReelTransition {
+  from: number;
+  to: number;
+  duration: number;
+  delay: number;
+  easing: (progress: number) => number;
+}
+
+interface WoodGradientColors {
+  top: string;
+  middle: string;
+  bottom: string;
+}
+
+interface ContourLoopData {
+  reelIndex: number;
+  reelCenterX: number;
+  outerLeft: ContourPoint[];
+  outerRight: ContourPoint[];
+  innerLeft: ContourPoint[];
+  innerRight: ContourPoint[];
+  outerLeftTop: ContourPoint;
+  outerRightTop: ContourPoint;
+  outerLeftBottom: ContourPoint;
+  outerRightBottom: ContourPoint;
+}
+
+interface BoundaryPolyline {
+  left: ProjectedWorldPoint;
+  right: ProjectedWorldPoint;
+}
+
+interface RoundedSegment {
+  corner: Point2D;
+  start: Point2D;
+  end: Point2D;
+}
+
+interface HistoryItem {
+  id?: string | number;
+  timestamp?: string;
+  game_mode?: string;
+  reward_mode?: string;
+  active_lines?: number;
+  bet_per_line?: number;
+  total_bet?: number;
+  total_payout?: number;
+  net_result?: number;
+  joker_enabled?: boolean;
+  mini_game_triggered?: boolean;
+}
+
+interface RootScope {
+  getElementById(id: string): HTMLElement | null;
+  querySelector(selector: string): Element | null;
+  querySelectorAll(selector: string): NodeListOf<Element>;
+  appendChild<T extends Node>(node: T): T;
+}
+
+type GameTypeOddsCoefficients = Record<number, number>;
+
+type DebugDragging = 'swing' | 'space' | 'zoom' | null;
+
+interface DrawPaylineOptions {
+  drawPath?: boolean;
+  drawMarkers?: boolean;
+  mergeLine67Markers?: boolean;
+}
+
+
+// ─── Constants ──────────────────────────────────────────────────────────────
+
+const HISTORY_PAGE_SIZE: number = 20;
+const CLASSIC_SYMBOL_COUNT: number = 22;
+const ODDS_MATCH_ORDER = [5, 4, 3, 2] as const;
+const NUMBERS_TARGET_RTP = 0.86 as const;
+const BASE_GROUP_COEFFICIENTS = [1.85, 1.75, 1.65, 1.55, 1.45, 1.35, 1.25, 1.15, 1.05, 0.95, 0.85] as const;
 const GAME_TYPE_ODDS_COEFFICIENTS = {
   1: 1.0,
   2: 0.94,
   3: 1.08,
   4: 1.03,
   5: 0.98,
-};
+} as const satisfies GameTypeOddsCoefficients;
 
 /**
  * BingoMiniGame - Bonus game after winning on slot machine
@@ -26,7 +247,29 @@ const GAME_TYPE_ODDS_COEFFICIENTS = {
  * - Click ticket numbers to remove them
  */
 class BingoMiniGame {
-  constructor(winAmount, shadowRoot, onComplete, userBalance) {
+  winAmount: number;
+  shadowRoot: RootScope;
+  onComplete: BingoOnCompleteCallback | null;
+  userBalance: number;
+  currentTicket: number;
+  tickets: number[][];
+  maxNumbersPerTicket: number;
+  maxTickets: number;
+  totalNumbers: number;
+  drawnNumbers: number[];
+  drawCount: number;
+  isPlaying: boolean;
+  gameFinished: boolean;
+  coinValues: number[];
+  selectedCoinValue: number;
+  oddsTable: BingoOddsEntry[];
+  betMultipliers: BingoBetMultipliers;
+  overlay!: HTMLDialogElement;
+  serverResults?: BingoServerResults;
+  totalWin?: number;
+  payoutTable?: BingoPayoutTable;
+
+  constructor(winAmount: number, shadowRoot: RootScope, onComplete: BingoOnCompleteCallback | null, userBalance: number) {
     this.winAmount = winAmount;
     this.shadowRoot = shadowRoot;
     this.onComplete = onComplete;
@@ -77,7 +320,7 @@ class BingoMiniGame {
   /**
    * Show toast notification (replaces JS alerts)
    */
-  showToast(message, type = 'error') {
+  showToast(message: string, type: string = 'error'): void {
     const container = this.overlay.querySelector('#toastContainer');
     if (!container) return;
 
@@ -96,7 +339,7 @@ class BingoMiniGame {
   /**
    * Select coin value for betting
    */
-  selectCoinValue(value) {
+  selectCoinValue(value: number): void {
     if (this.isPlaying || this.gameFinished) return;
     this.selectedCoinValue = value;
     this.updateUI();
@@ -105,20 +348,20 @@ class BingoMiniGame {
   /**
    * Calculate total bet across all tickets
    */
-  calculateTotalBet() {
+  calculateTotalBet(): number {
     return this.tickets
-      .filter(t => t.length > 0)
-      .reduce((sum, t) => sum + (this.betMultipliers[t.length] * this.selectedCoinValue), 0);
+      .filter((t: number[]) => t.length > 0)
+      .reduce((sum: number, t: number[]) => sum + (this.betMultipliers[t.length] * this.selectedCoinValue), 0);
   }
 
   /**
    * Check if user has sufficient balance
    */
-  hasSufficientBalance() {
+  hasSufficientBalance(): boolean {
     return this.calculateTotalBet() <= this.userBalance;
   }
 
-  render() {
+  render(): void {
     const overlay = document.createElement('dialog');
     overlay.className = 'minigame-overlay';
     overlay.id = 'minigameOverlay';
@@ -209,7 +452,7 @@ class BingoMiniGame {
     }
   }
 
-  renderOddsTable() {
+  renderOddsTable(): string {
     let html = '<table class="odds-table"><thead><tr><th>Numbers</th><th>Matches</th><th>Odds</th><th>Probability</th></tr></thead><tbody>';
     for (const row of this.oddsTable) {
       html += `<tr><td>${row.played}</td><td>${row.matches}</td><td>${row.odds}x</td><td>${row.prob}%</td></tr>`;
@@ -218,7 +461,7 @@ class BingoMiniGame {
     return html;
   }
 
-  renderNumberGrid() {
+  renderNumberGrid(): string {
     let html = '';
     for (let i = 1; i <= this.totalNumbers; i++) {
       html += `<button class="number-btn" data-number="${i}">${i}</button>`;
@@ -226,7 +469,7 @@ class BingoMiniGame {
     return html;
   }
 
-  renderTickets() {
+  renderTickets(): string {
     let html = '';
     for (let i = 0; i < this.maxTickets; i++) {
       const isActive = i === this.currentTicket;
@@ -241,59 +484,59 @@ class BingoMiniGame {
     return html;
   }
 
-  bindEvents() {
+  bindEvents(): void {
     // Coin selector buttons
-    this.overlay.querySelectorAll('.coin-btn').forEach(btn => {
+    this.overlay.querySelectorAll('.coin-btn').forEach((btn: Element) => {
       btn.addEventListener('click', () => {
         if (this.isPlaying || this.gameFinished) return;
-        const value = parseInt(btn.dataset.value);
+        const value = Number.parseInt((btn as HTMLElement).dataset.value || '', 10);
         this.selectCoinValue(value);
       });
     });
 
     // Number selection
-    this.overlay.querySelectorAll('.number-btn').forEach(btn => {
+    this.overlay.querySelectorAll('.number-btn').forEach((btn: Element) => {
       btn.addEventListener('click', () => {
         if (this.isPlaying || this.gameFinished) return;
-        const num = parseInt(btn.dataset.number);
-        this.selectNumber(num, btn);
+        const num = Number.parseInt((btn as HTMLElement).dataset.number || '', 10);
+        this.selectNumber(num, btn as HTMLElement);
       });
     });
 
     // Ticket selection
-    this.overlay.querySelectorAll('.ticket').forEach(ticket => {
+    this.overlay.querySelectorAll('.ticket').forEach((ticket: Element) => {
       ticket.addEventListener('click', () => {
         if (this.isPlaying || this.gameFinished) return;
-        const ticketIdx = parseInt(ticket.dataset.ticket);
+        const ticketIdx = Number.parseInt((ticket as HTMLElement).dataset.ticket || '', 10);
         this.switchTicket(ticketIdx);
       });
     });
 
     // Next ticket button
-    this.overlay.querySelector('#nextTicketBtn').addEventListener('click', () => {
+    (this.overlay.querySelector('#nextTicketBtn') as HTMLButtonElement).addEventListener('click', () => {
       if (this.isPlaying || this.gameFinished) return;
       this.nextTicket();
     });
 
     // Play button
-    this.overlay.querySelector('#playBtn').addEventListener('click', () => {
+    (this.overlay.querySelector('#playBtn') as HTMLButtonElement).addEventListener('click', () => {
       if (!this.isPlaying && !this.gameFinished) {
         this.play();
       }
     });
 
     // Collect button
-    this.overlay.querySelector('#collectBtn').addEventListener('click', () => {
+    (this.overlay.querySelector('#collectBtn') as HTMLButtonElement).addEventListener('click', () => {
       this.collect();
     });
 
     // Skip button
-    this.overlay.querySelector('#skipBtn').addEventListener('click', () => {
+    (this.overlay.querySelector('#skipBtn') as HTMLButtonElement).addEventListener('click', () => {
       this.skip();
     });
   }
 
-  selectNumber(num, btn) {
+  selectNumber(num: number, btn: HTMLElement): void {
     const ticket = this.tickets[this.currentTicket];
 
     // Check if number is already in CURRENT ticket
@@ -316,7 +559,7 @@ class BingoMiniGame {
       // Add to current ticket if not full
       if (ticket.length < this.maxNumbersPerTicket) {
         ticket.push(num);
-        ticket.sort((a, b) => a - b);
+        ticket.sort((a: number, b: number) => a - b);
       } else {
         this.showToast(`Ticket ${this.currentTicket + 1} is full (max 5 numbers)`, 'info');
         return;
@@ -329,7 +572,7 @@ class BingoMiniGame {
   /**
    * Remove a number from a specific ticket
    */
-  removeNumberFromTicket(ticketIdx, num) {
+  removeNumberFromTicket(ticketIdx: number, num: number): void {
     if (this.isPlaying || this.gameFinished) return;
 
     const ticket = this.tickets[ticketIdx];
@@ -340,12 +583,12 @@ class BingoMiniGame {
     }
   }
 
-  switchTicket(ticketIdx) {
+  switchTicket(ticketIdx: number): void {
     this.currentTicket = ticketIdx;
     this.updateUI();
   }
 
-  nextTicket() {
+  nextTicket(): void {
     // Find next ticket with space or empty
     for (let i = 0; i < this.maxTickets; i++) {
       const nextIdx = (this.currentTicket + 1 + i) % this.maxTickets;
@@ -357,10 +600,10 @@ class BingoMiniGame {
     this.updateUI();
   }
 
-  updateUI() {
+  updateUI(): void {
     // Update coin selector buttons
-    this.overlay.querySelectorAll('.coin-btn').forEach(btn => {
-      const value = parseInt(btn.dataset.value);
+    this.overlay.querySelectorAll<HTMLButtonElement>('.coin-btn').forEach((btn: HTMLButtonElement) => {
+      const value = Number.parseInt(btn.dataset.value || '', 10);
       btn.classList.toggle('selected', value === this.selectedCoinValue);
     });
 
@@ -381,7 +624,7 @@ class BingoMiniGame {
     }
 
     // Update ticket active states and styling
-    this.overlay.querySelectorAll('.ticket').forEach((ticket, idx) => {
+    this.overlay.querySelectorAll('.ticket').forEach((ticket: Element, idx: number) => {
       ticket.classList.toggle('active', idx === this.currentTicket);
     });
 
@@ -392,7 +635,8 @@ class BingoMiniGame {
         ? this.betMultipliers[this.tickets[i].length] * this.selectedCoinValue
         : 0;
 
-      container.innerHTML = this.tickets[i].map(num =>
+      if (!container) continue;
+      container.innerHTML = this.tickets[i].map((num: number) =>
         `<span class="ticket-number removable" data-ticket="${i}" data-num="${num}" title="Click to remove">${num}</span>`
       ).join('');
 
@@ -403,12 +647,12 @@ class BingoMiniGame {
       }
 
       // Bind click to remove number from ticket
-      container.querySelectorAll('.ticket-number').forEach(numEl => {
-        numEl.addEventListener('click', (e) => {
+      container.querySelectorAll('.ticket-number').forEach((numEl: Element) => {
+        numEl.addEventListener('click', (e: Event) => {
           if (this.isPlaying || this.gameFinished) return;
           e.stopPropagation();
-          const ticketIdx = parseInt(numEl.dataset.ticket);
-          const num = parseInt(numEl.dataset.num);
+          const ticketIdx = Number.parseInt((numEl as HTMLElement).dataset.ticket || '', 10);
+          const num = Number.parseInt((numEl as HTMLElement).dataset.num || '', 10);
           this.removeNumberFromTicket(ticketIdx, num);
         });
       });
@@ -417,10 +661,10 @@ class BingoMiniGame {
     // Update number grid selection state
     // Numbers used in OTHER tickets are completely disabled (globally-used)
     const currentTicketNums = this.tickets[this.currentTicket];
-    this.overlay.querySelectorAll('.number-btn').forEach(btn => {
-      const num = parseInt(btn.dataset.number);
+    this.overlay.querySelectorAll('.number-btn').forEach((btn: Element) => {
+      const num = Number.parseInt((btn as HTMLElement).dataset.number || '', 10);
       const isInCurrentTicket = currentTicketNums.includes(num);
-      const isInOtherTicket = this.tickets.some((t, idx) => idx !== this.currentTicket && t.includes(num));
+      const isInOtherTicket = this.tickets.some((t: number[], idx: number) => idx !== this.currentTicket && t.includes(num));
 
       // 'selected' = in current ticket (green)
       btn.classList.toggle('selected', isInCurrentTicket);
@@ -449,10 +693,11 @@ class BingoMiniGame {
 
     // Update next ticket button state
     const currentFull = this.tickets[this.currentTicket].length >= this.maxNumbersPerTicket;
-    this.overlay.querySelector('#nextTicketBtn').disabled = currentFull && this.tickets.every(t => t.length >= this.maxNumbersPerTicket) || this.isPlaying;
+    const nextTicketBtn = this.overlay.querySelector('#nextTicketBtn') as HTMLButtonElement | null;
+    if (nextTicketBtn) nextTicketBtn.disabled = currentFull && this.tickets.every(t => t.length >= this.maxNumbersPerTicket) || this.isPlaying;
   }
 
-  async play() {
+  async play(): Promise<void> {
     // Validate balance before playing
     const totalBet = this.calculateTotalBet();
     if (totalBet > this.userBalance) {
@@ -468,25 +713,29 @@ class BingoMiniGame {
     this.isPlaying = true;
 
     // Disable controls
-    this.overlay.querySelector('#playBtn').disabled = true;
-    this.overlay.querySelector('#playBtn').textContent = 'Drawing...';
-    this.overlay.querySelector('#nextTicketBtn').disabled = true;
-    this.overlay.querySelector('#skipBtn').style.display = 'none';
+    const playBtnEl = this.overlay.querySelector('#playBtn') as HTMLButtonElement | null;
+    if (playBtnEl) { playBtnEl.disabled = true; playBtnEl.textContent = 'Drawing...'; }
+    const nextTicketBtnEl = this.overlay.querySelector('#nextTicketBtn') as HTMLButtonElement | null;
+    if (nextTicketBtnEl) nextTicketBtnEl.disabled = true;
+    const skipBtnHide = this.overlay.querySelector('#skipBtn') as HTMLElement | null;
+    if (skipBtnHide) skipBtnHide.style.display = 'none';
 
     // Clear all number selections and ticket active states
-    this.overlay.querySelectorAll('.number-btn').forEach(btn => {
+    this.overlay.querySelectorAll('.number-btn').forEach((btn: Element) => {
       btn.classList.remove('selected');
     });
-    this.overlay.querySelector('.number-grid').style.pointerEvents = 'none';
-    const coinSelectorEl = this.overlay.querySelector('.coin-selector-buttons');
+    const numberGrid = this.overlay.querySelector('.number-grid') as HTMLElement | null;
+    if (numberGrid) numberGrid.style.pointerEvents = 'none';
+    const coinSelectorEl = this.overlay.querySelector('.coin-selector-buttons') as HTMLElement | null;
     if (coinSelectorEl) coinSelectorEl.style.pointerEvents = 'none';
-    this.overlay.querySelectorAll('.ticket').forEach(ticket => ticket.classList.remove('active'));
-    this.overlay.querySelectorAll('.ticket-number').forEach(el => {
+    this.overlay.querySelectorAll('.ticket').forEach((ticket: Element) => ticket.classList.remove('active'));
+    this.overlay.querySelectorAll('.ticket-number').forEach((el: Element) => {
       el.classList.add('locked');
     });
 
     // Show drawn section
-    this.overlay.querySelector('#drawnSection').style.display = 'block';
+    const drawnSection = this.overlay.querySelector('#drawnSection') as HTMLElement | null;
+    if (drawnSection) drawnSection.style.display = 'block';
 
     try {
       // Call backend API with new ticket-based format
@@ -519,28 +768,33 @@ class BingoMiniGame {
       } else {
         throw new Error(result.message || 'Mini-game request failed');
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('[BingoMiniGame] API Error:', error);
-      this.showToast('Error: ' + error.message, 'error');
+      const msg = error instanceof Error ? error.message : String(error);
+      this.showToast('Error: ' + msg, 'error');
 
       // Re-enable controls on error
       this.isPlaying = false;
-      this.overlay.querySelector('#playBtn').disabled = false;
-      this.overlay.querySelector('#playBtn').textContent = 'Start drawing';
-      this.overlay.querySelector('#nextTicketBtn').disabled = false;
-      this.overlay.querySelector('#skipBtn').style.display = 'inline-block';
-      this.overlay.querySelector('.number-grid').style.pointerEvents = '';
-      const coinSelRestore = this.overlay.querySelector('.coin-selector-buttons');
+      const playBtnErr = this.overlay.querySelector('#playBtn') as HTMLButtonElement | null;
+      if (playBtnErr) { playBtnErr.disabled = false; playBtnErr.textContent = 'Start drawing'; }
+      const nextTicketBtnErr = this.overlay.querySelector('#nextTicketBtn') as HTMLButtonElement | null;
+      if (nextTicketBtnErr) nextTicketBtnErr.disabled = false;
+      const skipBtnEl = this.overlay.querySelector('#skipBtn') as HTMLElement | null;
+      if (skipBtnEl) skipBtnEl.style.display = 'inline-block';
+      const numGridEl = this.overlay.querySelector('.number-grid') as HTMLElement | null;
+      if (numGridEl) numGridEl.style.pointerEvents = '';
+      const coinSelRestore = this.overlay.querySelector('.coin-selector-buttons') as HTMLElement | null;
       if (coinSelRestore) coinSelRestore.style.pointerEvents = '';
-      this.overlay.querySelectorAll('.ticket-number').forEach(el => {
+      this.overlay.querySelectorAll('.ticket-number').forEach((el: Element) => {
         el.classList.remove('locked');
       });
       this.updateUI();
-      this.overlay.querySelector('#drawnSection').style.display = 'none';
+      const drawnSectionEl = this.overlay.querySelector('#drawnSection') as HTMLElement | null;
+      if (drawnSectionEl) drawnSectionEl.style.display = 'none';
     }
   }
 
-  animateDraw(index) {
+  animateDraw(index: number): void {
     if (index >= this.drawnNumbers.length) {
       this.showResults();
       return;
@@ -566,11 +820,11 @@ class BingoMiniGame {
     }
 
     // Mark matched numbers in tickets
-    this.tickets.forEach((ticket, ticketIdx) => {
+    this.tickets.forEach((ticket: number[], ticketIdx: number) => {
       if (ticket.includes(num)) {
         const ticketNumEls = this.overlay.querySelectorAll(`#ticketNumbers${ticketIdx} .ticket-number`);
-        ticketNumEls.forEach(el => {
-          if (parseInt(el.dataset.num) === num) {
+        ticketNumEls.forEach((el: Element) => {
+          if (Number.parseInt((el as HTMLElement).dataset.num || '', 10) === num) {
             el.classList.add('matched');
           }
         });
@@ -581,23 +835,25 @@ class BingoMiniGame {
     setTimeout(() => this.animateDraw(index + 1), 500);
   }
 
-  showResults() {
+  showResults(): void {
     this.gameFinished = true;
     let totalWin = 0;
 
     // Use server results if available (authoritative), fallback to client calculation
     if (this.serverResults && this.serverResults.ticket_results) {
       // Server-provided results (authoritative)
-      this.serverResults.ticket_results.forEach((result, i) => {
+      this.serverResults.ticket_results.forEach((result: BingoTicketResult, i: number) => {
         if (result.numbers_played === 0) return;
 
         const ticketWin = result.payout || 0;
         totalWin += ticketWin;
 
         // Show result on ticket
-        const resultEl = this.overlay.querySelector(`#ticketResult${i}`);
-        resultEl.textContent = `${result.matches}/${result.numbers_played} = ${ticketWin.toFixed(2)} coins`;
-        if (ticketWin > 0) resultEl.classList.add('win');
+        const resultEl = this.overlay.querySelector(`#ticketResult${i}`) as HTMLElement | null;
+        if (resultEl) {
+          resultEl.textContent = `${result.matches}/${result.numbers_played} = ${ticketWin.toFixed(2)} coins`;
+          if (ticketWin > 0) resultEl.classList.add('win');
+        }
       });
 
       // Use server's total payout
@@ -609,7 +865,7 @@ class BingoMiniGame {
         if (ticket.length === 0) continue;
 
         const played = ticket.length;
-        const matched = ticket.filter(n => this.drawnNumbers.includes(n)).length;
+        const matched = ticket.filter((n: number) => this.drawnNumbers.includes(n)).length;
         const multiplier = this.payoutTable[played]?.[matched] || 0;
         const betMultiplier = this.betMultipliers[played];
         const ticketWin = multiplier * betMultiplier;
@@ -617,9 +873,11 @@ class BingoMiniGame {
         totalWin += ticketWin;
 
         // Show result on ticket
-        const resultEl = this.overlay.querySelector(`#ticketResult${i}`);
-        resultEl.textContent = `${matched}/${played} = ${ticketWin.toFixed(2)} coins`;
-        if (ticketWin > 0) resultEl.classList.add('win');
+        const resultEl = this.overlay.querySelector(`#ticketResult${i}`) as HTMLElement | null;
+        if (resultEl) {
+          resultEl.textContent = `${matched}/${played} = ${ticketWin.toFixed(2)} coins`;
+          if (ticketWin > 0) resultEl.classList.add('win');
+        }
       }
     }
 
@@ -628,15 +886,19 @@ class BingoMiniGame {
     const netResult = totalWin - totalBet;
 
     // Show result section
-    const resultSection = this.overlay.querySelector('#resultSection');
-    resultSection.style.display = 'block';
+    const resultSection = this.overlay.querySelector('#resultSection') as HTMLElement | null;
+    if (resultSection) resultSection.style.display = 'block';
 
-    this.overlay.querySelector('#resultText').innerHTML = `
-      Total bet: ${totalBet} coins<br>
-      Total payout: ${totalWin} coins<br>
-      Net result: <span style="color: ${netResult >= 0 ? '#10b981' : '#ef4444'}">${netResult >= 0 ? '+' : ''}${netResult} coins</span>
-    `;
-    this.overlay.querySelector('#totalWin').textContent = netResult >= 0 ? `Won: ${netResult} coins` : `Lost: ${Math.abs(netResult)} coins`;
+    const resultText = this.overlay.querySelector('#resultText') as HTMLElement | null;
+    if (resultText) {
+      resultText.innerHTML = `
+        Total bet: ${totalBet} coins<br>
+        Total payout: ${totalWin} coins<br>
+        Net result: <span style="color: ${netResult >= 0 ? '#10b981' : '#ef4444'}">${netResult >= 0 ? '+' : ''}${netResult} coins</span>
+      `;
+    }
+    const totalWinEl = this.overlay.querySelector('#totalWin') as HTMLElement | null;
+    if (totalWinEl) totalWinEl.textContent = netResult >= 0 ? `Won: ${netResult} coins` : `Lost: ${Math.abs(netResult)} coins`;
 
     // Update balance display in mini-game
     const balanceDisplay = this.overlay.querySelector('#balanceDisplay');
@@ -658,12 +920,14 @@ class BingoMiniGame {
     this.totalWin = totalWin;
 
     // Show collect button, hide play button
-    this.overlay.querySelector('#playBtn').style.display = 'none';
-    this.overlay.querySelector('#collectBtn').style.display = 'inline-block';
+    const playBtnHide = this.overlay.querySelector('#playBtn') as HTMLElement | null;
+    if (playBtnHide) playBtnHide.style.display = 'none';
+    const collectBtnShow = this.overlay.querySelector('#collectBtn') as HTMLElement | null;
+    if (collectBtnShow) collectBtnShow.style.display = 'inline-block';
 
   }
 
-  collect() {
+  collect(): void {
     if (typeof this.overlay.close === 'function' && this.overlay.open) {
       this.overlay.close();
     } else {
@@ -674,7 +938,7 @@ class BingoMiniGame {
     }
   }
 
-  skip() {
+  skip(): void {
     if (typeof this.overlay.close === 'function' && this.overlay.open) {
       this.overlay.close();
     } else {
@@ -686,26 +950,134 @@ class BingoMiniGame {
   }
 }
 
-function createRootScope(rootElement) {
+function createRootScope(rootElement: HTMLElement): RootScope {
   return {
-    getElementById(id) {
+    getElementById(id: string): HTMLElement | null {
       const candidate = rootElement.ownerDocument?.getElementById(id) || null;
       return candidate && rootElement.contains(candidate) ? candidate : null;
     },
-    querySelector(selector) {
+    querySelector(selector: string): Element | null {
       return rootElement.querySelector(selector);
     },
-    querySelectorAll(selector) {
+    querySelectorAll(selector: string): NodeListOf<Element> {
       return rootElement.querySelectorAll(selector);
     },
-    appendChild(node) {
+    appendChild<T extends Node>(node: T): T {
       return rootElement.appendChild(node);
     },
   };
 }
 
 export class SlotMachine {
-  constructor(rootElement, options = {}) {
+  rootElement: HTMLElement;
+  shadowRoot: RootScope;
+  initialBalance: number;
+  initialJwtToken: string;
+  credits: number;
+  bet: number;
+  kvote: number[];
+  spinsCount: number;
+  stopArray: unknown[];
+  selectedPaylines: number[];
+  jokerAdded: boolean;
+  jokerPosition: number;
+  jokerCost: number;
+  rewardMode: number;
+  gameTypeValue: number;
+  progressInterval: ReturnType<typeof setInterval> | null;
+  isSpinning: boolean;
+  activeMenuView: string;
+  historyPage: number;
+  historyTotalPages: number;
+  historyTotalItems: number;
+  historyItems: HistoryItem[];
+  historyLoading: boolean;
+  isMounted: boolean;
+  magicOpenAiMode: boolean;
+  magicCameraYawRad: number;
+  magicCameraPitchRad: number;
+  magicCameraDepthOffset: number;
+  magicSwingAngleRad: number;
+  magicSwingAmplitudeRad: number;
+  magicInitialLeftSwingRad: number;
+  magicSwingSpeedRadPerSec: number;
+  magicSwingAnimationFrame: number | null;
+  magicSwingStartTime: number;
+  magicSwingDebugState: string | null;
+  magicLastRenderedSwingRad: number | null;
+  magicSwingMotionDirection: number;
+  currentSpinDurationMs: number;
+  spinCountdownSeconds: number;
+  jwtToken: string;
+  spinDirections: number[];
+  currentRotations: number[];
+  renderRotations: number[];
+  reelSpringOffsets: number[];
+  symbolStrip: SymbolValue[];
+  reelAnimationFrame: number | null;
+  jokerSelectionActive: boolean;
+  canvas: HTMLCanvasElement | null;
+  ctx: CanvasRenderingContext2D | null;
+  webgl: WebGLRenderingContext | null;
+  webglProgram: WebGLProgram | null;
+  webglVertexBuffer: WebGLBuffer | null;
+  webglTexture: WebGLTexture | null;
+  webglPositionLocation: number;
+  webglUvLocation: number;
+  webglTextureLocation: WebGLUniformLocation | null;
+  webglEnabled: boolean;
+  webglBackbufferCanvas: HTMLCanvasElement | null;
+  webglTextureWidth: number;
+  webglTextureHeight: number;
+  maxSpinnerRenderDpr: number;
+  canvasWidth: number;
+  canvasHeight: number;
+  reelBorderColor: string;
+  reelPanelBaseColor: string;
+  reelCellFillColor: string;
+  reelWoodTopColor: string;
+  reelWoodMidColor: string;
+  reelWoodBottomColor: string;
+  cellHalfHeight: number;
+  middleRowCenterY: number;
+  bottomRowCenterY: number;
+  debugSwingPaused: boolean;
+  debugSavedSwingRad: number;
+  debugSwingBtnRect: HitRect | null;
+  debugSwingSliderRect: HitRect | null;
+  debugSpaceSliderRect: HitRect | null;
+  debugSwingSliderValue: number;
+  debugSpaceSliderValue: number;
+  debugDragging: DebugDragging;
+  debugSwingLeftArrowRect: HitRect | null;
+  debugSwingRightArrowRect: HitRect | null;
+  debugZoomSliderValue: number;
+  debugZoomSliderRect: HitRect | null;
+  isFullscreen: boolean;
+  debugFullscreenBtnRect: HitRect | null;
+  preFullscreenCanvasStyle: string;
+  preFullscreenCanvasParent: HTMLElement | null;
+  preFullscreenCanvasNext: ChildNode | null;
+  fullscreenStyleEl: HTMLStyleElement | null;
+  fullscreenEscHandler: ((e: KeyboardEvent) => void) | null;
+  fsHitRects: FullscreenHitRects;
+  fsHoverKey: string | null;
+  validJokerPositions: number[];
+  jokerAffectedLines: number[];
+  jokerCanvasX: number;
+  jokerCanvasY: number;
+  jokerImageLoaded: boolean;
+  img: HTMLImageElement;
+  logoImg: HTMLImageElement;
+  logoImgLoaded: boolean;
+  cellHalfWidth: number;
+  spinnerPaddingLeft: number;
+  spinnerPaddingTop: number;
+  lineColor: string;
+  ringSettings: RingSettings;
+  boundCanvasClick: (e: MouseEvent) => void;
+
+  constructor(rootElement: HTMLElement, options: SlotMachineOptions = {}) {
     if (!rootElement) {
       throw new Error('SlotMachine root element is required');
     }
@@ -822,7 +1194,7 @@ export class SlotMachine {
     this.fsHoverKey = null;
   }
 
-  mount() {
+  mount(): void {
     if (this.isMounted) return;
     this.isMounted = true;
 
@@ -878,9 +1250,9 @@ export class SlotMachine {
     };
 
     // Listen for ring settings events from control panel
-    document.addEventListener('slotm:ring-settings', (e) => {
+    document.addEventListener('slotm:ring-settings', ((e: CustomEvent) => {
       this.setRingSettings(e.detail);
-    });
+    }) as EventListener);
 
     // Bind event handlers
     this.boundCanvasClick = this.handleCanvasClick.bind(this);
@@ -891,36 +1263,46 @@ export class SlotMachine {
     void this.loadSpinsCountFromHistory();
   }
 
-  initializeUI() {
+  initializeUI(): void {
     // Bet options - initialized based on game type
     this.updateBetOptions();
 
     // Lines - bind events to static buttons
     const linesContainer = this.shadowRoot.getElementById('linesContainer');
-    const lineButtons = linesContainer.querySelectorAll('.line-btn');
-    for (let i = 0; i < lineButtons.length; i++) {
-      const lineButton = lineButtons[i];
-      lineButton.addEventListener('click', () => this.toggleLine(i, lineButton));
+    if (linesContainer) {
+      const lineButtons = linesContainer.querySelectorAll<HTMLElement>('.line-btn');
+      for (let i = 0; i < lineButtons.length; i++) {
+        const lineButton = lineButtons[i];
+        if (lineButton) lineButton.addEventListener('click', () => this.toggleLine(i, lineButton));
+      }
     }
 
     // Game types - bind events to static buttons
     const gameTypeLabels = ['Numbers', 'Roman', 'Fruits', 'Animals', 'Emoji'];
     const gameTypeOptions = this.shadowRoot.getElementById('gameTypeOptions');
-    const gameTypeButtons = gameTypeOptions.querySelectorAll('.control-group');
-    for (let i = 0; i < gameTypeButtons.length; i++) {
-      const optionButton = gameTypeButtons[i];
-      const value = parseInt(optionButton.dataset.value);
-      const label = gameTypeLabels[value - 1] || optionButton.textContent;
-      optionButton.addEventListener('click', () => this.selectGameType(value, label, optionButton));
+    if (gameTypeOptions) {
+      const gameTypeButtons = gameTypeOptions.querySelectorAll<HTMLElement>('.control-group');
+      for (let i = 0; i < gameTypeButtons.length; i++) {
+        const optionButton = gameTypeButtons[i];
+        if (optionButton) {
+          const value = Number.parseInt((optionButton as HTMLElement).dataset?.value || '', 10);
+          const label = gameTypeLabels[value - 1] || optionButton.textContent;
+          optionButton.addEventListener('click', () => this.selectGameType(value, label, optionButton));
+        }
+      }
     }
 
     // Reward modes - bind events to static buttons
     const rewardModeOptions = this.shadowRoot.getElementById('rewardModeOptions');
-    const rewardModeButtons = rewardModeOptions.querySelectorAll('.control-group');
-    for (let i = 0; i < rewardModeButtons.length; i++) {
-      const optionButton = rewardModeButtons[i];
-      const value = parseInt(optionButton.dataset.value);
-      optionButton.addEventListener('click', () => this.selectRewardMode(value, optionButton));
+    if (rewardModeOptions) {
+      const rewardModeButtons = rewardModeOptions.querySelectorAll<HTMLElement>('.control-group');
+      for (let i = 0; i < rewardModeButtons.length; i++) {
+        const optionButton = rewardModeButtons[i];
+        if (optionButton) {
+          const value = Number.parseInt((optionButton as HTMLElement).dataset?.value || '', 10);
+          optionButton.addEventListener('click', () => this.selectRewardMode(value, optionButton));
+        }
+      }
     }
 
     // Canvas reels
@@ -938,12 +1320,12 @@ export class SlotMachine {
     }, 100);
   }
 
-  initCanvas() {
+  initCanvas(): void {
     if (!this.canvas) return;
 
     const computedStyle = getComputedStyle(this.canvas);
-    const innerPadding = parseFloat(computedStyle.getPropertyValue('--spinner-inner-padding'))
-      || parseFloat(computedStyle.paddingLeft)
+    const innerPadding = Number.parseFloat(computedStyle.getPropertyValue('--spinner-inner-padding'))
+      || Number.parseFloat(computedStyle.paddingLeft)
       || 10;
     const themedBorderColor = computedStyle.getPropertyValue('--slot-border-color').trim();
     const themedPanelColor = computedStyle.getPropertyValue('--slot-card-bg').trim();
@@ -1004,7 +1386,7 @@ export class SlotMachine {
     this.renderFrame();
   }
 
-  createWebGLShader(gl, type, source) {
+  createWebGLShader(gl: WebGLRenderingContext, type: number, source: string): WebGLShader | null {
     const shader = gl.createShader(type);
     if (!shader) return null;
     gl.shaderSource(shader, source);
@@ -1017,7 +1399,7 @@ export class SlotMachine {
     return shader;
   }
 
-  ensureWebGLContext(pixelWidth, pixelHeight) {
+  ensureWebGLContext(pixelWidth: number, pixelHeight: number): boolean {
     if (!this.canvas) return false;
     if (!window.WebGLRenderingContext) return false;
 
@@ -1145,7 +1527,7 @@ export class SlotMachine {
     return true;
   }
 
-  ensureWebGLBackbuffer(pixelWidth, pixelHeight) {
+  ensureWebGLBackbuffer(pixelWidth: number, pixelHeight: number): void {
     if (!this.webglEnabled) return;
     if (!this.webglBackbufferCanvas) {
       this.webglBackbufferCanvas = document.createElement('canvas');
@@ -1158,7 +1540,7 @@ export class SlotMachine {
     }
   }
 
-  presentWebGLFrame() {
+  presentWebGLFrame(): void {
     if (!this.webglEnabled || !this.webgl || !this.webglProgram || !this.webglVertexBuffer || !this.webglTexture) {
       return;
     }
@@ -1209,13 +1591,13 @@ export class SlotMachine {
     gl.drawArrays(gl.TRIANGLES, 0, 6);
   }
 
-  cancelReelAnimation() {
+  cancelReelAnimation(): void {
     if (!this.reelAnimationFrame) return;
     cancelAnimationFrame(this.reelAnimationFrame);
     this.reelAnimationFrame = null;
   }
 
-  debugPauseSwing() {
+  debugPauseSwing(): void {
     this.debugSwingPaused = true;
     this.debugSavedSwingRad = this.magicSwingAngleRad || 0;
 
@@ -1227,7 +1609,7 @@ export class SlotMachine {
     this.renderFrame();
   }
 
-  debugResumeSwing() {
+  debugResumeSwing(): void {
     this.debugSwingPaused = false;
     this.debugSavedSwingRad = 0;
     this.debugSwingSliderValue = 0;
@@ -1238,16 +1620,16 @@ export class SlotMachine {
     this.renderFrame();
   }
 
-  easeOutSpin(progress) {
+  easeOutSpin(progress: number): number {
     return 1 - Math.pow(1 - progress, 3.4);
   }
 
-  cubicBezierComponent(t, control1, control2) {
+  cubicBezierComponent(t: number, control1: number, control2: number): number {
     const inv = 1 - t;
     return (3 * inv * inv * t * control1) + (3 * inv * t * t * control2) + (t * t * t);
   }
 
-  cubicBezierEase(progress, p1x = 0.22, p1y = 0.61, p2x = 0.36, p2y = 1) {
+  cubicBezierEase(progress: number, p1x: number = 0.22, p1y: number = 0.61, p2x: number = 0.36, p2y: number = 1): number {
     const clamped = Math.max(0, Math.min(1, Number(progress) || 0));
     let low = 0;
     let high = 1;
@@ -1267,7 +1649,7 @@ export class SlotMachine {
     return this.cubicBezierComponent(t, p1y, p2y);
   }
 
-  getReelStepAngle() {
+  getReelStepAngle(): number {
     const stripLength = Array.isArray(this.symbolStrip) ? this.symbolStrip.length : 0;
     if (!Number.isFinite(stripLength) || stripLength < 2) {
       return 360 / CLASSIC_SYMBOL_COUNT;
@@ -1275,11 +1657,11 @@ export class SlotMachine {
     return 360 / stripLength;
   }
 
-  buildNumberSymbols() {
+  buildNumberSymbols(): number[] {
     return Array.from({ length: CLASSIC_SYMBOL_COUNT }, (_, index) => index + 1);
   }
 
-  toRomanNumber(value) {
+  toRomanNumber(value: SymbolValue): string {
     const numericValue = Math.max(1, Math.floor(Number(value) || 1));
     const map = [
       [1000, 'M'],
@@ -1309,7 +1691,7 @@ export class SlotMachine {
     return result || 'I';
   }
 
-  getSymbolSetForGameType(gameType = 1) {
+  getSymbolSetForGameType(gameType: number = 1): SymbolValue[] {
     const numberSymbols = this.buildNumberSymbols();
     const symbolSets = {
       1: numberSymbols,
@@ -1322,7 +1704,7 @@ export class SlotMachine {
     return symbolSets[gameType] || symbolSets[1];
   }
 
-  resolveGroupCoefficients(groupCount) {
+  resolveGroupCoefficients(groupCount: number): number[] {
     if (groupCount <= 0) {
       return [];
     }
@@ -1341,7 +1723,7 @@ export class SlotMachine {
     });
   }
 
-  getExactMatchProbability(symbolCount, matchCount) {
+  getExactMatchProbability(symbolCount: number, matchCount: number): number {
     const safeCount = Math.max(2, Number(symbolCount) || CLASSIC_SYMBOL_COUNT);
     if (matchCount === 5) {
       return 1 / (safeCount ** 5);
@@ -1349,12 +1731,12 @@ export class SlotMachine {
     return (safeCount - 1) / (safeCount ** (matchCount + 1));
   }
 
-  buildBaseNumbersOdds(symbolCount = CLASSIC_SYMBOL_COUNT) {
+  buildBaseNumbersOdds(symbolCount: number = CLASSIC_SYMBOL_COUNT): number[] {
     const groupCount = Math.ceil(symbolCount / 2);
     const groupCoefficients = this.resolveGroupCoefficients(groupCount);
-    const coefficientSum = groupCoefficients.reduce((sum, value) => sum + value, 0);
+    const coefficientSum = groupCoefficients.reduce((sum: number, value: number) => sum + value, 0);
     const scale = NUMBERS_TARGET_RTP / (ODDS_MATCH_ORDER.length * coefficientSum);
-    const odds = [];
+    const odds: number[] = [];
 
     for (let groupIndex = 0; groupIndex < groupCount; groupIndex += 1) {
       const groupCoefficient = groupCoefficients[groupIndex] ?? 1;
@@ -1371,7 +1753,7 @@ export class SlotMachine {
     return odds;
   }
 
-  getOddsForGameType(gameType = 1) {
+  getOddsForGameType(gameType: number = 1): number[] {
     const baseOdds = this.buildBaseNumbersOdds(CLASSIC_SYMBOL_COUNT);
     const coefficient = GAME_TYPE_ODDS_COEFFICIENTS[gameType] ?? 1;
 
@@ -1381,11 +1763,11 @@ export class SlotMachine {
     return baseOdds.map((value) => Math.max(1, Math.round(value * coefficient)));
   }
 
-  animateReels(transitions, onComplete = null) {
+  animateReels(transitions: (ReelTransition | null)[], onComplete: (() => void) | null = null): void {
     this.cancelReelAnimation();
 
     const startedAt = performance.now();
-    const nextFrame = (now) => {
+    const nextFrame = (now: number): void => {
       let allComplete = true;
 
       for (let reel = 0; reel < transitions.length; reel++) {
@@ -1427,7 +1809,7 @@ export class SlotMachine {
     this.reelAnimationFrame = requestAnimationFrame(nextFrame);
   }
 
-  getSymbolHue(symbol, fallbackIndex = 0) {
+  getSymbolHue(symbol: SymbolValue, fallbackIndex: number = 0): number {
     const symbolText = String(symbol ?? '');
     const numberValue = Number(symbolText);
     if (Number.isFinite(numberValue) && symbolText !== '') {
@@ -1442,7 +1824,7 @@ export class SlotMachine {
     return hueWheel[idx];
   }
 
-  parseCssColorToRgb(input, fallback = 'rgb(255, 255, 255)') {
+  parseCssColorToRgb(input: string, fallback: string = 'rgb(255, 255, 255)'): string {
     const value = String(input || '').trim();
     if (!value) return fallback;
 
@@ -1450,14 +1832,14 @@ export class SlotMachine {
     if (hexMatch) {
       const hex = hexMatch[1];
       if (hex.length === 3) {
-        const r = parseInt(hex[0] + hex[0], 16);
-        const g = parseInt(hex[1] + hex[1], 16);
-        const b = parseInt(hex[2] + hex[2], 16);
+        const r = Number.parseInt(hex[0] + hex[0], 16);
+        const g = Number.parseInt(hex[1] + hex[1], 16);
+        const b = Number.parseInt(hex[2] + hex[2], 16);
         return `rgb(${r}, ${g}, ${b})`;
       }
-      const r = parseInt(hex.slice(0, 2), 16);
-      const g = parseInt(hex.slice(2, 4), 16);
-      const b = parseInt(hex.slice(4, 6), 16);
+      const r = Number.parseInt(hex.slice(0, 2), 16);
+      const g = Number.parseInt(hex.slice(2, 4), 16);
+      const b = Number.parseInt(hex.slice(4, 6), 16);
       return `rgb(${r}, ${g}, ${b})`;
     }
 
@@ -1475,7 +1857,7 @@ export class SlotMachine {
     return fallback;
   }
 
-  colorWithAlpha(rgbColor, alphaValue) {
+  colorWithAlpha(rgbColor: string, alphaValue: number): string {
     const safeAlpha = Math.max(0, Math.min(1, Number(alphaValue) || 0));
     const normalized = this.parseCssColorToRgb(rgbColor, 'rgb(255, 255, 255)');
     const rgbMatch = normalized.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/i);
@@ -1485,7 +1867,7 @@ export class SlotMachine {
     return `rgba(${rgbMatch[1]}, ${rgbMatch[2]}, ${rgbMatch[3]}, ${safeAlpha})`;
   }
 
-  getWoodGradientColors(depthWeight = 0.5) {
+  getWoodGradientColors(depthWeight: number = 0.5): WoodGradientColors {
     const depth = Math.max(0, Math.min(1, Number(depthWeight) || 0));
     return {
       top: this.colorWithAlpha(this.reelWoodTopColor || 'rgb(188, 129, 67)', 0.78 + (depth * 0.16)),
@@ -1494,7 +1876,7 @@ export class SlotMachine {
     };
   }
 
-  getSymbolFontSizePx(baseCellHeight, symbol) {
+  getSymbolFontSizePx(baseCellHeight: number, symbol: SymbolValue): number {
     const text = String(symbol ?? '');
     const charCount = text.length;
     let scale = 0.33;
@@ -1510,7 +1892,7 @@ export class SlotMachine {
     return Math.max(15, baseCellHeight * scale);
   }
 
-  transformByMagicCamera(x, y, z, includeDepthOffset = true) {
+  transformByMagicCamera(x: number, y: number, z: number, includeDepthOffset: boolean = true): { x: number; y: number; z: number } {
     let viewX = x;
     let viewY = y;
     let viewZ = z;
@@ -1542,7 +1924,7 @@ export class SlotMachine {
     return { x: viewX, y: viewY, z: viewZ };
   }
 
-  projectPoint3D(x, y, z, centerX, centerY, perspective) {
+  projectPoint3D(x: number, y: number, z: number, centerX: number, centerY: number, perspective: number): ProjectedPoint {
     const transformed = this.transformByMagicCamera(x, y, z, true);
     const viewX = transformed.x;
     const viewY = transformed.y;
@@ -1557,7 +1939,7 @@ export class SlotMachine {
     };
   }
 
-  projectWorldPoint(x, y, z, centerX, centerY, perspective, yawRad, pitchRad, depthOffset) {
+  projectWorldPoint(x: number, y: number, z: number, centerX: number, centerY: number, perspective: number, yawRad: number, pitchRad: number, depthOffset: number): ProjectedWorldPoint {
     const yawCos = Math.cos(yawRad);
     const yawSin = Math.sin(yawRad);
     let viewX = (x * yawCos) + (z * yawSin);
@@ -1584,7 +1966,7 @@ export class SlotMachine {
     };
   }
 
-  drawMagicReelTunnel(reelCenterX, reelCenterY, reelWidth, reelAreaHeight) {
+  drawMagicReelTunnel(reelCenterX: number, reelCenterY: number, reelWidth: number, reelAreaHeight: number): void {
     const ctx = this.ctx;
     if (!ctx || !this.magicOpenAiMode) return;
 
@@ -1625,19 +2007,19 @@ export class SlotMachine {
     ctx.restore();
   }
 
-  drawRoundedQuadPath(points, radiusPx) {
+  drawRoundedQuadPath(points: Point2D[], radiusPx: number): void {
     const ctx = this.ctx;
     if (!ctx || !points || points.length !== 4) return;
 
-    const clampDot = (value) => Math.max(-1, Math.min(1, value));
-    const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
-    const normalize = (vector) => {
+    const clampDot = (value: number): number => Math.max(-1, Math.min(1, value));
+    const distance = (a: Point2D, b: Point2D): number => Math.hypot(a.x - b.x, a.y - b.y);
+    const normalize = (vector: Point2D): Point2D => {
       const length = Math.hypot(vector.x, vector.y);
       if (length <= 0.0001) return { x: 0, y: 0 };
       return { x: vector.x / length, y: vector.y / length };
     };
 
-    const roundedSegments = [];
+    const roundedSegments: RoundedSegment[] = [];
     for (let i = 0; i < 4; i++) {
       const prev = points[(i + 3) % 4];
       const current = points[i];
@@ -1685,7 +2067,7 @@ export class SlotMachine {
     ctx.closePath();
   }
 
-  drawPolygonPath(points) {
+  drawPolygonPath(points: Point2D[]): void {
     const ctx = this.ctx;
     if (!ctx || !Array.isArray(points) || points.length < 3) return;
     ctx.beginPath();
@@ -1696,7 +2078,7 @@ export class SlotMachine {
     ctx.closePath();
   }
 
-  drawDiamondBadge(points, depthWeight = 0.5) {
+  drawDiamondBadge(points: Point2D[], depthWeight: number = 0.5): void {
     const ctx = this.ctx;
     if (!ctx || !Array.isArray(points) || points.length !== 4) return;
 
@@ -1714,7 +2096,7 @@ export class SlotMachine {
     const height = maxY - minY;
     const centerX = (minX + maxX) / 2;
     const centerY = (minY + maxY) / 2;
-    const drawDiamondPath = () => {
+    const drawDiamondPath = (): void => {
       ctx.beginPath();
       ctx.moveTo(top.x, top.y);
       ctx.lineTo(right.x, right.y);
@@ -1729,7 +2111,7 @@ export class SlotMachine {
     const brightGold = depth > 0.5 ? rs.diamondBrightGold : 'rgba(227, 175, 72, 0.96)';
     const midGold = depth > 0.5 ? rs.diamondMidGold : 'rgba(169, 117, 33, 0.97)';
 
-    let fillGradient = null;
+    let fillGradient: CanvasGradient | null = null;
     if (this.magicOpenAiMode) {
       const outerRadius = Math.max(6, Math.max(width, height) * 0.58);
       fillGradient = ctx.createRadialGradient(
@@ -1774,7 +2156,7 @@ export class SlotMachine {
     ctx.restore();
   }
 
-  scaleDiamondPoints(points, scaleX = 1, scaleY = 1) {
+  scaleDiamondPoints(points: Point2D[], scaleX: number = 1, scaleY: number = 1): Point2D[] {
     if (!Array.isArray(points) || points.length !== 4) {
       return points;
     }
@@ -1786,7 +2168,7 @@ export class SlotMachine {
     }));
   }
 
-  drawWoodDiamondBadge(points, depthWeight = 0.5) {
+  drawWoodDiamondBadge(points: Point2D[], depthWeight: number = 0.5): void {
     const ctx = this.ctx;
     if (!ctx || !Array.isArray(points) || points.length !== 4) return;
 
@@ -1831,7 +2213,7 @@ export class SlotMachine {
     ctx.restore();
   }
 
-  drawNeonDiamondBadge(points, highlightStrength = 1, depthWeight = 0.5) {
+  drawNeonDiamondBadge(points: Point2D[], highlightStrength: number = 1, depthWeight: number = 0.5): void {
     const ctx = this.ctx;
     if (!ctx || !Array.isArray(points) || points.length !== 4) return;
 
@@ -1851,7 +2233,7 @@ export class SlotMachine {
     const centerY = (minY + maxY) / 2;
     const glowBlur = Math.min(36, 18 + (strength * 6));
 
-    const drawDiamondPath = () => {
+    const drawDiamondPath = (): void => {
       ctx.beginPath();
       ctx.moveTo(top.x, top.y);
       ctx.lineTo(right.x, right.y);
@@ -1864,7 +2246,7 @@ export class SlotMachine {
     const neonBlue = depth > 0.5 ? 'rgba(173, 226, 255, 0.97)' : 'rgba(154, 214, 250, 0.96)';
     const neonBlueDeep = depth > 0.5 ? 'rgba(126, 190, 236, 0.95)' : 'rgba(112, 174, 220, 0.94)';
 
-    let fillGradient = null;
+    let fillGradient: CanvasGradient | null = null;
     if (typeof ctx.createConicGradient === 'function') {
       fillGradient = ctx.createConicGradient(-Math.PI / 2, centerX, centerY);
       fillGradient.addColorStop(0, neonWhite);
@@ -1901,7 +2283,7 @@ export class SlotMachine {
     ctx.restore();
   }
 
-  drawFlatDiamondBadge(centerX, centerY, baseCellWidth, baseCellHeight, depthWeight = 0.5, paylineHighlight = 0) {
+  drawFlatDiamondBadge(centerX: number, centerY: number, baseCellWidth: number, baseCellHeight: number, depthWeight: number = 0.5, paylineHighlight: number = 0): void {
     const isMagic = Boolean(this.magicOpenAiMode);
     const highlightStrength = Math.max(0, Number(paylineHighlight) || 0);
     const highlightScaleBoost = highlightStrength > 0
@@ -1948,7 +2330,7 @@ export class SlotMachine {
     baseCellHeight,
     depthWeight,
     paylineHighlight = 0,
-  }) {
+  }: CurvedDiamondBadgeParams): void {
     const isMagic = Boolean(this.magicOpenAiMode);
     const highlightStrength = Math.max(0, Number(paylineHighlight) || 0);
     const highlightScaleBoost = highlightStrength > 0
@@ -1958,7 +2340,7 @@ export class SlotMachine {
     const halfH = baseCellHeight * (isMagic ? 0.38 : 0.36);
     const centerShiftRad = isMagic ? (angleSpanRad * 0.08) : 0;
     const angleOffset = (halfH / Math.max(1, baseCellHeight)) * angleSpanRad;
-    const projectAtAngle = (xLocal, sampleAngle) => {
+    const projectAtAngle = (xLocal: number, sampleAngle: number): ProjectedPoint => {
       const y3d = -radius * Math.sin(sampleAngle);
       const z3d = (radius * Math.cos(sampleAngle)) - radius;
       return this.projectPoint3D(xLocal, y3d, z3d, reelCenterX, reelCenterY, perspective);
@@ -2006,7 +2388,7 @@ export class SlotMachine {
     depthOffset,
     symbolScale = 1,
     centerShiftMultiplier = 1,
-  }) {
+  }: CurvedDiamondBadgeWorldParams): void {
     const isMagic = Boolean(this.magicOpenAiMode);
     const highlightStrength = Math.max(0, Number(paylineHighlight) || 0);
     const highlightScaleBoost = highlightStrength > 0
@@ -2019,7 +2401,7 @@ export class SlotMachine {
     const centerShiftRad = (isMagic ? (angleSpanRad * 0.08) : 0) * centerShiftMultiplier;
     const angleOffset = (halfH / Math.max(1, effectiveCellHeight)) * angleSpanRad;
 
-    const projectAtAngle = (xLocal, sampleAngle) => {
+    const projectAtAngle = (xLocal: number, sampleAngle: number): ProjectedPoint => {
       const y3d = -radius * Math.sin(sampleAngle);
       const z3d = (radius * Math.cos(sampleAngle)) - radius;
       return this.projectWorldPoint(
@@ -2064,7 +2446,7 @@ export class SlotMachine {
     }
   }
 
-  drawCurvedReelCell(cell, renderPass = 'full') {
+  drawCurvedReelCell(cell: ReelCellData, renderPass: RenderPass = 'full'): void {
     const ctx = this.ctx;
     if (!ctx) return;
 
@@ -2099,12 +2481,12 @@ export class SlotMachine {
     const segments = cell.precomputedEdges
       ? (cell.precomputedEdges.leftEdge.length - 1)
       : (this.magicOpenAiMode ? 40 : 28);
-    let leftEdge;
-    let rightEdge;
-    let centerEdge;
-    let innerLeftEdge = null;
-    let innerRightEdge = null;
-    let innerRadius = null;
+    let leftEdge: ProjectedPoint[] | ProjectedWorldPoint[];
+    let rightEdge: ProjectedPoint[] | ProjectedWorldPoint[];
+    let centerEdge: Point2D[];
+    let innerLeftEdge: ProjectedPoint[] | null = null;
+    let innerRightEdge: ProjectedPoint[] | null = null;
+    let innerRadius: number | null = null;
 
     if (cell.precomputedEdges) {
       leftEdge = cell.precomputedEdges.leftEdge;
@@ -2442,8 +2824,8 @@ export class SlotMachine {
     }
     let axisYUnitX = axisYx / Math.max(axisYLength, 0.0001);
     let axisYUnitY = axisYy / Math.max(axisYLength, 0.0001);
-    let axisXUnitX;
-    let axisXUnitY;
+    let axisXUnitX: number;
+    let axisXUnitY: number;
     if (this.magicOpenAiMode && axisXLength < 0.05) {
       // Stable silhouette fallback: derive X axis perpendicular to Y axis.
       axisXUnitX = axisYUnitY;
@@ -2549,7 +2931,7 @@ export class SlotMachine {
     }
   }
 
-  drawReelCell(cell, renderPass = 'full') {
+  drawReelCell(cell: ReelCellData, renderPass: RenderPass = 'full'): void {
     const ctx = this.ctx;
     if (!ctx) return;
     if (cell?.curved) {
@@ -2646,7 +3028,7 @@ export class SlotMachine {
     ctx.restore();
   }
 
-  drawReelsCanvas() {
+  drawReelsCanvas(): void {
     const ctx = this.ctx;
     if (!ctx || !this.canvasWidth || !this.canvasHeight) return;
 
@@ -2909,11 +3291,11 @@ export class SlotMachine {
   }
 
   drawMagicWorldReels(
-    reelStartX, reelSpacing, reelWidth, reelAreaY, reelAreaHeight,
-    reelCenterY, baseCellWidth, baseCellHeight, baseCellPitch,
-    radius, perspective, reelUnitCount, stepAngle,
-    magicSymbolPhaseOffset, strip, reelSpringOffsets,
-  ) {
+    reelStartX: number, reelSpacing: number, reelWidth: number, reelAreaY: number, reelAreaHeight: number,
+    reelCenterY: number, baseCellWidth: number, baseCellHeight: number, baseCellPitch: number,
+    radius: number, perspective: number, reelUnitCount: number, stepAngle: number,
+    magicSymbolPhaseOffset: number, strip: SymbolValue[], reelSpringOffsets: number[],
+  ): void {
     const ctx = this.ctx;
     if (!ctx) return;
 
@@ -2930,13 +3312,13 @@ export class SlotMachine {
     const pitchSin = Math.sin(pitchRad);
     const yawFacingSign = yawCos >= 0 ? 1 : -1;
     const backFaceThreshold = 0.03;
-    const worldCells = [];
+    const worldCells: ReelCellData[] = [];
 
     for (let reelIndex = 0; reelIndex < 5; reelIndex++) {
       const reelCenterX = reelStartX + (reelIndex * reelSpacing) + (reelWidth / 2);
       const reelYOffset = Number(reelSpringOffsets[reelIndex] || 0);
       const reelCenterYWithSpring = reelCenterY + reelYOffset;
-      const reelCells = [];
+      const reelCells: ReelCellData[] = [];
 
       // Precompute all 22 boundary polylines (shared between adjacent cells).
       const boundaryPolylines = [];
@@ -3091,7 +3473,7 @@ export class SlotMachine {
     // 2) back-facing sectors first within each reel
     // 3) farther sectors first
     // 4) stable tie-breakers
-    worldCells.sort((a, b) => {
+    worldCells.sort((a: ReelCellData, b: ReelCellData) => {
       const reelRankA = faceRight ? (4 - a.reelIndex) : a.reelIndex;
       const reelRankB = faceRight ? (4 - b.reelIndex) : b.reelIndex;
       if (reelRankA !== reelRankB) {
@@ -3114,7 +3496,7 @@ export class SlotMachine {
     const ringWallThickness = Math.max(12, baseCellHeight * 0.32);
     const innerRadius = Math.max(6, radius - ringWallThickness);
     const contourSamples = 96;
-    const contourLoops = [];
+    const contourLoops: ContourLoopData[] = [];
     const projectContourPoint = (
       reelCenterX,
       reelCenterY,
@@ -3174,7 +3556,7 @@ export class SlotMachine {
       this.ringSettings.gapFillAlpha,
     );
 
-    const drawLoopSegments = (points) => {
+    const drawLoopSegments = (points: ContourPoint[]): void => {
       if (!points.length) return;
       ctx.beginPath();
       ctx.moveTo(points[0].x, points[0].y);
@@ -3185,10 +3567,10 @@ export class SlotMachine {
       ctx.closePath();
       ctx.stroke();
     };
-    const drawLoop = (points) => {
+    const drawLoop = (points: ContourPoint[]): void => {
       drawLoopSegments(points);
     };
-    const drawLoopHalf = (points, frontHalf) => {
+    const drawLoopHalf = (points: ContourPoint[], frontHalf: boolean): void => {
       if (!points.length) return;
       const len = points.length;
       let drawing = false;
@@ -3211,14 +3593,14 @@ export class SlotMachine {
       }
       ctx.stroke();
     };
-    const drawNamedLoopsHalf = (loops, keys, frontHalf) => {
+    const drawNamedLoopsHalf = (loops: Record<string, ContourPoint[]>, keys: string[], frontHalf: boolean): void => {
       for (let j = 0; j < keys.length; j++) {
         const loop = loops[keys[j]];
         if (!Array.isArray(loop) || !loop.length) continue;
         drawLoopHalf(loop, frontHalf);
       }
     };
-    const drawAnnulusFill = (outerPoints, innerPoints) => {
+    const drawAnnulusFill = (outerPoints: Point2D[], innerPoints: Point2D[]): void => {
       if (!outerPoints.length || !innerPoints.length) return;
       ctx.save();
       ctx.globalCompositeOperation = 'source-over';
@@ -3248,7 +3630,7 @@ export class SlotMachine {
     const pulseR = pulseColorMatch ? pulseColorMatch[0] : '208';
     const pulseG = pulseColorMatch ? pulseColorMatch[1] : '156';
     const pulseB = pulseColorMatch ? pulseColorMatch[2] : '61';
-    const drawInnerRingFill = (innerPoints) => {
+    const drawInnerRingFill = (innerPoints: Point2D[]): void => {
       if (!innerPoints.length) return;
       ctx.save();
       ctx.globalCompositeOperation = 'source-over';
@@ -3305,12 +3687,12 @@ export class SlotMachine {
 
       // Bridge points between the two large outer side ellipses (top + bottom),
       // using projected extrema so connectors stay on visible top/bottom edges.
-      const getMinYPoint = (points) => points.reduce(
-        (best, point) => (point.y < best.y ? point : best),
+      const getMinYPoint = (points: ContourPoint[]): ContourPoint => points.reduce(
+        (best: ContourPoint, point: ContourPoint) => (point.y < best.y ? point : best),
         points[0],
       );
-      const getMaxYPoint = (points) => points.reduce(
-        (best, point) => (point.y > best.y ? point : best),
+      const getMaxYPoint = (points: ContourPoint[]): ContourPoint => points.reduce(
+        (best: ContourPoint, point: ContourPoint) => (point.y > best.y ? point : best),
         points[0],
       );
       const outerLeftTop = getMinYPoint(outerLeft);
@@ -3339,14 +3721,14 @@ export class SlotMachine {
       right: ['outerRight', 'innerRight'],
     };
     const allLoopKeys = ['outerLeft', 'outerRight', 'innerLeft', 'innerRight'];
-    const drawNamedLoops = (loops, keys) => {
+    const drawNamedLoops = (loops: Record<string, ContourPoint[]>, keys: string[]): void => {
       for (let j = 0; j < keys.length; j++) {
         const loop = loops[keys[j]];
         if (!Array.isArray(loop) || !loop.length) continue;
         drawLoop(loop);
       }
     };
-    const drawConnector = (fromPoint, toPoint) => {
+    const drawConnector = (fromPoint: Point2D, toPoint: Point2D): void => {
       if (!fromPoint || !toPoint) return;
       ctx.beginPath();
       ctx.moveTo(fromPoint.x, fromPoint.y);
@@ -3354,7 +3736,7 @@ export class SlotMachine {
       ctx.stroke();
     };
 
-    const cellsByReel = new Map();
+    const cellsByReel = new Map<number, ReelCellData[]>();
     for (let i = 0; i < worldCells.length; i++) {
       const cell = worldCells[i];
       if (!cellsByReel.has(cell.reelIndex)) {
@@ -3362,7 +3744,7 @@ export class SlotMachine {
       }
       cellsByReel.get(cell.reelIndex).push(cell);
     }
-    const loopsByReel = new Map();
+    const loopsByReel = new Map<number, ContourLoopData>();
     for (let i = 0; i < contourLoops.length; i++) {
       const loops = contourLoops[i];
       loopsByReel.set(loops.reelIndex, loops);
@@ -3447,7 +3829,7 @@ export class SlotMachine {
 
   }
 
-  drawJokerSprite(x, y) {
+  drawJokerSprite(x: number, y: number): void {
     if (!this.ctx || !this.img || !this.jokerImageLoaded) return;
     if (!this.cellHalfWidth || !this.cellHalfHeight) return;
 
@@ -3467,7 +3849,7 @@ export class SlotMachine {
     this.ctx.drawImage(this.img, drawX, drawY, imageWidth * scale, imageHeight * scale);
   }
 
-  getCellOriginFromGridPosition(gridPos) {
+  getCellOriginFromGridPosition(gridPos: number): Point2D | null {
     if (!Number.isFinite(gridPos) || gridPos < 0 || gridPos > 14) {
       return null;
     }
@@ -3480,7 +3862,7 @@ export class SlotMachine {
     };
   }
 
-  syncJokerCanvasPositionFromSelection() {
+  syncJokerCanvasPositionFromSelection(): void {
     if (!this.jokerPosition || this.jokerPosition <= 0) return;
     const origin = this.getCellOriginFromGridPosition(this.jokerPosition - 1);
     if (!origin) return;
@@ -3488,7 +3870,7 @@ export class SlotMachine {
     this.jokerCanvasY = origin.y;
   }
 
-  drawJokerSelectionBoxes() {
+  drawJokerSelectionBoxes(): void {
     if (!this.ctx) return;
     const padX = this.spinnerPaddingLeft || 0;
     const padY = this.spinnerPaddingTop || 0;
@@ -3502,8 +3884,8 @@ export class SlotMachine {
 
     for (let i = 0; i < 15; i++) {
       if (this.validJokerPositions[i] !== 1) continue;
-      let x;
-      let y;
+      let x: number;
+      let y: number;
 
       if (i < 5) {
         x = padX + this.cellHalfWidth * 2 * i;
@@ -3524,7 +3906,7 @@ export class SlotMachine {
     this.ctx.restore();
   }
 
-  drawDebugControls() {
+  drawDebugControls(): void {
     // Sliders only visible in fullscreen + magic mode
     if (!this.magicOpenAiMode || !this.ctx || !this.isFullscreen) {
       this.debugSwingBtnRect = null;
@@ -3551,7 +3933,7 @@ export class SlotMachine {
 
     ctx.save();
 
-    const drawBtn = (bx, by, w, h, label, paused) => {
+    const drawBtn = (bx: number, by: number, w: number, h: number, label: string, paused: boolean): HitRect => {
       ctx.fillStyle = paused ? 'rgba(239, 68, 68, 0.7)' : 'rgba(60, 60, 60, 0.7)';
       ctx.strokeStyle = paused ? 'rgba(239, 68, 68, 0.9)' : 'rgba(180, 180, 180, 0.5)';
       ctx.lineWidth = 1;
@@ -3577,7 +3959,7 @@ export class SlotMachine {
       return { x: bx, y: by, w, h };
     };
 
-    const drawArrowBtn = (ax, ay, size, direction) => {
+    const drawArrowBtn = (ax: number, ay: number, size: number, direction: string): HitRect => {
       // direction: 'left' or 'right'
       ctx.fillStyle = 'rgba(60, 60, 60, 0.7)';
       ctx.strokeStyle = 'rgba(180, 180, 180, 0.5)';
@@ -3616,7 +3998,7 @@ export class SlotMachine {
       return { x: ax, y: ay, w: size, h: size };
     };
 
-    const drawSlider = (sx, sy, sw, sh, value, min, max, unit) => {
+    const drawSlider = (sx: number, sy: number, sw: number, sh: number, value: number, min: number, max: number, unit: string): HitRect => {
       const rect = { x: sx, y: sy - thumbR, w: sw, h: thumbR * 2 + sh };
       const trackY = sy + sh / 2;
       // Golden track background
@@ -3719,7 +4101,7 @@ export class SlotMachine {
     ctx.restore();
   }
 
-  drawFullscreenButton() {
+  drawFullscreenButton(): void {
     if (!this.magicOpenAiMode || !this.ctx) {
       this.debugFullscreenBtnRect = null;
       return;
@@ -3804,7 +4186,7 @@ export class SlotMachine {
     this.debugFullscreenBtnRect = { x: bx, y: by, w: size, h: size };
   }
 
-  renderFrame() {
+  renderFrame(): void {
     if (!this.ctx || !this.canvas) return;
     this.ctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
 
@@ -3854,7 +4236,7 @@ export class SlotMachine {
     }
   }
 
-  createOddsTables() {
+  createOddsTables(): void {
     // Default odds (game type 1 = Numbers) are server-side rendered in the HTML.
     // Only rebuild if the initial game type differs from the default.
     const gameType = this.gameTypeValue || 1;
@@ -3864,33 +4246,33 @@ export class SlotMachine {
     this.updateOddsTables(symbols, odds);
   }
 
-  bindEvents() {
-    this.shadowRoot.getElementById('startBtn').addEventListener('click', () => this.startSpin());
-    this.shadowRoot.getElementById('stopBtn').addEventListener('click', () => this.stopSpin());
+  bindEvents(): void {
+    this.shadowRoot.getElementById('startBtn')?.addEventListener('click', () => this.startSpin());
+    this.shadowRoot.getElementById('stopBtn')?.addEventListener('click', () => this.stopSpin());
     const jokerToggleButton = this.shadowRoot.getElementById('jokerCheckbox');
     if (jokerToggleButton) {
       jokerToggleButton.addEventListener('click', () => {
-        if (jokerToggleButton.disabled) return;
+        if ((jokerToggleButton as HTMLButtonElement).disabled) return;
         const shouldEnable = !jokerToggleButton.classList.contains('active');
         this.toggleJoker(shouldEnable);
       });
     }
-    this.shadowRoot.getElementById('confirmJokerBtn').addEventListener('click', () => this.confirmJoker());
-    this.shadowRoot.getElementById('removeJokerBtn').addEventListener('click', () => this.removeJoker());
-    this.shadowRoot.getElementById('gameTypeBtn').addEventListener('click', () => this.cycleGameType());
-    this.shadowRoot.getElementById('rewardModeBtn').addEventListener('click', () => this.cycleRewardMode());
-    this.shadowRoot.getElementById('betBtn').addEventListener('click', () => this.cycleBet());
-    this.shadowRoot.getElementById('slotMenuGame').addEventListener('click', () => this.setMenuView('game'));
-    this.shadowRoot.getElementById('slotMenuRules').addEventListener('click', () => this.setMenuView('rules'));
-    this.shadowRoot.getElementById('slotMenuHistory').addEventListener('click', () => {
+    this.shadowRoot.getElementById('confirmJokerBtn')?.addEventListener('click', () => this.confirmJoker());
+    this.shadowRoot.getElementById('removeJokerBtn')?.addEventListener('click', () => this.removeJoker());
+    this.shadowRoot.getElementById('gameTypeBtn')?.addEventListener('click', () => this.cycleGameType());
+    this.shadowRoot.getElementById('rewardModeBtn')?.addEventListener('click', () => this.cycleRewardMode());
+    this.shadowRoot.getElementById('betBtn')?.addEventListener('click', () => this.cycleBet());
+    this.shadowRoot.getElementById('slotMenuGame')?.addEventListener('click', () => this.setMenuView('game'));
+    this.shadowRoot.getElementById('slotMenuRules')?.addEventListener('click', () => this.setMenuView('rules'));
+    this.shadowRoot.getElementById('slotMenuHistory')?.addEventListener('click', () => {
       this.setMenuView('history');
       void this.loadHistoryPage(this.historyPage || 1);
     });
 
     const historyPagination = this.shadowRoot.getElementById('slotHistoryPagination');
     if (historyPagination) {
-      historyPagination.addEventListener('click', (event) => {
-        const trigger = event.target.closest('button[data-page]');
+      historyPagination.addEventListener('click', (event: MouseEvent) => {
+        const trigger = (event.target as HTMLElement)?.closest('button[data-page]');
         if (!trigger) return;
         const page = Number.parseInt(trigger.getAttribute('data-page') || '', 10);
         if (!Number.isFinite(page)) return;
@@ -3904,7 +4286,7 @@ export class SlotMachine {
       if (!Number.isFinite(page)) return;
       void this.loadHistoryPage(page);
     });
-    pageInput.addEventListener('keydown', (event) => {
+    pageInput.addEventListener('keydown', (event: KeyboardEvent) => {
       if (event.key !== 'Enter') return;
       const page = Number.parseInt(pageInput.value || '', 10);
       if (!Number.isFinite(page)) return;
@@ -3919,28 +4301,28 @@ export class SlotMachine {
     window.addEventListener('resize', () => this.initCanvas());
 
     // Canvas-based debug controls (mouse + touch)
-    const getCanvasXY = (event) => {
+    const getCanvasXY = (event: MouseEvent | TouchEvent): Point2D | null => {
       if (!this.canvas) return null;
       const rect = this.canvas.getBoundingClientRect();
-      const clientX = event.touches ? event.touches[0].clientX : event.clientX;
-      const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+      const clientX = (event as TouchEvent).touches ? (event as TouchEvent).touches[0].clientX : (event as MouseEvent).clientX;
+      const clientY = (event as TouchEvent).touches ? (event as TouchEvent).touches[0].clientY : (event as MouseEvent).clientY;
       return { x: clientX - rect.left, y: clientY - rect.top };
     };
 
-    const hitRect = (pt, r) => r && pt.x >= r.x && pt.x <= r.x + r.w && pt.y >= r.y && pt.y <= r.y + r.h;
+    const hitRect = (pt: Point2D, r: HitRect | undefined): boolean => !!(r && pt.x >= r.x && pt.x <= r.x + r.w && pt.y >= r.y && pt.y <= r.y + r.h);
 
-    const sliderFromX = (pt, sliderRect, min, max) => {
+    const sliderFromX = (pt: Point2D, sliderRect: HitRect, min: number, max: number): number => {
       const t = Math.max(0, Math.min(1, (pt.x - sliderRect.x) / sliderRect.w));
       return min + t * (max - min);
     };
 
-    const adjustSwing = (delta) => {
+    const adjustSwing = (delta: number): void => {
       this.debugSwingSliderValue = Math.max(-90, Math.min(90, this.debugSwingSliderValue + delta));
       this.magicSwingAngleRad = (this.debugSwingSliderValue * Math.PI) / 180;
       if (!this.reelAnimationFrame) this.renderFrame();
     };
 
-    const handleDown = (event) => {
+    const handleDown = (event: MouseEvent | TouchEvent): void => {
       if (!this.magicOpenAiMode) return;
       const pt = getCanvasXY(event);
       if (!pt) return;
@@ -4007,7 +4389,7 @@ export class SlotMachine {
       }
     };
 
-    const handleMove = (event) => {
+    const handleMove = (event: MouseEvent | TouchEvent): void => {
       const pt = getCanvasXY(event);
 
       if (this.debugDragging) {
@@ -4080,18 +4462,18 @@ export class SlotMachine {
 
     this.canvas.addEventListener('mousedown', handleDown);
     this.canvas.addEventListener('touchstart', handleDown, { passive: false });
-    this.canvas.addEventListener('click', (e) => {
+    this.canvas.addEventListener('click', (e: MouseEvent) => {
       if (Date.now() - fsPanelToggledAt < 300) {
         e.stopPropagation();
       }
     }, true);
-    window.addEventListener('mousemove', handleMove);
-    window.addEventListener('touchmove', handleMove, { passive: false });
+    window.addEventListener('mousemove', handleMove as EventListener);
+    window.addEventListener('touchmove', handleMove as EventListener, { passive: false });
     window.addEventListener('mouseup', handleUp);
     window.addEventListener('touchend', handleUp);
 
     // Keyboard listener for fine swing control
-    this.canvas.addEventListener('keydown', (event) => {
+    this.canvas.addEventListener('keydown', (event: KeyboardEvent) => {
       if (!this.magicOpenAiMode || !this.debugSwingPaused) return;
       if (event.key === 'ArrowLeft') {
         event.preventDefault();
@@ -4103,13 +4485,13 @@ export class SlotMachine {
     });
   }
 
-  startMagicSwingAnimation() {
+  startMagicSwingAnimation(): void {
     this.stopMagicSwingAnimation();
     this.magicSwingStartTime = performance.now();
     this.magicSwingDebugState = null;
     this.magicLastRenderedSwingRad = null;
     this.magicSwingMotionDirection = 0;
-    const loop = (now) => {
+    const loop = (now: number): void => {
       const elapsed = (now - this.magicSwingStartTime) / 1000;
       const speed = Math.max(0.0001, this.magicSwingSpeedRadPerSec);
       const quarterPeriod = Math.PI / (2 * speed);
@@ -4159,7 +4541,7 @@ export class SlotMachine {
     this.magicSwingAnimationFrame = requestAnimationFrame(loop);
   }
 
-  stopMagicSwingAnimation() {
+  stopMagicSwingAnimation(): void {
     if (this.magicSwingAnimationFrame) {
       cancelAnimationFrame(this.magicSwingAnimationFrame);
       this.magicSwingAnimationFrame = null;
@@ -4170,7 +4552,7 @@ export class SlotMachine {
     this.magicSwingMotionDirection = 0;
   }
 
-  setRingSettings(settings) {
+  setRingSettings(settings: Partial<RingSettings>): void {
     if (!settings || typeof settings !== 'object') return;
     const merged = { ...this.ringSettings, ...settings };
     this.ringSettings = merged;
@@ -4192,7 +4574,7 @@ export class SlotMachine {
     }
   }
 
-  getRingSettings() {
+  getRingSettings(): RingSettings {
     return {
       ...this.ringSettings,
       cellFillColor: this.reelCellFillColor,
@@ -4203,7 +4585,7 @@ export class SlotMachine {
     };
   }
 
-  resetRingDefaults() {
+  resetRingDefaults(): void {
     this.setRingSettings({
       cellFillColor: 'rgba(208, 156, 61, 0.2)',
       cellFillAlpha: 0.7,
@@ -4228,7 +4610,7 @@ export class SlotMachine {
     });
   }
 
-  toggleFullscreen() {
+  toggleFullscreen(): void {
     if (this.isFullscreen) {
       this.exitFullscreen();
     } else {
@@ -4236,7 +4618,7 @@ export class SlotMachine {
     }
   }
 
-  enterFullscreen() {
+  enterFullscreen(): void {
     if (this.isFullscreen || !this.canvas) return;
     this.isFullscreen = true;
 
@@ -4285,7 +4667,7 @@ export class SlotMachine {
     this.initCanvas();
 
     // Escape key handler
-    this.fullscreenEscHandler = (e) => {
+    this.fullscreenEscHandler = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') {
         e.preventDefault();
         this.exitFullscreen();
@@ -4297,7 +4679,7 @@ export class SlotMachine {
     this.renderFrame();
   }
 
-  exitFullscreen() {
+  exitFullscreen(): void {
     if (!this.isFullscreen) return;
     this.isFullscreen = false;
 
@@ -4342,7 +4724,7 @@ export class SlotMachine {
   // ─── Canvas-rendered fullscreen UI ───────────────────────────────────
   // Single unified overlay frame in front of the rings, matching HTML styles.
 
-  drawFullscreenUI() {
+  drawFullscreenUI(): void {
     if (!this.isFullscreen || !this.magicOpenAiMode || !this.ctx) return;
     const ctx = this.ctx;
     const cw = this.canvasWidth;
@@ -4790,9 +5172,9 @@ export class SlotMachine {
     ctx.restore();
   }
 
-  handleFullscreenUIClick(pt) {
+  handleFullscreenUIClick(pt: Point2D): boolean {
     if (!this.isFullscreen || !this.fsHitRects) return false;
-    const hit = (r) => r && pt.x >= r.x && pt.x <= r.x + r.w && pt.y >= r.y && pt.y <= r.y + r.h;
+    const hit = (r: HitRect | undefined): boolean => !!(r && pt.x >= r.x && pt.x <= r.x + r.w && pt.y >= r.y && pt.y <= r.y + r.h);
 
     // Start
     if (hit(this.fsHitRects.start) && !this.isSpinning) {
@@ -4952,7 +5334,7 @@ export class SlotMachine {
     return false;
   }
 
-  toggleMagicOpenAiMode(forceState = null) {
+  toggleMagicOpenAiMode(forceState: boolean | null = null): void {
     if (this.rewardMode === 1 && forceState !== false) {
       return;
     }
@@ -4987,7 +5369,7 @@ export class SlotMachine {
     this.renderFrame();
   }
 
-  setMenuView(view) {
+  setMenuView(view: string): void {
     this.activeMenuView = view;
 
     const viewGame = this.shadowRoot.getElementById('slotViewGame');
@@ -5014,7 +5396,7 @@ export class SlotMachine {
     }
   }
 
-  escapeHistoryCell(value) {
+  escapeHistoryCell(value: string | number | boolean | undefined): string {
     return String(value ?? '')
       .replaceAll('&', '&amp;')
       .replaceAll('<', '&lt;')
@@ -5023,7 +5405,7 @@ export class SlotMachine {
       .replaceAll("'", '&#39;');
   }
 
-  formatHistoryTimestamp(value) {
+  formatHistoryTimestamp(value: string | undefined): string {
     try {
       const date = new Date(value);
       if (Number.isNaN(date.getTime())) return String(value || '-');
@@ -5033,7 +5415,7 @@ export class SlotMachine {
     }
   }
 
-  getHistoryPageWindow() {
+  getHistoryPageWindow(): number[] {
     const total = Math.max(1, this.historyTotalPages);
     const current = Math.min(total, Math.max(1, this.historyPage));
     const maxButtons = 5;
@@ -5058,7 +5440,7 @@ export class SlotMachine {
     return pages;
   }
 
-  renderHistoryView(errorMessage = '') {
+  renderHistoryView(errorMessage: string = ''): void {
     const statusEl = this.shadowRoot.getElementById('slotHistoryStatus');
     const tableWrap = this.shadowRoot.getElementById('slotHistoryTableWrap');
     const paginationEl = this.shadowRoot.getElementById('slotHistoryPagination');
@@ -5158,7 +5540,7 @@ export class SlotMachine {
     goBtn.disabled = this.historyTotalPages <= 1;
   }
 
-  async loadHistoryPage(page) {
+  async loadHistoryPage(page: number): Promise<void> {
     const requestedPage = Number.parseInt(String(page || 1), 10);
     const normalizedPage = Number.isFinite(requestedPage) ? requestedPage : 1;
     const targetPage = Math.min(
@@ -5195,44 +5577,51 @@ export class SlotMachine {
       this.historyItems = Array.isArray(json.data.history) ? json.data.history : [];
       this.historyLoading = false;
       this.renderHistoryView();
-    } catch (error) {
+    } catch (error: unknown) {
       this.historyLoading = false;
-      this.renderHistoryView(error.message || 'Failed to load history');
+      const msg = error instanceof Error ? error.message : String(error);
+      this.renderHistoryView(msg || 'Failed to load history');
     }
   }
 
-  cycleGameType() {
+  cycleGameType(): void {
     const gameTypeOptions = this.shadowRoot.getElementById('gameTypeOptions');
-    const controlGroups = gameTypeOptions.querySelectorAll('.control-group');
-    const activeIndex = Array.from(controlGroups).findIndex(el => el.classList.contains('active'));
+    if (!gameTypeOptions) return;
+    const controlGroups = gameTypeOptions.querySelectorAll<HTMLElement>('.control-group');
+    const activeIndex = Array.from(controlGroups).findIndex((el: Element) => el.classList.contains('active'));
     const nextIndex = (activeIndex + 1) % controlGroups.length;
     const nextElement = controlGroups[nextIndex];
-    const value = parseInt(nextElement.dataset.value);
+    if (!nextElement) return;
+    const value = Number.parseInt(nextElement.dataset.value || '', 10);
     const name = (nextElement.textContent || '').trim();
     this.selectGameType(value, name, nextElement);
   }
 
-  cycleRewardMode() {
+  cycleRewardMode(): void {
     const rewardModeOptions = this.shadowRoot.getElementById('rewardModeOptions');
-    const controlGroups = rewardModeOptions.querySelectorAll('.control-group');
-    const activeIndex = Array.from(controlGroups).findIndex(el => el.classList.contains('active'));
+    if (!rewardModeOptions) return;
+    const controlGroups = rewardModeOptions.querySelectorAll<HTMLElement>('.control-group');
+    const activeIndex = Array.from(controlGroups).findIndex((el: Element) => el.classList.contains('active'));
     const nextIndex = (activeIndex + 1) % controlGroups.length;
     const nextElement = controlGroups[nextIndex];
-    const value = parseInt(nextElement.dataset.value);
+    if (!nextElement) return;
+    const value = Number.parseInt(nextElement.dataset.value || '', 10);
     this.selectRewardMode(value, nextElement);
   }
 
-  cycleBet() {
+  cycleBet(): void {
     const betOptions = this.shadowRoot.getElementById('betOptions');
-    const controlGroups = betOptions.querySelectorAll('.control-group');
-    const activeIndex = Array.from(controlGroups).findIndex(el => el.classList.contains('active'));
+    if (!betOptions) return;
+    const controlGroups = betOptions.querySelectorAll<HTMLElement>('.control-group');
+    const activeIndex = Array.from(controlGroups).findIndex((el: Element) => el.classList.contains('active'));
     const nextIndex = (activeIndex + 1) % controlGroups.length;
     const nextElement = controlGroups[nextIndex];
-    const bet = parseInt(nextElement.dataset.value);
+    if (!nextElement) return;
+    const bet = Number.parseInt(nextElement.dataset.value || '', 10);
     this.selectBet(bet, nextElement);
   }
 
-  updateBetOptions() {
+  updateBetOptions(): void {
     // Bet arrays per game type (matching reference implementation)
     const betArrays = {
       1: [2, 3, 4, 5, 6],  // Numbers (Brojevi)
@@ -5249,7 +5638,7 @@ export class SlotMachine {
     betOptions.innerHTML = '';
 
     // Create new bet options
-    bets.forEach((bet, idx) => {
+    bets.forEach((bet: number, idx: number) => {
       const optionButton = document.createElement('button');
       optionButton.type = 'button';
       optionButton.className = 'control-group' + (idx === 0 ? ' active' : '');
@@ -5264,7 +5653,7 @@ export class SlotMachine {
     this.updateDisplay();
   }
 
-  selectBet(bet, element) {
+  selectBet(bet: number, element: HTMLElement): void {
     this.bet = bet;
     if (this.rewardMode === 1 && this.jokerAdded && this.jokerPosition > 0) {
       this.jokerCost = this.bet * 5;
@@ -5278,7 +5667,7 @@ export class SlotMachine {
     this.updateDisplay();
   }
 
-  selectGameType(value, name, element) {
+  selectGameType(value: number, name: string, element: HTMLElement): void {
     this.gameTypeValue = value;
     element.parentElement.querySelectorAll('.control-group').forEach(el => el.classList.remove('active'));
     element.classList.add('active');
@@ -5286,7 +5675,7 @@ export class SlotMachine {
     this.updateSymbols();
   }
 
-  selectRewardMode(value, element) {
+  selectRewardMode(value: number, element: HTMLElement): void {
     // If user switches to single-line mode, force-clear any joker state first.
     if (value === 2) {
       const jokerCheckbox = this.shadowRoot.getElementById('jokerCheckbox');
@@ -5340,7 +5729,7 @@ export class SlotMachine {
     this.updateDisplay();
   }
 
-  setCanvasFullHeight() {
+  setCanvasFullHeight(): void {
     if (!this.canvas) return;
     this.canvas.classList.remove('single-line-mode');
     this.canvas.style.overflow = 'hidden';
@@ -5348,7 +5737,7 @@ export class SlotMachine {
     this.renderFrame();
   }
 
-  setCanvasMiddleRow() {
+  setCanvasMiddleRow(): void {
     if (!this.canvas) return;
     this.canvas.classList.add('single-line-mode');
     this.canvas.style.overflow = 'visible';
@@ -5356,7 +5745,7 @@ export class SlotMachine {
     this.renderFrame();
   }
 
-  toggleLine(index, element) {
+  toggleLine(index: number, element: HTMLElement): void {
     const linesContainer = this.shadowRoot.getElementById('linesContainer');
     const currentlyActive = element.classList.contains('active');
 
@@ -5405,7 +5794,7 @@ export class SlotMachine {
     this.updateDisplay();
   }
 
-  toggleJoker(checked) {
+  toggleJoker(checked: boolean): void {
     const jokerButton = this.shadowRoot.getElementById('jokerCheckbox');
     if (jokerButton) {
       jokerButton.classList.toggle('active', !!checked);
@@ -5436,7 +5825,7 @@ export class SlotMachine {
     this.updateDisplay();
   }
 
-  getPaylineGridPositions() {
+  getPaylineGridPositions(): number[][] {
     return [
       [5, 6, 7, 8, 9],      // Line 0: Middle row
       [0, 1, 2, 3, 4],      // Line 1: Top row
@@ -5448,7 +5837,7 @@ export class SlotMachine {
     ];
   }
 
-  getActivePaylineHighlightMap() {
+  getActivePaylineHighlightMap(): number[] {
     const highlightMap = new Array(15).fill(0);
     if (this.rewardMode !== 1) {
       return highlightMap;
@@ -5470,7 +5859,7 @@ export class SlotMachine {
     return highlightMap;
   }
 
-  calculateValidJokerPositions() {
+  calculateValidJokerPositions(): void {
     this.validJokerPositions = new Array(15).fill(0);
 
     const paylineGridPositions = this.getPaylineGridPositions();
@@ -5484,14 +5873,14 @@ export class SlotMachine {
     }
   }
 
-  countActivePaylines() {
+  countActivePaylines(): number {
     let count = 0;
     this.selectedPaylines.forEach(item => { if (item === 1) count++; });
     this.shadowRoot.getElementById('lineCount').textContent = count;
     return count;
   }
 
-  drawJokerSelectionGrid() {
+  drawJokerSelectionGrid(): void {
     if (!this.ctx || !this.cellHalfHeight || !this.cellHalfWidth) {
       this.initCanvas();
     }
@@ -5500,19 +5889,19 @@ export class SlotMachine {
     this.addCanvasClickListener();
   }
 
-  addCanvasClickListener() {
+  addCanvasClickListener(): void {
     if (!this.canvas) return;
     this.canvas.classList.add('joker-active');
     this.canvas.addEventListener('click', this.boundCanvasClick);
   }
 
-  removeCanvasClickListener() {
+  removeCanvasClickListener(): void {
     if (!this.canvas) return;
     this.canvas.classList.remove('joker-active');
     this.canvas.removeEventListener('click', this.boundCanvasClick);
   }
 
-  handleCanvasClick(e) {
+  handleCanvasClick(e: MouseEvent): void {
     const rect = this.canvas.getBoundingClientRect();
     // Account for 8px border
     const borderWidth = 8;
@@ -5553,7 +5942,7 @@ export class SlotMachine {
     }
   }
 
-  redrawWithJoker(x, y) {
+  redrawWithJoker(x: number, y: number): void {
     this.jokerCanvasX = x;
     this.jokerCanvasY = y;
     this.jokerSelectionActive = true;
@@ -5561,7 +5950,7 @@ export class SlotMachine {
     this.drawJokerAtPosition(x, y);
   }
 
-  getLinesForJokerPosition(pos) {
+  getLinesForJokerPosition(pos: number): number[] {
     // Map of which lines each position is part of
     const jokerLineMapping = [
       [2, 6],         // pos 0
@@ -5584,7 +5973,7 @@ export class SlotMachine {
     return jokerLineMapping[pos] || [];
   }
 
-  drawJokerAtPosition(x, y) {
+  drawJokerAtPosition(x: number, y: number): void {
     this.drawJokerSprite(x, y);
 
     const confirmBtn = this.shadowRoot.getElementById('confirmJokerBtn');
@@ -5597,7 +5986,7 @@ export class SlotMachine {
     }
   }
 
-  confirmJoker() {
+  confirmJoker(): void {
     this.jokerAdded = true;
     this.jokerCost = this.bet * 5;
     this.jokerSelectionActive = false;
@@ -5626,7 +6015,7 @@ export class SlotMachine {
     this.updateDisplay();
   }
 
-  removeJoker() {
+  removeJoker(): void {
     this.jokerPosition = 0;
     this.jokerCost = 0;
     this.jokerAdded = false;
@@ -5658,7 +6047,7 @@ export class SlotMachine {
     this.updateDisplay();
   }
 
-  updateSymbols() {
+  updateSymbols(): void {
     const symbols = this.getSymbolSetForGameType(this.gameTypeValue);
     const odds = this.getOddsForGameType(this.gameTypeValue);
     this.symbolStrip = [...symbols];
@@ -5676,7 +6065,7 @@ export class SlotMachine {
     this.drawLines();
   }
 
-  updateOddsTables(symbols, odds) {
+  updateOddsTables(symbols: SymbolValue[], odds: number[]): void {
     const container = this.shadowRoot.getElementById('oddsContainer');
     if (!container) return;
 
@@ -5719,7 +6108,7 @@ export class SlotMachine {
     });
   }
 
-  updateDisplay() {
+  updateDisplay(): void {
     this.shadowRoot.getElementById('credits').textContent = this.credits;
     this.shadowRoot.getElementById('currentBet').textContent = this.bet;
     const activeLines = this.rewardMode === 2 ? 1 : this.selectedPaylines.filter(l => l === 1).length;
@@ -5730,7 +6119,7 @@ export class SlotMachine {
     this.shadowRoot.getElementById('spinsCount').textContent = this.spinsCount;
   }
 
-  clearCanvas() {
+  clearCanvas(): void {
     if (!this.ctx) return;
     this.ctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
     if (this.webglEnabled) {
@@ -5738,7 +6127,7 @@ export class SlotMachine {
     }
   }
 
-  lineCheck() {
+  lineCheck(): void {
     if (!this.ctx) return;
 
     // Only draw lines in multi-line mode
@@ -5763,7 +6152,7 @@ export class SlotMachine {
     }
   }
 
-  createLineThumbGradient(centerX, centerY, radius) {
+  createLineThumbGradient(centerX: number, centerY: number, radius: number): CanvasGradient | null {
     if (!this.ctx) return null;
     const ctx = this.ctx;
     const safeRadius = Math.max(1, Number(radius) || 1);
@@ -5790,7 +6179,7 @@ export class SlotMachine {
     return linearGradient;
   }
 
-  traceRoundedRectPath(left, top, width, height, radius) {
+  traceRoundedRectPath(left: number, top: number, width: number, height: number, radius: number): void {
     if (!this.ctx) return;
     const ctx = this.ctx;
     const safeRadius = Math.max(0, Math.min(radius, Math.min(width, height) / 2));
@@ -5813,7 +6202,7 @@ export class SlotMachine {
     ctx.closePath();
   }
 
-  drawPayline(x, options = {}) {
+  drawPayline(x: number, options: DrawPaylineOptions = {}): void {
     if (!this.ctx) return;
     const drawPath = options.drawPath !== false;
     const drawMarkers = options.drawMarkers !== false;
@@ -5941,7 +6330,7 @@ export class SlotMachine {
     this.ctx.lineWidth = 4;
   }
 
-  drawMergedLine67Markers() {
+  drawMergedLine67Markers(): void {
     if (!this.ctx) return;
 
     const padX = this.spinnerPaddingLeft || 0;
@@ -5993,17 +6382,17 @@ export class SlotMachine {
     }
   }
 
-  drawLines() {
+  drawLines(): void {
     this.renderFrame();
   }
 
-  getTotalBet() {
+  getTotalBet(): number {
     if (this.rewardMode === 2) return this.bet;
     const jokerFee = this.jokerAdded && this.jokerPosition > 0 ? this.jokerCost : 0;
     return this.selectedPaylines.filter(l => l === 1).length * this.bet + jokerFee;
   }
 
-  setButtonsEnabled(enabled) {
+  setButtonsEnabled(enabled: boolean): void {
     // Disable/enable buttons with pointer-events: none
     const buttons = ['startBtn', 'betBtn', 'gameTypeBtn', 'rewardModeBtn'];
     buttons.forEach(id => {
@@ -6066,12 +6455,12 @@ export class SlotMachine {
     }
   }
 
-  setStopButtonEnabled(enabled) {
+  setStopButtonEnabled(enabled: boolean): void {
     const stopBtn = this.shadowRoot.getElementById('stopBtn');
     if (stopBtn) stopBtn.disabled = !enabled;
   }
 
-  async startSpin() {
+  async startSpin(): Promise<void> {
     if (this.isSpinning) return;
     const totalBet = this.getTotalBet();
     if (this.credits < totalBet) {
@@ -6097,7 +6486,7 @@ export class SlotMachine {
       const spinDurationMs = this.rotateReels(response, true);
       this.setStopButtonEnabled(true);
       this.startProgressTimer(response, spinDurationMs);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Spin error:', error);
       this.credits += totalBet;
       this.isSpinning = false;
@@ -6107,16 +6496,16 @@ export class SlotMachine {
     }
   }
 
-  async callSpinAPI() {
+  async callSpinAPI(): Promise<unknown[]> {
     const activeLines = this.rewardMode === 2 ? [1, 0, 0, 0, 0, 0, 0] : this.selectedPaylines;
     const jokerEnabled = this.rewardMode === 1 && this.jokerAdded && this.jokerPosition > 0;
-    const headers = { 'Content-Type': 'application/json' };
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (this.jwtToken) {
       headers.Authorization = `Bearer ${this.jwtToken}`;
     }
     const body = {
       action: 'slot_spin',
-      ulog: parseInt(this.bet),
+      ulog: Number.parseInt(String(this.bet), 10),
       igra: this.gameTypeValue,
       kvote: this.kvote,
       brojLinija: activeLines,
@@ -6142,9 +6531,9 @@ export class SlotMachine {
     throw new Error(json.message || 'Spin failed');
   }
 
-  async loadSpinsCountFromHistory() {
+  async loadSpinsCountFromHistory(): Promise<void> {
     try {
-      const authHeaders = { 'Content-Type': 'application/json' };
+      const authHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
       if (this.jwtToken) {
         authHeaders.Authorization = `Bearer ${this.jwtToken}`;
       }
@@ -6182,7 +6571,7 @@ export class SlotMachine {
       }
 
       this.updateDisplay();
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Failed to load spins count from history:', error);
     }
   }
@@ -6192,7 +6581,7 @@ export class SlotMachine {
    * @param {Array} values - Either [360,360,360,360,360] for initial spin or actual reel values [1-22]
    * @param {boolean} isFinalSpin - True when spinning to final position
    */
-  rotateReels(values, isFinalSpin = false) {
+  rotateReels(values: number[], isFinalSpin: boolean = false): number {
     const reelCount = 5;
     const safeValues = Array.isArray(values) ? values : [];
     this.reelSpringOffsets = [0, 0, 0, 0, 0];
@@ -6221,7 +6610,7 @@ export class SlotMachine {
           to: target,
           duration,
           delay,
-          easing: (progress) => progress,
+          easing: (progress: number): number => progress,
         };
         maxDuration = Math.max(maxDuration, delay + duration);
       }
@@ -6235,14 +6624,14 @@ export class SlotMachine {
     return totalDuration;
   }
 
-  stopBounceEase(progress) {
+  stopBounceEase(progress: number): number {
     const t = Math.max(0, Math.min(1, Number(progress) || 0));
     const base = 1 - Math.pow(1 - t, 5);
     const wobble = Math.sin(t * Math.PI * 4) * Math.pow(1 - t, 1.8) * 0.08;
     return base + wobble;
   }
 
-  animateClassicReelPhysicsStop(values) {
+  animateClassicReelPhysicsStop(values: number[]): number {
     const reelCount = 5;
     const spinDurationMs = 3000;
     const sequentialStopDelayMs = 400;
@@ -6287,7 +6676,7 @@ export class SlotMachine {
     this.cancelReelAnimation();
 
     const startedAt = performance.now();
-    const nextFrame = (now) => {
+    const nextFrame = (now: number): void => {
       const elapsed = now - startedAt;
       let allDone = true;
 
@@ -6340,7 +6729,7 @@ export class SlotMachine {
     return totalDurationMs;
   }
 
-  startProgressTimer(data, durationMs = 5000) {
+  startProgressTimer(data: unknown[], durationMs: number = 5000): void {
     const normalizedDurationMs = Math.max(1000, Number(durationMs) || 5000);
     const totalSeconds = Math.max(1, Math.ceil(normalizedDurationMs / 1000));
     this.spinCountdownSeconds = totalSeconds;
@@ -6380,7 +6769,7 @@ export class SlotMachine {
     }, 1000);
   }
 
-  finishSpin(data) {
+  finishSpin(data: unknown[]): void {
     const progressLabel = this.shadowRoot.getElementById('progressLabel');
     const progressBar = this.shadowRoot.getElementById('progressBar');
     if (progressLabel) {
@@ -6404,7 +6793,7 @@ export class SlotMachine {
     this.updateDisplay();
   }
 
-  showWin(data) {
+  showWin(data: unknown[]): void {
     document.dispatchEvent(new CustomEvent("slotm:win"));
     const overlay = document.createElement('dialog');
     overlay.className = 'win-overlay';
@@ -6414,7 +6803,7 @@ export class SlotMachine {
     try {
       const requestJson = JSON.parse(data[5]);
       gameMode = requestJson.nacin;
-    } catch (e) {
+    } catch (e: unknown) {
       console.warn('Could not parse request JSON:', e);
     }
 
@@ -6453,11 +6842,11 @@ export class SlotMachine {
       }
     };
 
-    overlay.querySelector('#continueBtn').addEventListener('click', () => closeOverlay());
+    overlay.querySelector('#continueBtn')?.addEventListener('click', () => closeOverlay());
     overlay.querySelector('#miniGameBtn')?.addEventListener('click', () => {
       closeOverlay();
-      const winAmount = data[7];
-      new BingoMiniGame(winAmount, this.shadowRoot, (finalWin) => {
+      const winAmount = Number(data[7]) || 0;
+      new BingoMiniGame(winAmount, this.shadowRoot, (finalWin: number) => {
         // Add any bonus winnings to credits
         const bonus = finalWin - winAmount;
         if (bonus > 0) {
@@ -6474,7 +6863,7 @@ export class SlotMachine {
     }
   }
 
-  stopSpin() {
+  stopSpin(): void {
     if (this.progressInterval) {
       clearInterval(this.progressInterval);
       this.progressInterval = null;

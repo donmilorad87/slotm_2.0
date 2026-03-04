@@ -4,7 +4,7 @@ const HASH_ITERATIONS = 210_000;
 const HASH_KEY_LENGTH = 32;
 const HASH_DIGEST = "sha256";
 
-export function randomId(bytes = 32) {
+export function randomId(bytes = 32): string {
   return crypto.randomBytes(bytes).toString("hex");
 }
 

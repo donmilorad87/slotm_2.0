@@ -56,7 +56,7 @@ function timingSafeHexEqual(aHex: string, bHex: string): boolean {
       return false;
     }
     return crypto.timingSafeEqual(a, b);
-  } catch {
+  } catch (_: unknown) {
     return false;
   }
 }

@@ -1,6 +1,16 @@
 const CSRF_COOKIE_NAME = "slotm_csrf";
 
-function readCookie(name) {
+export interface JsonResponse<T = Record<string, unknown>> {
+  success: boolean;
+  message?: string;
+  data?: T;
+}
+
+interface FetchInit extends RequestInit {
+  headers?: HeadersInit;
+}
+
+function readCookie(name: string): string {
   const cookiePairs = String(document.cookie || "").split(";");
   for (let i = 0; i < cookiePairs.length; i += 1) {
     const pair = cookiePairs[i].trim();
@@ -20,11 +30,11 @@ function readCookie(name) {
   return "";
 }
 
-export function getCsrfToken() {
+export function getCsrfToken(): string {
   return readCookie(CSRF_COOKIE_NAME);
 }
 
-export function withCsrfHeaders(initialHeaders = {}) {
+export function withCsrfHeaders(initialHeaders: HeadersInit = {}): Headers {
   const headers = new Headers(initialHeaders);
   const token = getCsrfToken();
   if (token && !headers.has("X-CSRF-Token")) {
@@ -36,9 +46,9 @@ export function withCsrfHeaders(initialHeaders = {}) {
   return headers;
 }
 
-export async function fetchWithCsrf(url, init = {}) {
+export async function fetchWithCsrf(url: string, init: FetchInit = {}): Promise<Response> {
   const headers = withCsrfHeaders(init.headers || {});
-  const requestInit = {
+  const requestInit: RequestInit = {
     ...init,
     headers,
     credentials: "same-origin",
@@ -46,7 +56,7 @@ export async function fetchWithCsrf(url, init = {}) {
   return fetch(url, requestInit);
 }
 
-export async function postJson(url, payload) {
+export async function postJson<T = Record<string, unknown>>(url: string, payload: unknown): Promise<JsonResponse<T>> {
   const response = await fetchWithCsrf(url, {
     method: "POST",
     headers: {
@@ -54,10 +64,9 @@ export async function postJson(url, payload) {
     },
     body: JSON.stringify(payload),
   });
-  const json = await response.json();
+  const json: JsonResponse<T> = await response.json();
   if (!response.ok || !json.success) {
     throw new Error(json.message || `Request failed (${response.status})`);
   }
   return json;
 }
-

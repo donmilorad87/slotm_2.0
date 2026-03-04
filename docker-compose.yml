@@ -53,6 +53,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?schema=public
     volumes:
       - ./app:/home/node/app
       - ./app/.env:/home/node/app/.env:ro
@@ -118,7 +119,7 @@ services:
     ports:
       - "5050:5050"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:5050/misc/ping || exit 1"]
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:5050/pgadmin/misc/ping || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5

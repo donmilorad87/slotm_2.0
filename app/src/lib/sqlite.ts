@@ -132,10 +132,10 @@ export class SQLiteClient {
       throw new Error(result.stderr || `sqlite bridge exited with status ${result.status}`);
     }
 
-    let parsed;
+    let parsed: { ok: boolean; results?: unknown[]; error?: string };
     try {
       parsed = JSON.parse(result.stdout || "{}");
-    } catch (error) {
+    } catch (error: unknown) {
       throw new Error(`Failed to parse sqlite bridge output: ${result.stdout}`);
     }
 

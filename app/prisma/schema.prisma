@@ -1,0 +1,117 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                     Int       @id @default(autoincrement())
+  email                  String    @unique
+  passwordHash           String    @map("password_hash")
+  passwordSalt           String    @map("password_salt")
+  balanceUnits           Int       @default(0) @map("balance_units")
+  stripeCustomerId       String?   @map("stripe_customer_id")
+  defaultPaymentMethodId String?   @map("default_payment_method_id")
+  firstName              String?   @map("first_name")
+  lastName               String?   @map("last_name")
+  profilePicture         String?   @map("profile_picture")
+  createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt              DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  sessions         Session[]
+  transactions     Transaction[]
+  gameHistories    GameHistory[]
+  pendingMiniGames PendingMiniGame[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id
+  userId    Int      @map("user_id")
+  userAgent String?  @map("user_agent")
+  ipAddress String?  @map("ip_address")
+  createdAt DateTime @map("created_at") @db.Timestamptz
+  expiresAt DateTime @map("expires_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model Transaction {
+  id                Int      @id @default(autoincrement())
+  userId            Int      @map("user_id")
+  type              String
+  direction         String
+  amountUnits       Int      @map("amount_units")
+  balanceAfterUnits Int?     @map("balance_after_units")
+  description       String?
+  provider          String?
+  providerRef       String?  @map("provider_ref")
+  metadataJson      String?  @map("metadata_json")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  betHistories GameHistory[] @relation("BetTransaction")
+  winHistories GameHistory[] @relation("WinTransaction")
+
+  @@index([userId])
+  @@map("transactions")
+}
+
+model GameHistory {
+  id                       Int      @id @default(autoincrement())
+  userId                   Int      @map("user_id")
+  betTransactionId         Int?     @map("bet_transaction_id")
+  winTransactionId         Int?     @map("win_transaction_id")
+  reelsJson                String   @map("reels_json")
+  gridJson                 String?  @map("grid_json")
+  activeLinesJson          String   @map("active_lines_json")
+  winningLinesJson         String   @map("winning_lines_json")
+  rewardMode               String   @map("reward_mode")
+  gameType                 String   @map("game_type")
+  betPerLineCoins          Int      @map("bet_per_line_coins")
+  totalBetCoins            Int      @map("total_bet_coins")
+  totalPayoutCoins         Int      @map("total_payout_coins")
+  netResultCoins           Int      @map("net_result_coins")
+  jokerEnabled             Boolean  @default(false) @map("joker_enabled")
+  jokerPosition            Int?     @map("joker_position")
+  jokerCostCoins           Int      @default(0) @map("joker_cost_coins")
+  miniGameTriggered        Boolean  @default(false) @map("mini_game_triggered")
+  miniGameMode             String?  @map("mini_game_mode")
+  miniGamePlayedJson       String?  @map("mini_game_played_json")
+  miniGameDrawnJson        String?  @map("mini_game_drawn_json")
+  miniGameTotalBetCoins    Int?     @map("mini_game_total_bet_coins")
+  miniGameTotalPayoutCoins Int?     @map("mini_game_total_payout_coins")
+  miniGameNetResultCoins   Int?     @map("mini_game_net_result_coins")
+  createdAt                DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  betTransaction   Transaction?      @relation("BetTransaction", fields: [betTransactionId], references: [id])
+  winTransaction   Transaction?      @relation("WinTransaction", fields: [winTransactionId], references: [id])
+  pendingMiniGames PendingMiniGame[]
+
+  @@index([userId])
+  @@map("game_history")
+}
+
+model PendingMiniGame {
+  id            Int       @id @default(autoincrement())
+  userId        Int       @map("user_id")
+  gameHistoryId Int       @map("game_history_id")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  consumedAt    DateTime? @map("consumed_at") @db.Timestamptz
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gameHistory GameHistory @relation(fields: [gameHistoryId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("pending_minigame")
+}

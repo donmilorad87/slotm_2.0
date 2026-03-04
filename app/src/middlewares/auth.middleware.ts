@@ -2,7 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 
 import { parseCookies, serializeCookie } from "../lib/cookies.js";
-import type { RequestAuthState, SlotUser } from "../types/domain.js";
+import { isJwtUserPayload, type RequestAuthState, type SlotUser } from "../types/domain.js";
 
 interface JwtMiddlewareStore {
   getUserById(userId: number): Promise<SlotUser | null>;
@@ -128,17 +128,17 @@ export function createJwtAuthMiddlewares({
       }
 
       const user = await store.getUserById(userId);
-      if (!user) {
+      if (!user || !isJwtUserPayload(payload)) {
         return { user: null, token, payload: null, invalidToken: true };
       }
 
       return {
         user,
         token,
-        payload: payload as RequestAuthState["payload"],
+        payload,
         invalidToken: false,
       };
-    } catch {
+    } catch (_: unknown) {
       return { user: null, token, payload: null, invalidToken: true };
     }
   }

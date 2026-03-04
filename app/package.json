@@ -11,22 +11,28 @@
     "typecheck": "tsc -p ./tsconfig.backend.json --noEmit",
     "start": "node ./dist/server.js",
     "start:lan": "HOST=0.0.0.0 node ./dist/server.js",
-    "dev": "npx nodemon --watch src --watch scripts --watch tsconfig.backend.json --ext ts,js,mjs,cjs,hbs,css --delay 0.4 --exec \"npm run build:dist && node ./dist/server.js\"",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate deploy",
+    "postinstall": "prisma generate",
+    "dev:prisma": "prisma generate && prisma migrate deploy",
+    "dev": "npx nodemon --watch src --watch scripts --watch prisma --watch tsconfig.backend.json --ignore 'src/client/**' --ignore 'src/generated/**' --ext ts,js,mjs,cjs,hbs,css,prisma --delay 0.4 --exec \"npm run dev:prisma && npm run build:dist && node ./dist/server.js\"",
     "dev:once": "npm run build:dist && node ./dist/server.js",
     "dev:nodemon:reset": "npx nodemon --watch src --watch scripts --ext ts,js,mjs,cjs,hbs,css --delay 0.4 --exec \"bash ./scripts/build-and-reset-pm2.sh\"",
     "test:parity": "npm run build:dist && node --test tests/parity/*.test.mjs"
   },
   "dependencies": {
+    "@prisma/adapter-pg": "^7.4.2",
+    "@prisma/client": "^7.4.2",
     "compression": "^1.8.1",
     "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
     "express": "^5.2.1",
     "express-rate-limit": "^8.2.1",
     "express-validator": "^7.3.1",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
     "morgan": "^1.10.1",
-    "multer": "^2.1.0",
-    "pg": "^8.13.1"
+    "multer": "^2.1.0"
   },
   "devDependencies": {
     "@types/compression": "^1.8.1",
@@ -35,8 +41,9 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/morgan": "^1.9.10",
     "@types/multer": "^2.0.0",
-    "@types/node": "^25.3.2",
-    "@types/pg": "^8.16.0",
+    "@types/node": "^25.3.3",
+    "esbuild": "^0.27.3",
+    "prisma": "^7.4.2",
     "typescript": "^5.9.3"
   }
 }

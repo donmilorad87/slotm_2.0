@@ -1,8 +1,12 @@
 export const NUMBER_POOL_SIZE = 30;
 export const DRAWN_NUMBERS_COUNT = 12;
 export const MAX_BETS = 30;
-export const BET_AMOUNTS: readonly number[] = [10, 50, 100, 200, 300, 500, 1000];
-export const COIN_VALUES: readonly number[] = [10, 20, 50, 100, 200, 500, 1000];
+export const BET_AMOUNTS = [10, 50, 100, 200, 300, 500, 1000] as const;
+export const COIN_VALUES = [10, 20, 50, 100, 200, 500, 1000] as const;
+
+/** Indexed access: extract the element type from a readonly const array. */
+export type BetAmount = (typeof BET_AMOUNTS)[number];
+export type CoinValue = (typeof COIN_VALUES)[number];
 export const MAX_TICKETS = 5;
 export const MAX_NUMBERS_PER_TICKET = 5;
 export const PAYOUT_ODDS = 2.5;
@@ -103,7 +107,7 @@ export function validateRequest(request: LegacyMiniGameRequest): void {
     throw new Error(`Maximum ${MAX_BETS} bets allowed, got ${request.bets.length}`);
   }
 
-  const seen = new Set();
+  const seen = new Set<number>();
   let totalBet = 0;
 
   for (const item of request.bets) {
@@ -119,7 +123,7 @@ export function validateRequest(request: LegacyMiniGameRequest): void {
     }
     seen.add(number);
 
-    if (!BET_AMOUNTS.includes(bet)) {
+    if (!(BET_AMOUNTS as readonly number[]).includes(bet)) {
       throw new Error(`Invalid bet amount ${bet}. Valid amounts: ${BET_AMOUNTS.join(", ")}`);
     }
 
@@ -181,27 +185,47 @@ export function betMultiplier(numbersCount: number): number {
   return 0;
 }
 
+/** Valid ticket sizes (1–5 numbers per ticket). */
+export type ValidPlayed = 1 | 2 | 3 | 4 | 5;
+
+/** Conditional type: valid match counts depend on how many numbers were played. */
+type ValidMatches<P extends ValidPlayed> =
+  P extends 1 ? 1
+  : P extends 2 ? 1 | 2
+  : P extends 3 ? 1 | 2 | 3
+  : P extends 4 ? 1 | 2 | 3 | 4
+  : 1 | 2 | 3 | 4 | 5;
+
+/** Distribute template literal type correctly via mapped type + indexed access. */
+type OddsKeyOf<P extends ValidPlayed> = `${P}-${ValidMatches<P>}`;
+type OddsKey = { [P in ValidPlayed]: OddsKeyOf<P> }[ValidPlayed];
+
+const ODDS_TABLE = {
+  "1-1": 2.5,
+  "2-1": 0.62,
+  "2-2": 6.59,
+  "3-1": 0.27,
+  "3-2": 2.89,
+  "3-3": 18.45,
+  "4-1": 0.15,
+  "4-2": 1.64,
+  "4-3": 10.64,
+  "4-4": 55.36,
+  "5-1": 0.1,
+  "5-2": 1.05,
+  "5-3": 7.33,
+  "5-4": 35.43,
+  "5-5": 179.94,
+} as const satisfies Record<OddsKey, number>;
+
+type OddsTableKey = keyof typeof ODDS_TABLE;
+
 export function findOdds(played: number, matches: number): number {
   const key = `${played}-${matches}`;
-  const table: Record<string, number> = {
-    "1-1": 2.5,
-    "2-1": 0.62,
-    "2-2": 6.59,
-    "3-1": 0.27,
-    "3-2": 2.89,
-    "3-3": 18.45,
-    "4-1": 0.15,
-    "4-2": 1.64,
-    "4-3": 10.64,
-    "4-4": 55.36,
-    "5-1": 0.1,
-    "5-2": 1.05,
-    "5-3": 7.33,
-    "5-4": 35.43,
-    "5-5": 179.94,
-  };
-
-  return table[key] || 0;
+  if (key in ODDS_TABLE) {
+    return ODDS_TABLE[key as OddsTableKey];
+  }
+  return 0;
 }
 
 export function calculateTicketTotalBet(
@@ -215,7 +239,7 @@ export function calculateTicketTotalBet(
 
 export function validateTicketRequest(request: TicketMiniGameRequest): void {
   const coinValue = Number(request.coin_value);
-  if (!COIN_VALUES.includes(coinValue)) {
+  if (!(COIN_VALUES as readonly number[]).includes(coinValue)) {
     throw new Error(`Invalid coin value ${coinValue}. Valid values: ${COIN_VALUES.join(", ")}`);
   }
 
@@ -232,7 +256,7 @@ export function validateTicketRequest(request: TicketMiniGameRequest): void {
     throw new Error(`Maximum ${MAX_TICKETS} tickets allowed, got ${request.tickets.length}`);
   }
 
-  const allUsed = new Set();
+  const allUsed = new Set<number>();
 
   for (let i = 0; i < request.tickets.length; i += 1) {
     const ticketRaw = request.tickets[i];

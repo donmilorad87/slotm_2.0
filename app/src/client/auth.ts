@@ -1,19 +1,27 @@
 import { postJson } from "./http.js";
 
-function setError(message) {
+interface AuthRedirectData {
+  redirect?: string;
+}
+
+function toErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
+function setError(message: string): void {
   const el = document.getElementById("authError");
   if (el) {
     el.textContent = message || "";
   }
 }
 
-function bindLoginForm() {
-  const form = document.getElementById("loginForm");
+function bindLoginForm(): void {
+  const form = document.getElementById("loginForm") as HTMLFormElement | null;
   if (!form) {
     return;
   }
 
-  form.addEventListener("submit", async (event) => {
+  form.addEventListener("submit", async (event: Event) => {
     event.preventDefault();
     setError("");
 
@@ -25,21 +33,21 @@ function bindLoginForm() {
     };
 
     try {
-      const result = await postJson("/api/auth/login", payload);
+      const result = await postJson<AuthRedirectData>("/api/auth/login", payload);
       window.location.href = result.data?.redirect || "/";
-    } catch (error) {
-      setError(error.message || "Login failed");
+    } catch (error: unknown) {
+      setError(toErrorMessage(error, "Login failed"));
     }
   });
 }
 
-function bindRegisterForm() {
-  const form = document.getElementById("registerForm");
+function bindRegisterForm(): void {
+  const form = document.getElementById("registerForm") as HTMLFormElement | null;
   if (!form) {
     return;
   }
 
-  form.addEventListener("submit", async (event) => {
+  form.addEventListener("submit", async (event: Event) => {
     event.preventDefault();
     setError("");
 
@@ -51,10 +59,10 @@ function bindRegisterForm() {
     };
 
     try {
-      const result = await postJson("/api/auth/register", payload);
+      const result = await postJson<AuthRedirectData>("/api/auth/register", payload);
       window.location.href = result.data?.redirect || "/";
-    } catch (error) {
-      setError(error.message || "Register failed");
+    } catch (error: unknown) {
+      setError(toErrorMessage(error, "Register failed"));
     }
   });
 }
