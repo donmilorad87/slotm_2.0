@@ -18,11 +18,15 @@ interface StarSettings {
   drift: number;
   turbulence: number;
   nebulaOpacity: number;
-  nebulaDrift: number;
   nebulaScale: number;
   nebulaWarp: number;
   nebulaBrightness: number;
   nebulaDust: number;
+  nebulaBreathe: boolean;
+  nebulaColor1: string;
+  nebulaColor2: string;
+  nebulaColor3: string;
+  nebulaColor4: string;
 }
 
 type WinMode = "magic_stars" | "magic_confetti";
@@ -169,11 +173,15 @@ const DEFAULT_STAR_SETTINGS = Object.freeze({
   drift: 0.8,
   turbulence: 0.15,
   nebulaOpacity: 0.35,
-  nebulaDrift: 0.012,
   nebulaScale: 2.0,
   nebulaWarp: 0.45,
   nebulaBrightness: 1.0,
   nebulaDust: 0.7,
+  nebulaBreathe: true,
+  nebulaColor1: "#590f08",
+  nebulaColor2: "#732405",
+  nebulaColor3: "#4D1A03",
+  nebulaColor4: "#8C3810",
 }) satisfies StarSettings;
 
 const CONTROL_BINDINGS: readonly ControlBinding[] = [
@@ -194,11 +202,18 @@ const CONTROL_BINDINGS: readonly ControlBinding[] = [
   { id: "sv-control-drift", setting: "drift", type: "float" },
   { id: "sv-control-turbulence", setting: "turbulence", type: "float" },
   { id: "sv-control-nebulaOpacity", setting: "nebulaOpacity", type: "float" },
-  { id: "sv-control-nebulaDrift", setting: "nebulaDrift", type: "float" },
   { id: "sv-control-nebulaScale", setting: "nebulaScale", type: "float" },
   { id: "sv-control-nebulaWarp", setting: "nebulaWarp", type: "float" },
   { id: "sv-control-nebulaBrightness", setting: "nebulaBrightness", type: "float" },
   { id: "sv-control-nebulaDust", setting: "nebulaDust", type: "float" },
+  { id: "sv-control-nebulaBreathe", setting: "nebulaBreathe", type: "boolean" },
+];
+
+const NEBULA_COLOR_BINDINGS: readonly RingColorBinding[] = [
+  { id: "sv-control-nebulaColor1", setting: "nebulaColor1" },
+  { id: "sv-control-nebulaColor2", setting: "nebulaColor2" },
+  { id: "sv-control-nebulaColor3", setting: "nebulaColor3" },
+  { id: "sv-control-nebulaColor4", setting: "nebulaColor4" },
 ];
 
 const PARALLAX_STATIC_FACTOR: number = 0.08;
@@ -396,42 +411,62 @@ const SVEMIR_DROPDOWN_TEMPLATE: string = `<div id="svemirDropdown" class="space-
     <strong id="sv-output-turbulence" class="svemir-value">0.15</strong>
   </label>
 
-  <h3 class="svemir-section">Nebula</h3>
+  <h3 class="svemir-section">Background Nebula</h3>
 
   <label class="svemir-row" for="sv-control-nebulaOpacity">
-    <span>Nebula opacity</span>
+    <span>Opacity</span>
     <input id="sv-control-nebulaOpacity" type="range" min="0" max="1" step="0.01" value="0.35" data-output="sv-output-nebulaOpacity">
     <strong id="sv-output-nebulaOpacity" class="svemir-value">0.35</strong>
   </label>
 
-  <label class="svemir-row" for="sv-control-nebulaDrift">
-    <span>Nebula drift</span>
-    <input id="sv-control-nebulaDrift" type="range" min="0" max="0.1" step="0.001" value="0.012" data-output="sv-output-nebulaDrift">
-    <strong id="sv-output-nebulaDrift" class="svemir-value">0.012</strong>
-  </label>
-
   <label class="svemir-row" for="sv-control-nebulaScale">
-    <span>Nebula scale</span>
+    <span>Scale</span>
     <input id="sv-control-nebulaScale" type="range" min="0.5" max="8" step="0.1" value="2.0" data-output="sv-output-nebulaScale">
     <strong id="sv-output-nebulaScale" class="svemir-value">2.0</strong>
   </label>
 
   <label class="svemir-row" for="sv-control-nebulaWarp">
-    <span>Nebula warp</span>
+    <span>Warp</span>
     <input id="sv-control-nebulaWarp" type="range" min="0" max="1.5" step="0.01" value="0.45" data-output="sv-output-nebulaWarp">
     <strong id="sv-output-nebulaWarp" class="svemir-value">0.45</strong>
   </label>
 
   <label class="svemir-row" for="sv-control-nebulaBrightness">
-    <span>Nebula brightness</span>
+    <span>Brightness</span>
     <input id="sv-control-nebulaBrightness" type="range" min="0" max="3" step="0.05" value="1.0" data-output="sv-output-nebulaBrightness">
     <strong id="sv-output-nebulaBrightness" class="svemir-value">1.0</strong>
   </label>
 
   <label class="svemir-row" for="sv-control-nebulaDust">
-    <span>Nebula dust</span>
+    <span>Dust lanes</span>
     <input id="sv-control-nebulaDust" type="range" min="0" max="1" step="0.01" value="0.7" data-output="sv-output-nebulaDust">
     <strong id="sv-output-nebulaDust" class="svemir-value">0.7</strong>
+  </label>
+
+  <label class="svemir-row svemir-row--toggle" for="sv-control-nebulaBreathe">
+    <span>Breathe</span>
+    <input id="sv-control-nebulaBreathe" type="checkbox" checked data-output="sv-output-nebulaBreathe">
+    <strong id="sv-output-nebulaBreathe" class="svemir-value">ON</strong>
+  </label>
+
+  <label class="svemir-row svemir-row--color" for="sv-control-nebulaColor1">
+    <span>Base color</span>
+    <input id="sv-control-nebulaColor1" type="color" value="#590f08">
+  </label>
+
+  <label class="svemir-row svemir-row--color" for="sv-control-nebulaColor2">
+    <span>Mid tone</span>
+    <input id="sv-control-nebulaColor2" type="color" value="#732405">
+  </label>
+
+  <label class="svemir-row svemir-row--color" for="sv-control-nebulaColor3">
+    <span>Accent</span>
+    <input id="sv-control-nebulaColor3" type="color" value="#4D1A03">
+  </label>
+
+  <label class="svemir-row svemir-row--color" for="sv-control-nebulaColor4">
+    <span>Core glow</span>
+    <input id="sv-control-nebulaColor4" type="color" value="#8C3810">
   </label>
 
   <button type="button" class="svemir-reset" data-action="reset-stars">Restore default stars</button>
@@ -1002,11 +1037,15 @@ uniform vec2 u_resolution;
 uniform float u_time;
 uniform float u_opacity;
 uniform float u_scroll_y;
-uniform float u_neb_drift;
 uniform float u_neb_scale;
 uniform float u_neb_warp;
 uniform float u_neb_brightness;
 uniform float u_neb_dust;
+uniform float u_neb_breathe;
+uniform vec3 u_color1;
+uniform vec3 u_color2;
+uniform vec3 u_color3;
+uniform vec3 u_color4;
 
 // --- Simplex-style 2D noise (hash-based, no textures) ---
 vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
@@ -1039,15 +1078,30 @@ float snoise(vec2 v) {
   return 130.0 * dot(m, g);
 }
 
-// --- FBM (Fractal Brownian Motion) for rich cloud shapes ---
+// --- 7-octave FBM for finer gas detail ---
 float fbm(vec2 p) {
   float f = 0.0;
   float amp = 0.5;
   float freq = 1.0;
-  for (int i = 0; i < 5; i++) {
+  for (int i = 0; i < 7; i++) {
     f += amp * snoise(p * freq);
-    freq *= 2.1;
-    amp *= 0.48;
+    freq *= 2.05;
+    amp *= 0.46;
+  }
+  return f;
+}
+
+// --- Ridged noise for sharp filament structures ---
+float ridged(vec2 p) {
+  float f = 0.0;
+  float amp = 0.5;
+  float freq = 1.0;
+  for (int i = 0; i < 5; i++) {
+    float n = 1.0 - abs(snoise(p * freq));
+    n = n * n;
+    f += amp * n;
+    freq *= 2.2;
+    amp *= 0.5;
   }
   return f;
 }
@@ -1057,69 +1111,81 @@ void main() {
   float aspect = u_resolution.x / u_resolution.y;
   vec2 p = vec2(uv.x * aspect, uv.y);
 
-  float t = u_time * u_neb_drift;
+  // Parallax scroll offset
+  p.y += u_scroll_y * 0.0005;
 
-  // --- Fly-through perspective ---
-  // Two overlapping depth phases cross-fade for seamless radial expansion
-  vec2 center = vec2(0.5 * aspect, 0.5);
-  vec2 radDir = p - center;
-  float flyZ = t * 4.0;
+  // Breathing: slow organic warp drift when enabled
+  float breatheT = u_time * 0.008 * u_neb_breathe;
 
-  float phase0 = fract(flyZ);
-  float phase1 = fract(flyZ + 0.5);
-  float fade0 = sin(phase0 * 3.14159);
-  float fade1 = sin(phase1 * 3.14159);
+  // --- Triple domain warping for deeply organic shapes ---
+  float w1a = fbm(p * 1.6 + vec2(0.0, breatheT * 0.5));
+  float w1b = fbm(p * 1.6 + vec2(5.2, breatheT * 0.35 + 1.3));
+  vec2 warp1 = p + vec2(w1a, w1b) * u_neb_warp;
 
-  float zoom0 = 1.0 + phase0 * 2.0;
-  float zoom1 = 1.0 + phase1 * 2.0;
+  float w2a = fbm(warp1 * 1.4 + vec2(1.7, -0.8 + breatheT * 0.2));
+  float w2b = fbm(warp1 * 1.4 + vec2(-2.3, 3.1 + breatheT * 0.15));
+  vec2 warp2 = warp1 + vec2(w2a, w2b) * u_neb_warp * 0.5;
 
-  vec2 p0 = center + radDir * zoom0;
-  vec2 p1 = center + radDir * zoom1 + vec2(17.3, 11.1);
-  p = (p0 * fade0 + p1 * fade1) / (fade0 + fade1 + 0.001);
+  float w3a = fbm(warp2 * 2.0 + vec2(8.1, -3.4));
+  float w3b = fbm(warp2 * 2.0 + vec2(-4.7, 6.2));
+  vec2 warped = warp2 + vec2(w3a, w3b) * u_neb_warp * 0.25;
 
-  // Subtle lateral drift for organic variety
-  p += vec2(t * 0.3, t * 0.15);
-
-  // Domain warping: distort coordinates for organic cloud shapes
-  float warp1 = fbm(p * 1.8 + vec2(0.0, t * 0.3));
-  float warp2 = fbm(p * 1.8 + vec2(5.2, t * 0.2 + 1.3));
-  vec2 warped = p + vec2(warp1, warp2) * u_neb_warp;
-
-  // Primary cloud density
+  // --- Multi-layer density ---
+  // Diffuse gas layer
   float n1 = fbm(warped * u_neb_scale);
   float n2 = fbm(warped * (u_neb_scale * 1.75) + vec2(3.7, 1.2));
-  float density = smoothstep(-0.1, 0.55, n1) * smoothstep(-0.2, 0.5, n2);
+  float diffuse = smoothstep(-0.15, 0.55, n1) * smoothstep(-0.2, 0.5, n2);
 
-  // Filament structures (thin wispy tendrils)
-  float filament = fbm(warped * 5.0 + vec2(t * 0.2, -t * 0.15));
-  filament = smoothstep(0.15, 0.6, abs(filament)) * 0.4;
-  density = max(density, filament * 0.5);
+  // Dense core layer
+  float core = fbm(warped * (u_neb_scale * 0.8) + vec2(-2.1, 4.5));
+  core = smoothstep(0.15, 0.7, core);
+  core = core * core;
 
-  // Color palette: deep crimson, burnt orange, dark amber
-  vec3 deepRed    = vec3(0.35, 0.06, 0.03);
-  vec3 burntOrange = vec3(0.45, 0.14, 0.04);
-  vec3 darkAmber   = vec3(0.30, 0.10, 0.02);
-  vec3 hotCore     = vec3(0.55, 0.22, 0.06);
+  // Ridged filament layer (Carina / Eagle Nebula style tendrils)
+  float filament = ridged(warped * u_neb_scale * 2.5 + vec2(2.3, -1.7));
+  filament = smoothstep(0.3, 0.75, filament) * 0.6;
 
-  // Mix colors based on density layers
+  // Combined density
+  float density = diffuse * 0.7 + core * 0.4 + filament * 0.5;
+  density = clamp(density, 0.0, 1.0);
+
+  // --- Emission regions: bright ionized gas near embedded stars ---
+  float emission = fbm(warped * (u_neb_scale * 3.0) + vec2(-5.3, 2.8));
+  emission = smoothstep(0.35, 0.7, emission);
+  emission *= core * 0.8;
+
+  // --- Color mixing with configurable uniforms ---
   float colorMix = fbm(warped * 1.5 + vec2(7.0, 3.0));
-  vec3 nebColor = mix(deepRed, burntOrange, smoothstep(-0.3, 0.4, colorMix));
-  nebColor = mix(nebColor, darkAmber, smoothstep(0.1, 0.6, n2) * 0.6);
-  nebColor = mix(nebColor, hotCore, smoothstep(0.4, 0.8, density) * 0.5);
+  vec3 nebColor = mix(u_color1, u_color2, smoothstep(-0.3, 0.4, colorMix));
+  nebColor = mix(nebColor, u_color3, smoothstep(0.1, 0.6, n2) * 0.6);
+  nebColor = mix(nebColor, u_color4, smoothstep(0.3, 0.7, density) * 0.5);
 
-  // Dark dust lanes cutting through the gas
-  float dust = fbm(warped * 4.0 + vec2(2.1, -1.4));
-  float dustMask = smoothstep(-0.05, 0.25, dust);
+  // Emission hotspots push toward bright core color
+  nebColor = mix(nebColor, u_color4 * 1.6, emission * 0.7);
+
+  // --- Ridged-noise dust lanes (dark absorption) ---
+  float dustRidge = ridged(warped * u_neb_scale * 1.8 + vec2(2.1, -1.4));
+  float dustFbm = fbm(warped * 4.0 + vec2(-1.5, 3.2));
+  float dustMask = smoothstep(0.1, 0.45, dustRidge * 0.6 + dustFbm * 0.4);
   density *= mix(1.0 - u_neb_dust, 1.0, dustMask);
 
-  // Soft vignette to keep edges dark
-  float vignette = 1.0 - length((uv - 0.5) * 1.4);
-  vignette = smoothstep(0.0, 0.7, vignette);
+  // --- Scattered embedded stars (high-frequency noise peaks) ---
+  float starNoise = snoise(warped * 45.0);
+  float stars = smoothstep(0.92, 0.98, starNoise) * 0.5;
+  stars *= smoothstep(0.2, 0.5, density);
+
+  // --- Softer vignette with natural edge falloff ---
+  vec2 vigUv = (uv - 0.5) * vec2(1.2, 1.3);
+  float vignette = 1.0 - dot(vigUv, vigUv);
+  vignette = smoothstep(-0.1, 0.8, vignette);
   density *= vignette;
 
   // Final compositing
-  float alpha = density * u_opacity * 0.35;
-  gl_FragColor = vec4(nebColor * density * u_neb_brightness, alpha);
+  vec3 finalColor = nebColor * density * u_neb_brightness;
+  finalColor += vec3(0.85, 0.82, 0.95) * stars * u_neb_brightness;
+
+  float alpha = density * u_opacity * 0.4 + stars * u_opacity * 0.3;
+  gl_FragColor = vec4(finalColor, alpha);
 }
 `;
 
@@ -1129,16 +1195,34 @@ interface NebulaLocations {
   uTime: WebGLUniformLocation | null;
   uOpacity: WebGLUniformLocation | null;
   uScrollY: WebGLUniformLocation | null;
-  uNebDrift: WebGLUniformLocation | null;
   uNebScale: WebGLUniformLocation | null;
   uNebWarp: WebGLUniformLocation | null;
   uNebBrightness: WebGLUniformLocation | null;
   uNebDust: WebGLUniformLocation | null;
+  uNebBreathe: WebGLUniformLocation | null;
+  uColor1: WebGLUniformLocation | null;
+  uColor2: WebGLUniformLocation | null;
+  uColor3: WebGLUniformLocation | null;
+  uColor4: WebGLUniformLocation | null;
 }
 
 /* -------------------------------------------------------------------------- */
 /*  WebGL Helpers                                                             */
 /* -------------------------------------------------------------------------- */
+
+function hexToGlRgb(hex: string): [number, number, number] {
+  const fallback: [number, number, number] = [0.35, 0.06, 0.03];
+  if (typeof hex !== "string" || hex.length < 7 || hex[0] !== "#") {
+    return fallback;
+  }
+  const r: number = parseInt(hex.substring(1, 3), 16);
+  const g: number = parseInt(hex.substring(3, 5), 16);
+  const b: number = parseInt(hex.substring(5, 7), 16);
+  if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) {
+    return fallback;
+  }
+  return [r / 255, g / 255, b / 255];
+}
 
 function createShader(gl: WebGLRenderingContext, type: number, source: string): WebGLShader | null {
   const shader: WebGLShader | null = gl.createShader(type);
@@ -1434,11 +1518,6 @@ class BlazingStarfield {
         0,
         1,
       ),
-      nebulaDrift: this.clamp(
-        this.numberOrDefault(merged.nebulaDrift, DEFAULT_STAR_SETTINGS.nebulaDrift),
-        0,
-        0.1,
-      ),
       nebulaScale: this.clamp(
         this.numberOrDefault(merged.nebulaScale, DEFAULT_STAR_SETTINGS.nebulaScale),
         0.5,
@@ -1459,6 +1538,17 @@ class BlazingStarfield {
         0,
         1,
       ),
+      nebulaBreathe: merged.nebulaBreathe === undefined
+        ? DEFAULT_STAR_SETTINGS.nebulaBreathe
+        : Boolean(merged.nebulaBreathe),
+      nebulaColor1: typeof merged.nebulaColor1 === "string" && /^#[0-9A-Fa-f]{6}$/.test(merged.nebulaColor1)
+        ? merged.nebulaColor1 : DEFAULT_STAR_SETTINGS.nebulaColor1,
+      nebulaColor2: typeof merged.nebulaColor2 === "string" && /^#[0-9A-Fa-f]{6}$/.test(merged.nebulaColor2)
+        ? merged.nebulaColor2 : DEFAULT_STAR_SETTINGS.nebulaColor2,
+      nebulaColor3: typeof merged.nebulaColor3 === "string" && /^#[0-9A-Fa-f]{6}$/.test(merged.nebulaColor3)
+        ? merged.nebulaColor3 : DEFAULT_STAR_SETTINGS.nebulaColor3,
+      nebulaColor4: typeof merged.nebulaColor4 === "string" && /^#[0-9A-Fa-f]{6}$/.test(merged.nebulaColor4)
+        ? merged.nebulaColor4 : DEFAULT_STAR_SETTINGS.nebulaColor4,
     };
   }
 
@@ -1648,11 +1738,15 @@ class BlazingStarfield {
         uTime: gl.getUniformLocation(nebulaProgram, "u_time"),
         uOpacity: gl.getUniformLocation(nebulaProgram, "u_opacity"),
         uScrollY: gl.getUniformLocation(nebulaProgram, "u_scroll_y"),
-        uNebDrift: gl.getUniformLocation(nebulaProgram, "u_neb_drift"),
         uNebScale: gl.getUniformLocation(nebulaProgram, "u_neb_scale"),
         uNebWarp: gl.getUniformLocation(nebulaProgram, "u_neb_warp"),
         uNebBrightness: gl.getUniformLocation(nebulaProgram, "u_neb_brightness"),
         uNebDust: gl.getUniformLocation(nebulaProgram, "u_neb_dust"),
+        uNebBreathe: gl.getUniformLocation(nebulaProgram, "u_neb_breathe"),
+        uColor1: gl.getUniformLocation(nebulaProgram, "u_color1"),
+        uColor2: gl.getUniformLocation(nebulaProgram, "u_color2"),
+        uColor3: gl.getUniformLocation(nebulaProgram, "u_color3"),
+        uColor4: gl.getUniformLocation(nebulaProgram, "u_color4"),
       };
       this.nebulaBuffer = gl.createBuffer();
       gl.bindBuffer(gl.ARRAY_BUFFER, this.nebulaBuffer);
@@ -1671,7 +1765,6 @@ class BlazingStarfield {
     const normalized: StarSettings = this.normalizeSettings(nextSettings);
     const movingCountChanged: boolean = normalized.movingStars !== this.settings.movingStars;
     const staticCountChanged: boolean = normalized.staticStars !== this.settings.staticStars;
-
     this.settings = normalized;
     this.maxDepth = this.computeMaxDepth();
 
@@ -2375,12 +2468,21 @@ class BlazingStarfield {
     gl.uniform2f(this.nebulaLocations.uResolution, this.canvas.width, this.canvas.height);
     gl.uniform1f(this.nebulaLocations.uTime, timeSec);
     gl.uniform1f(this.nebulaLocations.uOpacity, this.settings.nebulaOpacity);
-    gl.uniform1f(this.nebulaLocations.uScrollY, 0.0);
-    gl.uniform1f(this.nebulaLocations.uNebDrift, this.settings.nebulaDrift);
+    gl.uniform1f(this.nebulaLocations.uScrollY, this.scrollRenderY * PARALLAX_STATIC_FACTOR);
     gl.uniform1f(this.nebulaLocations.uNebScale, this.settings.nebulaScale);
     gl.uniform1f(this.nebulaLocations.uNebWarp, this.settings.nebulaWarp);
     gl.uniform1f(this.nebulaLocations.uNebBrightness, this.settings.nebulaBrightness);
     gl.uniform1f(this.nebulaLocations.uNebDust, this.settings.nebulaDust);
+    gl.uniform1f(this.nebulaLocations.uNebBreathe, this.settings.nebulaBreathe ? 1.0 : 0.0);
+
+    const c1: [number, number, number] = hexToGlRgb(this.settings.nebulaColor1);
+    const c2: [number, number, number] = hexToGlRgb(this.settings.nebulaColor2);
+    const c3: [number, number, number] = hexToGlRgb(this.settings.nebulaColor3);
+    const c4: [number, number, number] = hexToGlRgb(this.settings.nebulaColor4);
+    gl.uniform3f(this.nebulaLocations.uColor1, c1[0], c1[1], c1[2]);
+    gl.uniform3f(this.nebulaLocations.uColor2, c2[0], c2[1], c2[2]);
+    gl.uniform3f(this.nebulaLocations.uColor3, c3[0], c3[1], c3[2]);
+    gl.uniform3f(this.nebulaLocations.uColor4, c4[0], c4[1], c4[2]);
 
     // Additive blend so nebula glows over the black background
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
@@ -2488,14 +2590,16 @@ function loadSavedStarSettings(): Partial<StarSettings> | null {
     }
 
     const allowed: string[] = Object.keys(DEFAULT_STAR_SETTINGS);
-    const sanitized: Record<string, number | boolean> = {};
+    const sanitized: Record<string, number | boolean | string> = {};
 
     for (let i: number = 0; i < allowed.length; i += 1) {
       const key: string = allowed[i];
       const value: unknown = (parsed as Record<string, unknown>)[key];
       if (typeof value === "number" && Number.isFinite(value)) {
         sanitized[key] = value;
-      } else if (key === "staticIllumination" && typeof value === "boolean") {
+      } else if (typeof value === "boolean") {
+        sanitized[key] = value;
+      } else if (typeof value === "string") {
         sanitized[key] = value;
       }
     }
@@ -2810,6 +2914,15 @@ function bindSvemirControlPanel(starfield: BlazingStarfield): void {
     }
   }
 
+  const nebulaColorControls: BoundRingColorControl[] = [];
+  for (let i: number = 0; i < NEBULA_COLOR_BINDINGS.length; i += 1) {
+    const binding: RingColorBinding = NEBULA_COLOR_BINDINGS[i];
+    const input: HTMLElement | null = document.getElementById(binding.id);
+    if (input instanceof HTMLInputElement) {
+      nebulaColorControls.push({ input, binding });
+    }
+  }
+
   function normalizeForInputRange(value: number, inputEl: HTMLInputElement, type: ControlBindingType): number {
     let next: number = value;
     const min: number = Number(inputEl.min);
@@ -2827,7 +2940,7 @@ function bindSvemirControlPanel(starfield: BlazingStarfield): void {
   }
 
   function readSettingsFromInputs(): Partial<StarSettings> {
-    const next: Record<string, number | boolean> = {};
+    const next: Record<string, number | boolean | string> = {};
     for (let i: number = 0; i < controls.length; i += 1) {
       const item: BoundControl = controls[i];
 
@@ -2844,6 +2957,11 @@ function bindSvemirControlPanel(starfield: BlazingStarfield): void {
       if (Number.isFinite(parsed)) {
         next[item.binding.setting] = parsed;
       }
+    }
+
+    for (let i: number = 0; i < nebulaColorControls.length; i += 1) {
+      const item: BoundRingColorControl = nebulaColorControls[i];
+      next[item.binding.setting] = item.input.value;
     }
 
     return next as Partial<StarSettings>;
@@ -2884,6 +3002,14 @@ function bindSvemirControlPanel(starfield: BlazingStarfield): void {
         if (item.numberInput) {
           item.numberInput.value = String(normalized);
         }
+      }
+    }
+
+    for (let i: number = 0; i < nebulaColorControls.length; i += 1) {
+      const item: BoundRingColorControl = nebulaColorControls[i];
+      const value: unknown = (settings as Record<string, unknown>)[item.binding.setting];
+      if (typeof value === "string") {
+        item.input.value = value;
       }
     }
 
@@ -2958,6 +3084,13 @@ function bindSvemirControlPanel(starfield: BlazingStarfield): void {
       item.numberInput.addEventListener("input", syncFromNumber);
       item.numberInput.addEventListener("change", syncFromNumber);
     }
+  }
+
+  for (let i: number = 0; i < nebulaColorControls.length; i += 1) {
+    const item: BoundRingColorControl = nebulaColorControls[i];
+    item.input.addEventListener("input", () => {
+      applyInputSettings();
+    });
   }
 
   button.addEventListener("click", (event: MouseEvent) => {

@@ -183,6 +183,17 @@ body.theme-blazing-sun .game-page__content > .slot-machine-root {
   border-radius: 0.9rem;
 }
 
+body.theme-blazing-sun .btn:hover {
+  background: color-mix(in srgb, #667eea 60%, transparent);
+  border-color: #667eea;
+  color: #fff;
+}
+
+body.theme-blazing-sun .btn:active {
+  box-shadow: 0 2px rgba(0, 0, 0, 0.3);
+  transform: translateY(2px);
+}
+
 body.theme-blazing-sun .btn--ghost {
   background: color-mix(in srgb, rgba(208, 156, 61, 0.2) 60%, transparent);
   border: 2px solid var(--blz-panel-border);
