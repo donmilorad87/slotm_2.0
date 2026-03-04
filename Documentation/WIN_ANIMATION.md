@@ -144,17 +144,128 @@ With damping at 0.994, particles lose ~50% of their speed over ~115 frames (~1.9
 
 ---
 
+## Win Animation Configurator
+
+The win animation system includes a **real-time configurator panel** accessible from the game page. It allows players and developers to tune all particle parameters live, with instant visual feedback.
+
+**Source:** `app/src/client/blazing-background.ts`
+
+### Configurator UI
+
+The configurator is toggled via a button (`#winControll`) in the game page. When opened, it displays a dropdown panel (`#winDropdown`) with all controls for both animation modes.
+
+```
+┌──────────────────────────────────────┐
+│  Win Animation Settings              │
+│──────────────────────────────────────│
+│  Mode: [Magic Stars ▼]              │
+│                                      │
+│  ── Magic Stars Settings ──          │
+│  Particle Count  [====●====] 1000   │
+│  Speed           [====●====] 2.5    │
+│  Drift           [====●====] 2.8    │
+│  Turbulence      [====●====] 1.5    │
+│  Particle Size   [====●====] 1.8    │
+│  Brightness      [====●====] 1.6    │
+│  Duration        [====●====] 20s    │
+│  Hue Speed       [====●====] 0.18   │
+│  Focal Length    [====●====] 120    │
+│  Gravity         [====●====] 0.3    │
+│                                      │
+│  ── Confetti Settings ──             │
+│  Particle Count  [====●====] 5000   │
+│  Speed           [====●====] 4.5    │
+│  Drift           [====●====] 0.35   │
+│  Turbulence      [====●====] 0.015  │
+│  Particle Size   [====●====] 18     │
+│  Brightness      [====●====] 1.0    │
+│  Duration        [====●====] 20s    │
+│  Damping         [====●====] 0.994  │
+└──────────────────────────────────────┘
+```
+
+### Control Bindings (18 controls)
+
+Each control is bound to an HTML range input with a specific ID pattern `sv-win-{key}`:
+
+#### Magic Stars Controls
+
+| Control ID | Setting | Type | Range | Default |
+|-----------|---------|------|-------|---------|
+| `sv-win-msCount` | Particle Count | int | 0 – 500,000 | 1,000 |
+| `sv-win-msSpeed` | Speed | float | 0.0 – 10.0 | 2.5 |
+| `sv-win-msDrift` | Drift | float | 0.0 – 10.0 | 2.8 |
+| `sv-win-msTurbulence` | Turbulence | float | 0.0 – 5.0 | 1.5 |
+| `sv-win-msSize` | Particle Size | float | 0.0 – 50.0 | 1.8 |
+| `sv-win-msBrightness` | Brightness | float | 0.0 – 3.0 | 1.6 |
+| `sv-win-msDuration` | Duration (seconds) | int | 1 – 60 | 20 |
+| `sv-win-msHueSpeed` | Hue Rotation Speed | float | 0.0 – 1.0 | 0.18 |
+| `sv-win-msFocalLength` | Focal Length | int | 0 – 260 | 120 |
+| `sv-win-msGravity` | Gravity | float | 0.0 – 5.0 | 0.3 |
+
+#### Confetti Controls
+
+| Control ID | Setting | Type | Range | Default |
+|-----------|---------|------|-------|---------|
+| `sv-win-mcCount` | Particle Count | int | 0 – 500,000 | 5,000 |
+| `sv-win-mcSpeed` | Speed | float | 0.0 – 10.0 | 4.5 |
+| `sv-win-mcDrift` | Drift | float | 0.0 – 10.0 | 0.35 |
+| `sv-win-mcTurbulence` | Turbulence | float | 0.0 – 5.0 | 0.015 |
+| `sv-win-mcSize` | Particle Size | float | 0.0 – 50.0 | 18 |
+| `sv-win-mcBrightness` | Brightness | float | 0.0 – 3.0 | 1.0 |
+| `sv-win-mcDuration` | Duration (seconds) | int | 1 – 60 | 20 |
+| `sv-win-mcDamping` | Damping | float | 0.9 – 1.0 | 0.994 |
+
+### Persistence
+
+All settings are persisted to `localStorage` under a single versioned key:
+
+```
+Key:   slotm.win.settings.v1
+Value: JSON object with all 18+ settings
+```
+
+**Default settings object:**
+
+```javascript
+{
+  mode: "magic_stars",
+  msCount: 1000,
+  msSpeed: 2.5,
+  msDrift: 2.8,
+  msTurbulence: 1.5,
+  msSize: 1.8,
+  msBrightness: 1.6,
+  msDuration: 20,
+  msHueSpeed: 0.18,
+  msFocalLength: 120,
+  msGravity: 0.3,
+  mcCount: 5000,
+  mcSpeed: 4.5,
+  mcDrift: 0.35,
+  mcTurbulence: 0.015,
+  mcSize: 18,
+  mcBrightness: 1.0,
+  mcDuration: 20,
+  mcDamping: 0.994
+}
+```
+
+On page load, settings are read from localStorage and applied to the controls. Any change to a control immediately updates the stored settings and applies to the next animation.
+
+### How to Reset
+
+To reset all win animation settings to defaults, clear the localStorage key:
+
+```javascript
+localStorage.removeItem("slotm.win.settings.v1");
+location.reload();
+```
+
+---
+
 ## localStorage Keys
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `win_mode` | string | "magic" or "confetti" |
-| `win_duration` | number | Seconds |
-| `win_particleCount` | number | Particle count |
-| `win_particleSize` | number | Pixel size |
-| `win_speed` | number | Velocity |
-| `win_gravity` | number | Center pull |
-| `win_drift` | number | Random jitter |
-| `win_turbulence` | number | Noise |
-| `win_hueShift` | number | Color rotation |
-| `win_damping` | number | Velocity decay |
+| `slotm.win.settings.v1` | JSON | All win animation settings (versioned) |

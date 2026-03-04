@@ -18,7 +18,12 @@
     "dev": "npx nodemon --watch src --watch scripts --watch prisma --watch tsconfig.backend.json --ignore 'src/client/**' --ignore 'src/generated/**' --ext ts,js,mjs,cjs,hbs,css,prisma --delay 0.4 --exec \"npm run dev:prisma && npm run build:dist && node ./dist/server.js\"",
     "dev:once": "npm run build:dist && node ./dist/server.js",
     "dev:nodemon:reset": "npx nodemon --watch src --watch scripts --ext ts,js,mjs,cjs,hbs,css --delay 0.4 --exec \"bash ./scripts/build-and-reset-pm2.sh\"",
-    "test:parity": "npm run build:dist && node --test tests/parity/*.test.mjs"
+    "test:parity": "npm run build:dist && node --test tests/parity/*.test.mjs",
+    "test": "NODE_OPTIONS='--experimental-vm-modules' jest",
+    "test:unit": "NODE_OPTIONS='--experimental-vm-modules' jest --verbose",
+    "test:unit:coverage": "NODE_OPTIONS='--experimental-vm-modules' jest --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.4.2",
@@ -35,15 +40,20 @@
     "multer": "^2.1.0"
   },
   "devDependencies": {
+    "@jest/globals": "^30.2.0",
+    "@playwright/test": "^1.58.2",
     "@types/compression": "^1.8.1",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
+    "@types/jest": "^30.0.0",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/morgan": "^1.9.10",
     "@types/multer": "^2.0.0",
     "@types/node": "^25.3.3",
     "esbuild": "^0.27.3",
+    "jest": "^30.2.0",
     "prisma": "^7.4.2",
+    "ts-jest": "^29.4.6",
     "typescript": "^5.9.3"
   }
 }

@@ -398,7 +398,7 @@ a {
   border: 1px solid var(--blz-panel-border, var(--c-border));
   border-radius: 0.7rem;
   box-shadow: var(--blz-panel-shadow, 0 8px 18px rgba(15, 23, 42, 0.15));
-  z-index: 1200;
+  z-index: 2147483647;
   overflow: hidden;
 }
 
@@ -682,10 +682,42 @@ body.svemir-focus-mode .svemir-toggle {
   pointer-events: none;
 }
 
-body:not(.sw-active) .topbar,
-body:not(.sw-active) .home-main,
-body:not(.sw-active) .footer {
-  transition: opacity 1.2s ease 0.3s;
+/* View Transition names — each element animates independently */
+.topbar       { view-transition-name: topbar; }
+.home-main    { view-transition-name: home-main; }
+.footer       { view-transition-name: site-footer; }
+
+/* Hide the "old" snapshot (was invisible during sw-active anyway) */
+::view-transition-old(topbar),
+::view-transition-old(home-main),
+::view-transition-old(site-footer) {
+  animation: none;
+  opacity: 0;
+}
+
+/* Header slides in from top */
+::view-transition-new(topbar) {
+  animation: vt-slide-from-top 0.8s ease-out both;
+}
+
+/* Main slides in from top with slight delay */
+::view-transition-new(home-main) {
+  animation: vt-slide-from-top 0.8s ease-out 0.15s both;
+}
+
+/* Footer slides in from bottom with delay */
+::view-transition-new(site-footer) {
+  animation: vt-slide-from-bottom 0.8s ease-out 0.3s both;
+}
+
+@keyframes vt-slide-from-top {
+  from { opacity: 0; transform: translateY(-100%); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes vt-slide-from-bottom {
+  from { opacity: 0; transform: translateY(100%); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 /* ============================
@@ -699,7 +731,9 @@ body:not(.sw-active) .footer {
   height: 100vh;
   z-index: 900;
   overflow: hidden;
-  display: none;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .sw-active .sw-crawl-html {

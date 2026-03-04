@@ -18,6 +18,7 @@ interface CrawlSettings {
   introDuration: number;
   logoDuration: number;
   crawlDelay: number;
+  endHoldSeconds: number;
 }
 
 type CrawlBlock =
@@ -65,6 +66,7 @@ declare global {
     introDuration: 3.0,
     logoDuration: 6.0,
     crawlDelay: 10.0,
+    endHoldSeconds: 5.0,
   }) satisfies CrawlSettings;
 
   // ---- Crawl story content ----
@@ -288,15 +290,50 @@ declare global {
       if (this.crawlPhaseActive) return;
       this.crawlPhaseActive = true;
       this._applyCrawlCSS();
-      this.crawlContainer.style.display = "block";
+      this.crawlContainer.style.opacity = "1";
+      this.crawlContainer.style.visibility = "visible";
+      this.crawlContainer.style.pointerEvents = "";
       this.crawlY = 0;
     }
 
     private _hideCrawlDOM(): void {
+      if (!this.crawlPhaseActive) {
+        this.crawlContainer.style.opacity = "0";
+        this.crawlContainer.style.visibility = "hidden";
+        this.crawlContainer.style.pointerEvents = "none";
+        this.crawlContent.style.transform = "";
+        return;
+      }
+
       this.crawlPhaseActive = false;
-      this.crawlContainer.style.display = "none";
-      this.crawlY = 0;
-      this.crawlContent.style.transform = "";
+      this.crawlContainer.style.pointerEvents = "none";
+
+      // Fade to zero first, then hide after transition completes
+      const currentOpacity = Number.parseFloat(this.crawlContainer.style.opacity || "1");
+      if (currentOpacity <= 0.01) {
+        // Already faded out by the scroll animation
+        this.crawlContainer.style.opacity = "0";
+        this.crawlContainer.style.visibility = "hidden";
+        this.crawlY = 0;
+        this.crawlContent.style.transform = "";
+        return;
+      }
+
+      // Animate remaining opacity to zero, then hide
+      this.crawlContainer.style.transition = "opacity 0.6s ease-out";
+      this.crawlContainer.style.opacity = "0";
+
+      const onFaded = (): void => {
+        this.crawlContainer.removeEventListener("transitionend", onFaded);
+        this.crawlContainer.style.transition = "";
+        this.crawlContainer.style.visibility = "hidden";
+        this.crawlY = 0;
+        this.crawlContent.style.transform = "";
+      };
+      this.crawlContainer.addEventListener("transitionend", onFaded, { once: true });
+
+      // Safety fallback if transitionend doesn't fire
+      setTimeout(onFaded, 700);
     }
 
     // ---- Start / stop / resize ----
@@ -379,7 +416,21 @@ declare global {
 
         const contentH = this.crawlContent.offsetHeight;
         const viewH = window.innerHeight;
-        if (this.crawlY > contentH + viewH * 0.5) {
+
+        // Let the text fly for N more seconds after the last paragraph
+        // scrolls into view, then fade the whole crawl out smoothly.
+        const extraScrollPx = s.endHoldSeconds * s.scrollSpeed;
+        const fadeOutStart = contentH - viewH * 0.15 + extraScrollPx;
+        const fadeOutEnd = fadeOutStart + viewH * 0.65;
+
+        if (this.crawlY >= fadeOutStart) {
+          const fadeProgress = Math.min(1, (this.crawlY - fadeOutStart) / (fadeOutEnd - fadeOutStart));
+          this.crawlContainer.style.opacity = String(1 - fadeProgress);
+        } else {
+          this.crawlContainer.style.opacity = "1";
+        }
+
+        if (this.crawlY > fadeOutEnd) {
           this.stop();
           return;
         }
@@ -477,6 +528,7 @@ declare global {
     { id: "sw-cfg-introDuration", key: "introDuration", label: "Intro Duration", min: 0.5, max: 60, step: 0.5 },
     { id: "sw-cfg-logoDuration", key: "logoDuration", label: "Logo Duration", min: 0.5, max: 60, step: 0.5 },
     { id: "sw-cfg-crawlDelay", key: "crawlDelay", label: "Crawl Delay", min: 1, max: 120, step: 0.5 },
+    { id: "sw-cfg-endHoldSeconds", key: "endHoldSeconds", label: "End Hold (s)", min: 0, max: 30, step: 0.5 },
   ];
 
   function buildConfigPanel(): string {
@@ -674,7 +726,14 @@ declare global {
     const engine = new CrawlEngine(crawlCanvas);
 
     engine.onEnd = function (): void {
-      body.classList.remove("sw-active");
+      const doc = document as Document & { startViewTransition?: (cb: () => void) => unknown };
+      if (doc.startViewTransition) {
+        doc.startViewTransition(function (): void {
+          body.classList.remove("sw-active");
+        });
+      } else {
+        body.classList.remove("sw-active");
+      }
     };
 
     if (skipBtn) {
