@@ -5,9 +5,10 @@ import { dedupeKey } from "../compliance/util.js";
 
 const MAX_FINDINGS = 6;
 const MIN_CONFIDENCE = 0.6;
-const MAX_SLIDE_DESC = 6000;
-const MAX_SHAPE_TEXT = 300;
-const MAX_GUIDELINES = 12000;
+const MAX_SLIDE_DESC = 3500;
+const MAX_SHAPE_TEXT = 240;
+const MAX_TABLE_ROWS = 14;
+const MAX_GUIDELINES = 7000;
 const EMU_PER_INCH = 914400;
 
 interface AiFinding {
@@ -41,7 +42,7 @@ function describeShape(shape: ParsedShape): string {
     ? `@(${(shape.bbox.x / EMU_PER_INCH).toFixed(2)}in,${(shape.bbox.y / EMU_PER_INCH).toFixed(2)}in)`
     : "";
   if (shape.kind === "table" && shape.table) {
-    const rows = shape.table.rows.slice(0, 40).map((row) => {
+    const rows = shape.table.rows.slice(0, MAX_TABLE_ROWS).map((row) => {
       const fills = [...new Set(row.cells.map((c) => c.fillHex).filter((f): f is string => Boolean(f)))];
       const sizes = [
         ...new Set(
@@ -54,7 +55,10 @@ function describeShape(shape: ParsedShape): string {
       const label = (row.cells[0]?.text ?? "").replace(/\s+/g, " ").slice(0, 40);
       return `  row${row.rowIndex}: "${label}" fills=[${fills.map((f) => `#${f}`).join(",")}] sizes=[${sizes.join(",")}]`;
     });
-    const more = shape.table.rows.length > 40 ? `\n  …(${shape.table.rows.length - 40} more rows)` : "";
+    const more =
+      shape.table.rows.length > MAX_TABLE_ROWS
+        ? `\n  …(${shape.table.rows.length - MAX_TABLE_ROWS} more rows, similar styling)`
+        : "";
     return `[#${shape.shapeIndex}] TABLE ${pos} rows=${shape.table.rows.length}\n${rows.join("\n")}${more}`;
   }
   if (shape.kind === "text") {
@@ -168,7 +172,7 @@ function parseFindings(raw: string): AiFinding[] {
  * (text + fonts/sizes/colors/fills/positions) against them. One CLI call per
  * slide; on auth/timeout/parse failure a slide simply yields no findings.
  */
-const STATUS_CACHE_MS = 60000;
+const STATUS_CACHE_MS = 300000;
 
 export class ComplianceAiService {
   private statusCache: { at: number; status: ClaudeStatus } | null = null;
@@ -208,16 +212,14 @@ export class ComplianceAiService {
         const reminder = attempt === 0 ? prompt : `${prompt}\n\nIMPORTANT: Respond with JSON only.`;
         const raw = await runClaudePrint(reminder, {
           token: this.config.claudeOAuthToken,
-          timeoutMs: this.config.claudeCliTimeoutMs,
+          timeoutMs: this.config.claudeScanTimeoutMs,
           model: this.config.claudeModel,
         });
         return parseFindings(raw);
       } catch (error: unknown) {
         const isParse = error instanceof ClaudeCliError && error.kind === "parse";
         if (attempt === 1 || !isParse) {
-          if (!(error instanceof ClaudeCliError) || error.kind !== "timeout") {
-            console.warn(`[compliance] AI slide eval failed: ${error instanceof Error ? error.message : String(error)}`);
-          }
+          console.warn(`[compliance] AI slide eval failed: ${error instanceof Error ? error.message : String(error)}`);
           return [];
         }
       }
@@ -287,7 +289,7 @@ export class ComplianceAiService {
     try {
       const raw = await runClaudePrint(prompt, {
         token: this.config.claudeOAuthToken,
-        timeoutMs: this.config.claudeCliTimeoutMs,
+        timeoutMs: this.config.claudeScanTimeoutMs,
         model: this.config.claudeModel,
       });
       return ComplianceAiService.parseParagraphs(raw, paragraphs.length);

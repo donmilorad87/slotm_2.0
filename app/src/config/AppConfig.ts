@@ -76,6 +76,7 @@ export class AppConfig {
   readonly allowedPptxMimeTypes: Set<string>;
   readonly claudeOAuthToken: string;
   readonly claudeCliTimeoutMs: number;
+  readonly claudeScanTimeoutMs: number;
   readonly claudeModel: string;
   readonly guidelineSeedPath: string;
 
@@ -130,6 +131,9 @@ export class AppConfig {
     ]);
     this.claudeOAuthToken = env.CLAUDE_CODE_OAUTH_TOKEN;
     this.claudeCliTimeoutMs = 60000;
+    // Per-slide scan / text-rewrite calls send the full guidelines + slide structure and can be
+    // slow on table-heavy slides — give them more headroom than the general 60s budget.
+    this.claudeScanTimeoutMs = 150000;
     this.claudeModel = env.CLAUDE_MODEL;
     this.guidelineSeedPath = path.join(distDir, "assets", "seed", "acme-brand-guidelines.md");
 

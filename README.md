@@ -6,7 +6,7 @@ A Dockerized Node.js + TypeScript application. It contains two feature areas:
    game history (the original app).
 2. **Brand Compliance Checker** — upload a client PowerPoint, check it against ACME's brand rules
    (deterministic rules + AI-from-guidelines), review/accept findings per slide, and download a
-   corrected deck. See **[brand_guideline.md](brand_guideline.md)** for the full feature walkthrough.
+   corrected deck. See **[Documentation/BRAND_COMPLIENCE_CHECK.md](Documentation/BRAND_COMPLIENCE_CHECK.md)** for the full feature walkthrough.
 
 This README is for **developers** — how the infrastructure is wired and how to run, build, and work
 on the project.
@@ -202,7 +202,8 @@ npx prisma generate                        # regenerate client into src/generate
 slotm/
 ├── docker-compose.yml
 ├── .env / .env.example
-├── brand_guideline.md              # Brand Compliance feature walkthrough
+├── Documentation/
+│   └── BRAND_COMPLIENCE_CHECK.md    # Brand Compliance feature walkthrough
 ├── docker/
 │   ├── node/      (Dockerfile, entrypoint.sh, ecosystem.config.cjs — LibreOffice + Claude CLI + PM2)
 │   ├── nginx/     (default.conf.template — SSL, client_max_body_size 35m, proxy timeouts)
@@ -256,7 +257,7 @@ stored as integer **units** (`1 coin = 100 units`). Pages: `/`, `/games`, `/game
 Upload `.pptx` → hybrid scan (deterministic DB rules + AI checking against editable guidelines) →
 per-slide review with accept/reject/undo → apply accepted fixes → corrected deck, with
 original/annotated/corrected previews and downloads. Pages: `/compliance`, `/compliance/history`,
-`/guidelines`, `/rules`. **Full details: [brand_guideline.md](brand_guideline.md).**
+`/guidelines`, `/rules`. **Full details: [Documentation/BRAND_COMPLIENCE_CHECK.md](Documentation/BRAND_COMPLIENCE_CHECK.md).**
 
 Requires `CLAUDE_CODE_OAUTH_TOKEN` for the AI pass (deterministic rules work without it).
 
