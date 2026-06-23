@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{title}}</title>
+    <link rel="icon" type="image/gif" href="/assets/images/blazingSun.gif">
+    <link rel="stylesheet" href="/assets/css/main.css">
+  </head>
+  <body class="theme-blazing-sun">
+    <canvas id="space" aria-hidden="true"></canvas>
+    <header class="topbar">
+      <div class="topbar__left">
+        <a class="blazing-sun-logo" href="/" aria-label="Blazing Sun home">
+          <img style="height: 4em" src="/assets/images/blazingSun.gif" alt="Blazing Sun logo">
+        </a>
+      </div>
+      <nav class="topbar__right">
+        <a href="/games">Games</a>
+        <a href="/compliance">Brand Check</a>
+        <div class="topbar__profile">
+          <button class="topbar__avatar" type="button" aria-label="Profile menu" aria-haspopup="true" aria-expanded="false">
+            {{#if user_profile_picture}}
+              <img src="{{user_profile_picture}}" alt="Profile">
+            {{else}}
+              <span class="topbar__avatar-initials">{{user_initials}}</span>
+            {{/if}}
+          </button>
+          <div class="topbar__dropdown" hidden>
+            <a href="/profile">Profile</a>
+            <a href="/wallet">Wallet</a>
+            <a href="/logout">Logout</a>
+          </div>
+        </div>
+      </nav>
+    </header>
+
+    <main class="guidelines">
+      <div class="guidelines__head">
+        <h1>Brand Guidelines</h1>
+        <span class="guidelines__meta">Last updated: <span id="cmpGuidelinesUpdated">{{guidelines_updated_at}}</span></span>
+      </div>
+      <p class="guidelines__note">
+        These guidelines are sent to Claude as the rubric for AI-judgment checks (e.g. parallel bullets, layout).
+        Measurable rules — fonts, colors, the confidentiality footer, &ldquo;%ile&rdquo; — are enforced deterministically in code.
+      </p>
+
+      <label class="guidelines__editor-label" for="cmpGuidelinesText">Guidelines (Markdown)</label>
+      <textarea class="guidelines__editor" id="cmpGuidelinesText" spellcheck="false" aria-describedby="cmpGuidelinesStatus">{{guidelines_markdown}}</textarea>
+
+      <div class="guidelines__actions">
+        <button class="btn btn--primary" id="cmpSaveGuidelines" type="button" disabled>Save</button>
+        <a class="btn btn--ghost" href="/compliance">Back to Brand Check</a>
+        <span class="guidelines__status" id="cmpGuidelinesStatus" role="status" aria-live="polite"></span>
+      </div>
+    </main>
+
+    <script>
+      (function() {
+        var btn = document.querySelector('.topbar__avatar');
+        var dd = document.querySelector('.topbar__dropdown');
+        if (!btn || !dd) return;
+        btn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          var open = !dd.hidden;
+          dd.hidden = open;
+          btn.setAttribute('aria-expanded', String(!open));
+        });
+        document.addEventListener('click', function() {
+          dd.hidden = true;
+          btn.setAttribute('aria-expanded', 'false');
+        });
+        dd.addEventListener('click', function(e) { e.stopPropagation(); });
+      })();
+    </script>
+    <script type="module" src="/assets/js/blazing-background.js"></script>
+    <script type="module" src="/assets/js/guidelines.js"></script>
+  </body>
+</html>

@@ -12,6 +12,10 @@ interface PageRouteDeps {
   handleGamePage: RequestHandler;
   handleWalletPage: RequestHandler;
   handleProfilePage: RequestHandler;
+  handleCompliancePage: RequestHandler;
+  handleGuidelinesPage: RequestHandler;
+  handleComplianceHistoryPage: RequestHandler;
+  handleRulesPage: RequestHandler;
 }
 
 export function buildPageRoutes({
@@ -25,6 +29,10 @@ export function buildPageRoutes({
   handleGamePage,
   handleWalletPage,
   handleProfilePage,
+  handleCompliancePage,
+  handleGuidelinesPage,
+  handleComplianceHistoryPage,
+  handleRulesPage,
 }: PageRouteDeps): express.Router {
   const router = express.Router();
 
@@ -41,6 +49,10 @@ export function buildPageRoutes({
 
   router.get("/wallet", requireJwt, handleWalletPage);
   router.get("/profile", requireJwt, handleProfilePage);
+  router.get("/compliance", requireJwt, handleCompliancePage);
+  router.get("/compliance/history", requireJwt, handleComplianceHistoryPage);
+  router.get("/guidelines", requireJwt, handleGuidelinesPage);
+  router.get("/rules", requireJwt, handleRulesPage);
 
   return router;
 }

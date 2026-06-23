@@ -8,6 +8,8 @@ export interface AppEnv {
   CORS_ALLOWED_ORIGINS: string;
   SESSION_TTL_SECONDS: string;
   NODE_ENV: string;
+  CLAUDE_CODE_OAUTH_TOKEN: string;
+  CLAUDE_MODEL: string;
 }
 
 export function loadAppEnv(): AppEnv {
@@ -21,5 +23,7 @@ export function loadAppEnv(): AppEnv {
     CORS_ALLOWED_ORIGINS: process.env.CORS_ALLOWED_ORIGINS || "",
     SESSION_TTL_SECONDS: process.env.SESSION_TTL_SECONDS || "",
     NODE_ENV: process.env.NODE_ENV || "development",
+    CLAUDE_CODE_OAUTH_TOKEN: process.env.CLAUDE_CODE_OAUTH_TOKEN || "",
+    CLAUDE_MODEL: process.env.CLAUDE_MODEL || "sonnet",
   };
 }

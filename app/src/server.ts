@@ -13,6 +13,7 @@ import rateLimit from "express-rate-limit";
 
 import { AppConfig } from "./config/AppConfig.js";
 import { AuthController } from "./controllers/AuthController.js";
+import { ComplianceController } from "./controllers/ComplianceController.js";
 import { GameController } from "./controllers/GameController.js";
 import { PageController } from "./controllers/PageController.js";
 import { ProfileController } from "./controllers/ProfileController.js";
@@ -27,12 +28,19 @@ import { createJwtAuthMiddlewares } from "./middlewares/auth.middleware.js";
 import { createSessionCsrfMiddlewares } from "./middlewares/csrf-session.middleware.js";
 import { attachRequestContext } from "./middlewares/request-context.middleware.js";
 import { connectPrisma, disconnectPrisma, getPrisma } from "./repositories/PrismaConnection.js";
+import { ComplianceRepository } from "./repositories/ComplianceRepository.js";
+import { DeterministicRuleRepository } from "./repositories/DeterministicRuleRepository.js";
 import { GameRepository } from "./repositories/GameRepository.js";
+import { GuidelineRepository } from "./repositories/GuidelineRepository.js";
 import { TransactionRepository } from "./repositories/TransactionRepository.js";
 import { UserRepository } from "./repositories/UserRepository.js";
 import { registerRoutes } from "./routes/index.js";
 import { AuthService } from "./services/AuthService.js";
+import { ComplianceAiService } from "./services/ComplianceAiService.js";
+import { ComplianceService } from "./services/ComplianceService.js";
+import { DeterministicRuleService } from "./services/DeterministicRuleService.js";
 import { GameService } from "./services/GameService.js";
+import { GuidelineService } from "./services/GuidelineService.js";
 import { ProfileService } from "./services/ProfileService.js";
 import { WalletService } from "./services/WalletService.js";
 
@@ -42,6 +50,7 @@ async function start(): Promise<void> {
   const config = new AppConfig(env, distDir);
 
   await fs.mkdir(config.uploadsDir, { recursive: true });
+  await fs.mkdir(config.complianceUploadsDir, { recursive: true });
   await connectPrisma();
   console.log("[slotm] Prisma connected to PostgreSQL");
 
@@ -49,6 +58,9 @@ async function start(): Promise<void> {
   const userRepo = new UserRepository(prisma);
   const txRepo = new TransactionRepository(prisma);
   const gameRepo = new GameRepository(prisma);
+  const guidelineRepo = new GuidelineRepository(prisma);
+  const complianceRepo = new ComplianceRepository(prisma);
+  const deterministicRuleRepo = new DeterministicRuleRepository(prisma);
   const stripe = new StripeClient(config.stripeSecret);
 
   const registry = new GameEngineRegistry();
@@ -67,6 +79,17 @@ async function start(): Promise<void> {
   const walletService = new WalletService(userRepo, txRepo, stripe, config);
   const gameService = new GameService(txRepo, gameRepo, registry);
   const profileService = new ProfileService(userRepo);
+  const guidelineService = new GuidelineService(guidelineRepo, config);
+  const complianceAi = new ComplianceAiService(config);
+  const deterministicRuleService = new DeterministicRuleService(deterministicRuleRepo);
+  const complianceService = new ComplianceService(
+    complianceRepo,
+    guidelineService,
+    complianceAi,
+    deterministicRuleRepo,
+    config,
+  );
+  await guidelineService.ensureSeeded();
 
   const {
     optionalJwt,
@@ -100,6 +123,12 @@ async function start(): Promise<void> {
   const gameController = new GameController(gameService, gameRepo, config);
   const walletController = new WalletController(walletService, config);
   const profileController = new ProfileController(profileService);
+  const complianceController = new ComplianceController(
+    complianceService,
+    guidelineService,
+    deterministicRuleService,
+    config,
+  );
 
   const uploadStorage = multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, config.uploadsDir),
@@ -114,6 +143,23 @@ async function start(): Promise<void> {
     limits: { fileSize: config.maxUploadSize },
     fileFilter: (_req, file, cb) => {
       cb(null, config.allowedMimeTypes.has(file.mimetype));
+    },
+  });
+
+  const pptxStorage = multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, config.complianceUploadsDir),
+    filename: (_req, _file, cb) => {
+      const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      cb(null, `upload-${unique}.pptx`);
+    },
+  });
+  const uploadPptx = multer({
+    storage: pptxStorage,
+    limits: { fileSize: config.maxPptxUploadSize },
+    fileFilter: (_req, file, cb) => {
+      const okMime = config.allowedPptxMimeTypes.has(file.mimetype);
+      const okExt = file.originalname.toLowerCase().endsWith(".pptx");
+      cb(null, okMime && okExt);
     },
   });
 
@@ -183,11 +229,13 @@ async function start(): Promise<void> {
     requireJwt,
     authLimiter,
     upload,
+    uploadPptx,
     authController,
     pageController,
     gameController,
     walletController,
     profileController,
+    complianceController,
   });
 
   app.use((error: unknown, req: Request, res: Response, next: NextFunction) => {

@@ -1,248 +1,306 @@
 # slotm
 
-Dockerized Node.js slot machine application built with strict TypeScript and Prisma ORM.
+A Dockerized Node.js + TypeScript application. It contains two feature areas:
 
-## Tech Stack
+1. **Slot machine** — a credits-based slot/mini-game with JWT auth, wallet/Stripe top-ups, and
+   game history (the original app).
+2. **Brand Compliance Checker** — upload a client PowerPoint, check it against ACME's brand rules
+   (deterministic rules + AI-from-guidelines), review/accept findings per slide, and download a
+   corrected deck. See **[brand_guideline.md](brand_guideline.md)** for the full feature walkthrough.
 
-| Layer | Technology | Version |
-|-------|-----------|---------|
-| Runtime | Node.js | 22 LTS |
-| Language | TypeScript | 5.9 (strict mode) |
-| Framework | Express | 5 |
-| ORM | Prisma | 7.4 |
-| Database | PostgreSQL | 17 |
-| Auth | JWT (jsonwebtoken) | 9 |
-| Payments | Stripe (custom client) | — |
-| Client build | esbuild | 0.27 |
-| Server build | tsc | 5.9 |
-| Process manager | PM2 | — |
-| Reverse proxy | Nginx (SSL) | — |
+This README is for **developers** — how the infrastructure is wired and how to run, build, and work
+on the project.
 
-## Features
+---
 
-- User registration/login with JWT cookie auth
-- Slot machine with 5 game modes, 7 paylines, joker system
-- Mini-game (legacy number pick + ticket mode)
-- Stripe wallet top-up and card management
-- Transaction and game history with pagination
-- Profile management (name, password, picture upload)
-- Helmet, CORS, rate limiting, CSRF protection
+## Tech stack
 
-## TypeScript Configuration
+| Layer | Technology |
+|-------|-----------|
+| Runtime | Node.js 22 (LTS) |
+| Language | TypeScript 5.9 (strict, zero `any`) |
+| Web framework | Express 5 |
+| ORM | Prisma 7.4 + `@prisma/adapter-pg` |
+| Database | PostgreSQL 17 |
+| Auth | JWT (cookie) + session/CSRF middleware |
+| Payments | Stripe (custom HTTP client, no SDK) |
+| Client build | esbuild (type-strip only) |
+| Server build | `tsc` |
+| Process manager | PM2 (`pm2-runtime`) |
+| Reverse proxy | Nginx 1.27 (self-signed SSL) |
+| PPTX engine | `jszip` + `fast-xml-parser` (raw OOXML) |
+| Slide rendering | LibreOffice (headless) + `poppler-utils` (`pdftoppm`) |
+| AI | Claude Code CLI (`@anthropic-ai/claude-code`) installed in the node image |
 
-The codebase uses maximum strictness with zero `any` usage:
+> The Brand Compliance feature deliberately avoids heavy SDKs: PPTX is read/edited as raw OOXML,
+> Stripe is a hand-rolled client, and the views use a tiny custom Handlebars-subset renderer.
 
-```jsonc
-// tsconfig.json
-{
-  "strict": true,
-  "noImplicitAny": true,
-  "noUncheckedIndexedAccess": true,
-  "noImplicitReturns": true,
-  "exactOptionalPropertyTypes": true,
-  "useUnknownInCatchVariables": true,
-  "verbatimModuleSyntax": true,
-  "isolatedModules": true
-}
-```
+---
 
-**Key practices:**
-- Zero `any` — all values typed or narrowed with type guards
-- Zero `@ts-ignore` / `@ts-expect-error` — no compiler suppression
-- Zero non-null assertions (`!`) — runtime checks instead
-- Type assertions (`as`) only at library boundaries (Stripe API, JWT, JSON.parse) with runtime validation
-- All catch blocks use explicit `unknown` typing
-- Custom type guards: `isTransactionType()`, `isTransactionDirection()`, `isJwtUserPayload()`, `isGameModeName()`, `isRewardModeName()`, `isGameModeId()`
-- Shared domain types in `src/types/domain.ts` with `as const satisfies`, template literal types, conditional types, and mapped types
+## Docker infrastructure
 
-## Prisma ORM
+Four services on a custom bridge network **`slotm_net` (172.30.0.0/16)**, defined in
+`docker-compose.yml`. Each service has a `Dockerfile` under `docker/<service>/`.
 
-Prisma 7 with the PostgreSQL adapter replaces raw SQL queries.
+| Service | Container | IP | Ports (host) | Purpose |
+|---------|-----------|-----|--------------|---------|
+| **node** | slotm-node | 172.30.0.10 | 4300 | The Express app (PM2) |
+| **postgres** | slotm-postgres | 172.30.0.11 | 5432 | PostgreSQL 17 |
+| **nginx** | slotm-nginx | 172.30.0.12 | 80, 443 | SSL reverse proxy + static |
+| **pgadmin** | slotm-pgadmin | 172.30.0.13 | 5050 | DB admin UI |
 
-**Schema** (`prisma/schema.prisma`):
+**URLs**
 
-| Model | Table | Purpose |
-|-------|-------|---------|
-| `User` | `users` | Accounts, balance, Stripe customer link |
-| `Session` | `sessions` | JWT session tracking |
-| `Transaction` | `transactions` | Wallet credits/debits with metadata |
-| `GameHistory` | `game_history` | Spin results, mini-game attachments |
-| `PendingMiniGame` | `pending_minigame` | Unconsumed mini-game triggers |
+| What | URL |
+|------|-----|
+| App (via Nginx, SSL) | https://localhost/ |
+| App (direct Node) | http://localhost:4300/ |
+| pgAdmin (via Nginx) | https://localhost/pgadmin/ |
+| pgAdmin (direct) | http://localhost:5050/ |
+| PostgreSQL | localhost:5432 |
 
-**Generated client** outputs to `src/generated/prisma/` and is auto-generated on `npm install` via the `postinstall` hook.
+### The `node` image (important)
 
-**Commands:**
+`docker/node/Dockerfile` is a `node:22-slim` base plus, beyond the app runtime:
+
+- **LibreOffice + poppler-utils + Carlito fonts** — to render slides to PNGs
+  (`soffice --headless --convert-to pdf` → `pdftoppm`). Carlito is metric-compatible with Calibri
+  so rendered text geometry matches the brand font.
+- **Claude Code CLI** (`npm install -g @anthropic-ai/claude-code`) — the AI engine for the Brand
+  Compliance feature, authenticated via the `CLAUDE_CODE_OAUTH_TOKEN` env var.
+- **PM2** — runs the app as PID 1 via `pm2-runtime`.
+
+The `entrypoint.sh` runs `prisma generate` + `prisma migrate deploy`, builds `dist/`, then starts
+PM2 — so a `docker compose restart node` picks up source changes (it rebuilds on boot).
+
+### Volumes
+
+| Volume | Purpose | Backup |
+|--------|---------|--------|
+| `pgdata` | PostgreSQL data | **critical** |
+| `uploads` (bind under `app/uploads`) | user uploads incl. `compliance/` PPTX + slide PNGs | important |
+| `frontend_node_modules` | node_modules cache | regenerable |
+
+`app/` is **bind-mounted** into the node container; `app/.env` is mounted and loaded via `dotenv`.
+
+---
+
+## Quick start
 
 ```bash
-# Generate Prisma client after schema changes
-npm run prisma:generate
+# 1. Configure environment
+cp .env.example .env        # fill in secrets (see Environment below)
 
-# Deploy migrations
-npm run prisma:migrate
-
-# Generate + migrate (used in dev mode)
-npm run dev:prisma
-```
-
-## Quick Start
-
-```bash
-# 1. Copy and fill in environment variables
-cp .env.example .env
-
-# 2. Build and start all services
+# 2. Build + start everything
 docker compose up -d
 
-# 3. Verify all containers are healthy
-docker compose ps
+# 3. Verify
+docker compose ps           # all containers healthy
+docker compose logs -f node # watch the app boot (migrate → build → PM2)
 ```
 
-## Services
+Open https://localhost/ (accept the self-signed cert), register a user, and you're in.
 
-| Service | URL | Purpose |
-|---------|-----|---------|
-| App | https://localhost/ | Slot machine (via Nginx) |
-| App direct | http://localhost:4300/ | Direct Node access |
-| pgAdmin | https://localhost/pgadmin/ | PostgreSQL admin (via Nginx) |
-| pgAdmin direct | http://localhost:5050/ | PostgreSQL admin (direct) |
-| PostgreSQL | localhost:5432 | Database |
+---
 
-## Network
+## Environment (`.env` at repo root)
 
-Custom bridge: `slotm_net` (172.30.0.0/16)
-
-| Service | IP | Port(s) |
-|---------|-----|---------|
-| node | 172.30.0.10 | 4300 |
-| postgres | 172.30.0.11 | 5432 |
-| nginx | 172.30.0.12 | 80/443 |
-| pgadmin | 172.30.0.13 | 5050 |
-
-## Build System
-
-The build has two stages:
-
-1. **Client TypeScript** — `esbuild` strips type annotations from `src/client/*.ts` and outputs plain ES2022 JavaScript to `dist/client/`
-2. **Server TypeScript** — `tsc` compiles `src/**/*.ts` (excluding `src/client/`) to `dist/` with source maps
+`docker-compose.yml` interpolates these into the containers. **`.env` is gitignored — never commit
+secrets.** See `.env.example` for the template.
 
 ```bash
-# Full build (client + server)
-npm run build:dist
+# Build / runtime
+ENV=dev                      # dev | prod (node container mode)
+NODE_ENV=development
+APP_HOST=0.0.0.0
+APP_PORT=4300
 
-# Type-check only (no emit)
-npm run typecheck
+# PostgreSQL
+POSTGRES_HOST=172.30.0.11
+POSTGRES_PORT=5432
+POSTGRES_USER=slotm
+POSTGRES_PASSWORD=...
+POSTGRES_DB=slotm
+DATABASE_URL=postgresql://slotm:...@172.30.0.11:5432/slotm?schema=public
+
+# Auth
+JWT_SECRET=...
+JWT_EXPIRES_IN=14d
+
+# pgAdmin
+PGADMIN_EMAIL=admin@slotm.dev
+PGADMIN_PASSWORD=...
+
+# Stripe (wallet top-ups) — optional for slot machine
+STRIPE_KEY=...               # publishable
+STRIPE_SECRET=...
+STRIPE_WEBHOOK_SECRET=...
+
+# Brand Compliance AI (Claude Code CLI in the container)
+CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-...   # from `claude setup-token`; required for the AI pass
+CLAUDE_MODEL=sonnet                         # haiku | sonnet (default) | opus
 ```
 
-The `tsconfig.backend.json` extends the base config and excludes `src/client/**/*` since client files are handled by esbuild.
+---
 
-## Stripe Configuration
+## Build system
 
-Set these in `app/.env`:
+Two compilers, split by directory (they must not overlap):
 
-- `STRIPE_KEY` — Publishable key
-- `STRIPE_SECRET` — Secret key
-- `STRIPE_WEBHOOK_SECRET` — Webhook signing secret
-
-Webhook endpoint: `POST /api/wallet/stripe/webhook`
-
-The Stripe integration uses a custom HTTP client (`src/lib/stripe.ts`) instead of the official SDK to minimize dependencies.
-
-## Docker Commands
+1. **Client** (`src/client/**`) → **esbuild** strips types and emits ES2022 ESM to `dist/client/`
+   (`scripts/build.mjs`). No bundling, no type-checking. Each `src/client/<page>.ts` is served at
+   `/assets/js/<page>.js` and referenced from its `.hbs` view.
+2. **Server** (everything else in `src/`) → **`tsc -p tsconfig.backend.json`** to `dist/`
+   (excludes `src/client/**`). Non-`.ts` files (`.hbs`, `.css`, images, seed `.md`) are copied verbatim.
 
 ```bash
-# View logs
-docker compose logs -f node
-
-# Restart application
-docker compose restart node
-
-# PostgreSQL CLI
-docker compose exec postgres psql -U slotm -d slotm
-
-# Full rebuild
-docker compose down -v
-docker compose build --no-cache
-docker compose up -d
+npm run build:dist     # full build (client + server)
+npm run typecheck      # tsc --noEmit (server) — run before committing
 ```
 
-## Development
+Imports use **`.js` extensions** in `.ts` source (ESM + `verbatimModuleSyntax`).
 
-The `app/` directory is bind-mounted into the container.
-The `app/.env` file is mounted into the node container at `/home/node/app/.env`, and loaded at startup via `dotenv`.
+---
 
-- **Dev mode** (`ENV=dev`): nodemon watches `src/`, `scripts/`, and `prisma/` — runs `prisma generate`, `prisma migrate deploy`, builds `dist/`, then starts the server. Auto-restarts on file changes.
-- **Prod mode** (`ENV=prod`): builds `dist/` once and starts PM2.
+## Development workflow
 
 ```bash
-# Enter node container
-docker compose exec node bash
+docker compose exec node bash             # shell into the app container
+cd /home/node/app
 
-# Manual rebuild
-cd /home/node/app && npm run build:dist
+npm run build:dist                        # rebuild dist/ after changes
+npx tsc -p tsconfig.backend.json --noEmit # typecheck
+docker compose restart node               # apply changes (entrypoint rebuilds + restarts PM2)
 
-# Manual app reload (prod mode)
-pm2 reload slotm
-
-# Run tests
-cd /home/node/app && npm run test:parity
+docker compose logs -f node               # tail app logs
+docker compose exec postgres psql -U slotm -d slotm   # DB shell
 ```
 
-## Application URLs
+- **Dev mode** (`ENV=dev`): nodemon watches `src/`, `scripts/`, `prisma/`.
+- **Prod mode** (`ENV=prod`): build once + PM2 (`pm2-runtime`); restart the container to redeploy.
 
-- Login: https://localhost/login
-- Register: https://localhost/register
-- Game: https://localhost/games/slot-machine
-- Wallet: https://localhost/wallet
-- Profile: https://localhost/profile
-- pgAdmin: https://localhost/pgadmin/
+### Database & Prisma
 
-## Admin Credentials
+Models live in `prisma/schema.prisma`; migrations in `prisma/migrations/NNNN_name/`.
 
-- pgAdmin: email/password from `PGADMIN_EMAIL`/`PGADMIN_PASSWORD` in `.env`
-- PostgreSQL: credentials from `POSTGRES_USER`/`POSTGRES_PASSWORD` in `.env`
+```bash
+# Inside the node container:
+npx prisma migrate dev --name <change>    # create + apply a migration (dev DB)
+npx prisma generate                        # regenerate client into src/generated/prisma/
+```
 
-## Project Structure
+> **Note:** the live DB has some pre-existing index-name drift, so `prisma migrate dev` may want to
+> reset. Additive migrations in this repo are applied **non-destructively** (hand-written SQL via
+> `psql`, then `prisma migrate resolve --applied <name>`) to avoid wiping data. Follow that pattern
+> for additive changes.
+
+---
+
+## Project structure
 
 ```
 slotm/
 ├── docker-compose.yml
 ├── .env / .env.example
+├── brand_guideline.md              # Brand Compliance feature walkthrough
 ├── docker/
-│   ├── node/              # Node.js + PM2
-│   ├── nginx/             # SSL reverse proxy
-│   ├── postgres/          # PostgreSQL 17
-│   └── pgadmin/           # PostgreSQL admin UI
-├── app/
-│   ├── prisma/
-│   │   ├── schema.prisma  # Prisma schema (models, relations)
-│   │   └── migrations/    # Prisma migration history
-│   ├── src/
-│   │   ├── client/        # Browser TypeScript (esbuild)
-│   │   ├── config/        # AppConfig
-│   │   ├── controllers/   # Express request handlers
-│   │   ├── game/          # Slot engine, mini-game, odds
-│   │   ├── generated/     # Prisma generated client (gitignored)
-│   │   ├── interfaces/    # Repository + gateway contracts
-│   │   ├── lib/           # Utilities (cookies, security, stripe, template)
-│   │   ├── middlewares/    # Auth, CSRF, rate limiting
-│   │   ├── repositories/  # Prisma data access layer
-│   │   ├── routes/        # Express route definitions
-│   │   ├── services/      # Business logic (auth, wallet)
-│   │   ├── types/         # Domain types, type guards
-│   │   └── server.ts      # Application entry point
-│   ├── dist/              # Built JavaScript (gitignored)
-│   ├── scripts/           # Build scripts
-│   ├── tests/             # Test suites
-│   └── package.json
-└── data/                  # Docker volumes (gitignored)
+│   ├── node/      (Dockerfile, entrypoint.sh, ecosystem.config.cjs — LibreOffice + Claude CLI + PM2)
+│   ├── nginx/     (default.conf.template — SSL, client_max_body_size 35m, proxy timeouts)
+│   ├── postgres/  (PostgreSQL 17)
+│   └── pgadmin/
+└── app/
+    ├── prisma/                     # schema + migrations
+    └── src/
+        ├── server.ts               # composition root (manual DI wires everything)
+        ├── config/                 # AppConfig
+        ├── routes/                 # per-domain route builders, registered in index.ts
+        ├── controllers/            # thin HTTP handlers (extend BaseController)
+        ├── services/               # business logic (Auth, Wallet, Game, Profile,
+        │                           #   Compliance, ComplianceAi, Guideline, DeterministicRule)
+        ├── repositories/           # Prisma data access (the only place Prisma is touched)
+        ├── interfaces/             # repo/gateway contracts (services depend on these, not concretes)
+        ├── lib/                    # stripe, claudeCli, template engine, cookies, security, env
+        ├── compliance/             # PPTX engine: PptxDocument, xml, model, deterministic, renderPreview
+        ├── game/                   # slot/mini-game engines + math
+        ├── client/                 # browser TS (esbuild) — one file per page
+        ├── views/                  # .hbs templates (custom renderer)
+        ├── generated/prisma/       # generated client (gitignored)
+        └── assets/seed/            # seed data (ACME guidelines markdown)
 ```
 
-## Dependencies
+### Architecture
 
-**Runtime** (11 packages):
-`@prisma/adapter-pg`, `@prisma/client`, `compression`, `cors`, `dotenv`, `express`, `express-rate-limit`, `express-validator`, `helmet`, `jsonwebtoken`, `morgan`, `multer`
+Strict **layered DI**, assembled in `src/server.ts` (the only composition root — no container):
 
-**Dev** (8 packages):
-`@types/compression`, `@types/cors`, `@types/express`, `@types/jsonwebtoken`, `@types/morgan`, `@types/multer`, `@types/node`, `esbuild`, `prisma`, `typescript`
+```
+routes/ → controllers/ → services/ → repositories/ (Prisma) → PostgreSQL
+                                   ↘ compliance/ (PPTX engine), lib/claudeCli (AI)
+```
 
-No Stripe SDK — the app uses a custom lightweight HTTP client to minimize bundle size.
+Controllers are thin and extend `BaseController` (uniform JSON error handling, auth helpers).
+Services hold the logic and depend on `interfaces/` (so they're unit-testable with mocks).
+Repositories are the only code that touches Prisma. Pages render `.hbs` via the custom template
+engine in `src/lib/template.ts`.
+
+---
+
+## Feature: Slot machine
+
+JWT cookie auth, wallet credits with Stripe top-ups (`POST /api/wallet/stripe/webhook` uses the
+custom Stripe client), a slot engine with paylines/joker/mini-game, and game history. Balances are
+stored as integer **units** (`1 coin = 100 units`). Pages: `/`, `/games`, `/games/slot-machine`,
+`/wallet`, `/profile`.
+
+## Feature: Brand Compliance Checker
+
+Upload `.pptx` → hybrid scan (deterministic DB rules + AI checking against editable guidelines) →
+per-slide review with accept/reject/undo → apply accepted fixes → corrected deck, with
+original/annotated/corrected previews and downloads. Pages: `/compliance`, `/compliance/history`,
+`/guidelines`, `/rules`. **Full details: [brand_guideline.md](brand_guideline.md).**
+
+Requires `CLAUDE_CODE_OAUTH_TOKEN` for the AI pass (deterministic rules work without it).
+
+---
+
+## Testing
+
+```bash
+# Inside the node container (cd /home/node/app):
+npm test                 # Jest unit tests (tests/unit/**)
+npm run test:parity      # node --test parity tests (build dist first)
+npm run test:e2e         # Playwright end-to-end
+npx tsc -p tsconfig.backend.json --noEmit   # typecheck
+```
+
+---
+
+## Common commands
+
+```bash
+docker compose up -d                 # start all
+docker compose restart node          # redeploy app code
+docker compose logs -f node          # logs
+docker compose build node            # rebuild node image (after Dockerfile change)
+docker compose down                  # stop
+docker compose down -v               # stop + wipe volumes (DESTROYS DB)
+docker compose exec node bash        # app shell
+docker compose exec postgres psql -U slotm -d slotm   # DB shell
+```
+
+## Admin credentials
+
+- **pgAdmin:** `PGADMIN_EMAIL` / `PGADMIN_PASSWORD` from `.env`
+- **PostgreSQL:** `POSTGRES_USER` / `POSTGRES_PASSWORD` from `.env`
+
+---
+
+## Troubleshooting
+
+| Symptom | Cause / fix |
+|---------|-------------|
+| **Claude chip shows "offline"** | Missing/expired `CLAUDE_CODE_OAUTH_TOKEN`, or rate-limited mid-scan. Re-generate the token, set it in `.env`, `docker compose up -d node`. Test in-container: `claude -p ok --output-format json`. |
+| **413 on PPTX upload** | Nginx body limit. `client_max_body_size 35m` is set in the template — rebuild nginx (`docker compose build nginx && docker compose up -d nginx`) if you changed it. |
+| **No slide previews** | LibreOffice/poppler missing or render failed (panel still works without images). Confirm `which soffice pdftoppm` in the node container; rebuild the image if absent. |
+| **AI scan is slow** | Each slide is one CLI call (API-latency-bound). Use `CLAUDE_MODEL=haiku` for faster runs; deterministic rules + previews are instant regardless. |
+| **`prisma migrate dev` wants to reset** | Pre-existing index drift. Apply additive migrations non-destructively (see Database & Prisma). |
+| **Code changes not live** | `docker compose restart node` (entrypoint rebuilds `dist/`), or `npm run build:dist` in the container. |

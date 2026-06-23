@@ -25,8 +25,116 @@ model User {
   transactions     Transaction[]
   gameHistories    GameHistory[]
   pendingMiniGames PendingMiniGame[]
+  analysisSets     AnalysisSet[]
 
   @@map("users")
+}
+
+// --- Brand Compliance Checker ---------------------------------------------
+
+model Guideline {
+  id        Int      @id @default(autoincrement())
+  slug      String   @unique
+  markdown  String
+  version   Int      @default(1)
+  updatedBy Int?     @map("updated_by")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("guidelines")
+}
+
+model DeterministicRule {
+  id          Int      @id @default(autoincrement())
+  ruleType    String   @map("rule_type") // font_size | font_color | font_family | forbidden_text
+  scope       String   @default("any") // title | body | any
+  numberValue Int?     @map("number_value") // e.g. font size in pt
+  textValue   String?  @map("text_value") // hex (no #), family name, or forbidden text
+  severity    String   @default("warning")
+  autoFix     Boolean  @default(true) @map("auto_fix")
+  enabled     Boolean  @default(true)
+  name        String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("deterministic_rules")
+}
+
+model AnalysisSet {
+  id           Int      @id @default(autoincrement())
+  userId       Int      @map("user_id")
+  title        String
+  status       String   @default("uploaded")
+  phase        String   @default("uploaded")
+  slideCount   Int      @default(0) @map("slide_count")
+  guidelineId  Int?     @map("guideline_id")
+  errorMessage String?  @map("error_message")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  files  AnalysisFile[]
+  flags  Flag[]
+  slides SlideRender[]
+
+  @@index([userId])
+  @@map("analysis_sets")
+}
+
+model AnalysisFile {
+  id            Int      @id @default(autoincrement())
+  analysisSetId Int      @map("analysis_set_id")
+  kind          String
+  filename      String
+  publicPath    String   @map("public_path")
+  byteSize      Int      @default(0) @map("byte_size")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  analysisSet AnalysisSet @relation(fields: [analysisSetId], references: [id], onDelete: Cascade)
+
+  @@index([analysisSetId])
+  @@map("analysis_files")
+}
+
+model SlideRender {
+  id            Int      @id @default(autoincrement())
+  analysisSetId Int      @map("analysis_set_id")
+  slideIndex    Int      @map("slide_index")
+  kind          String   @default("annotated")
+  imageFilename String   @map("image_filename")
+  publicPath    String   @map("public_path")
+  widthEmu      Int      @default(0) @map("width_emu")
+  heightEmu     Int      @default(0) @map("height_emu")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  analysisSet AnalysisSet @relation(fields: [analysisSetId], references: [id], onDelete: Cascade)
+
+  @@unique([analysisSetId, slideIndex, kind])
+  @@map("slide_renders")
+}
+
+model Flag {
+  id            Int      @id @default(autoincrement())
+  analysisSetId Int      @map("analysis_set_id")
+  slideIndex    Int      @map("slide_index")
+  ruleId        String   @map("rule_id")
+  category      String
+  severity      String   @default("warning")
+  status        String   @default("pending")
+  message       String
+  locationJson  String?  @map("location_json")
+  suggestedFix  String?  @map("suggested_fix")
+  fixOpJson     String?  @map("fix_op_json")
+  autoFixable   Boolean  @default(false) @map("auto_fixable")
+  confidence    Float?
+  dedupeKey     String   @map("dedupe_key")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  analysisSet AnalysisSet @relation(fields: [analysisSetId], references: [id], onDelete: Cascade)
+
+  @@unique([analysisSetId, dedupeKey])
+  @@index([analysisSetId, slideIndex])
+  @@map("flags")
 }
 
 model Session {

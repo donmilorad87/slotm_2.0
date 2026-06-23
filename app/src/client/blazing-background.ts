@@ -2072,7 +2072,6 @@ class BlazingStarfield {
 
     if (elapsed >= ws.msDuration) {
       this.winActive = false;
-      this.canvas.classList.remove("win-overlay");
       return;
     }
 
@@ -2235,7 +2234,6 @@ class BlazingStarfield {
 
     if (elapsed >= ws.mcDuration) {
       this.winActive = false;
-      this.canvas.classList.remove("win-overlay");
       return;
     }
 
@@ -2342,7 +2340,6 @@ class BlazingStarfield {
 
   triggerWin(): void {
     this.winActive = false;
-    this.canvas.classList.add("win-overlay");
 
     const mode: WinMode = this.winSettings.mode;
     if (mode === "magic_confetti") {
@@ -2354,7 +2351,6 @@ class BlazingStarfield {
 
   cancelWin(): void {
     this.winActive = false;
-    this.canvas.classList.remove("win-overlay");
   }
 
   drawStaticStars(timeSec: number): void {

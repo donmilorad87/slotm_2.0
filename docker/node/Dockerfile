@@ -1,9 +1,12 @@
 FROM node:22-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends gosu openssl \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      gosu openssl \
+      libreoffice-impress libreoffice-core poppler-utils \
+      fonts-liberation fontconfig fonts-crosextra-carlito \
     && rm -rf /var/lib/apt/lists/*
 
-RUN npm install -g pm2@latest
+RUN npm install -g pm2@latest @anthropic-ai/claude-code
 
 WORKDIR /home/node/app
 

@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{title}}</title>
+    <link rel="icon" type="image/gif" href="/assets/images/blazingSun.gif">
+    <link rel="stylesheet" href="/assets/css/main.css">
+  </head>
+  <body class="theme-blazing-sun">
+    <canvas id="space" aria-hidden="true"></canvas>
+    <header class="topbar">
+      <div class="topbar__left">
+        <a class="blazing-sun-logo" href="/" aria-label="Blazing Sun home">
+          <img style="height: 4em" src="/assets/images/blazingSun.gif" alt="Blazing Sun logo">
+        </a>
+      </div>
+      <nav class="topbar__right">
+        <a href="/games">Games</a>
+        <a href="/compliance">Brand Check</a>
+        <div class="topbar__profile">
+          <button class="topbar__avatar" type="button" aria-label="Profile menu" aria-haspopup="true" aria-expanded="false">
+            {{#if user_profile_picture}}
+              <img src="{{user_profile_picture}}" alt="Profile">
+            {{else}}
+              <span class="topbar__avatar-initials">{{user_initials}}</span>
+            {{/if}}
+          </button>
+          <div class="topbar__dropdown" hidden>
+            <a href="/profile">Profile</a>
+            <a href="/wallet">Wallet</a>
+            <a href="/logout">Logout</a>
+          </div>
+        </div>
+      </nav>
+    </header>
+
+    <main class="rules">
+      <div class="rules__head">
+        <h1>Deterministic Rules</h1>
+        <a class="btn btn--ghost" href="/compliance">Back to Brand Check</a>
+      </div>
+      <p class="rules__note">
+        Precise rules checked in code on every scan — exact, fast, and auto-fixable. For example:
+        <em>titles must be 40pt</em>, or <em>titles must be red (#FF0000)</em>. Everything subtler
+        comes from the <a href="/guidelines">brand guidelines</a> via the AI.
+      </p>
+
+      <form class="rules__form" id="ruleForm">
+        <div class="rules__row">
+          <label>Type
+            <select id="ruleType">
+              <option value="font_size">Font size (pt)</option>
+              <option value="font_color">Font color (hex)</option>
+              <option value="font_family">Font family</option>
+              <option value="forbidden_text">Forbidden text</option>
+            </select>
+          </label>
+          <label>Applies to
+            <select id="ruleScope">
+              <option value="any">Any text</option>
+              <option value="title">Titles</option>
+              <option value="body">Body text</option>
+            </select>
+          </label>
+          <label id="ruleValueLabel">Required size (pt)
+            <input id="ruleValue" type="text" placeholder="e.g. 40">
+          </label>
+          <label>Severity
+            <select id="ruleSeverity">
+              <option value="error">Critical</option>
+              <option value="warning" selected>High</option>
+              <option value="info">Low</option>
+            </select>
+          </label>
+        </div>
+        <div class="rules__row">
+          <label class="rules__name">Name (optional)
+            <input id="ruleName" type="text" placeholder="e.g. Title size">
+          </label>
+          <label class="rules__check"><input id="ruleAutoFix" type="checkbox" checked> Auto-fix on apply</label>
+          <button class="btn btn--primary" id="ruleAddBtn" type="submit">Add rule</button>
+          <button class="btn btn--ghost" id="ruleCancelBtn" type="button" hidden>Cancel</button>
+        </div>
+        <p class="rules__status" id="ruleStatus" role="status" aria-live="polite"></p>
+      </form>
+
+      <ul class="rules__list" id="rulesList">
+        {{{rules_html}}}
+      </ul>
+    </main>
+
+    <script>
+      (function() {
+        var btn = document.querySelector('.topbar__avatar');
+        var dd = document.querySelector('.topbar__dropdown');
+        if (!btn || !dd) return;
+        btn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          var open = !dd.hidden;
+          dd.hidden = open;
+          btn.setAttribute('aria-expanded', String(!open));
+        });
+        document.addEventListener('click', function() {
+          dd.hidden = true;
+          btn.setAttribute('aria-expanded', 'false');
+        });
+        dd.addEventListener('click', function(e) { e.stopPropagation(); });
+      })();
+    </script>
+    <script type="module" src="/assets/js/blazing-background.js"></script>
+    <script type="module" src="/assets/js/rules.js"></script>
+  </body>
+</html>

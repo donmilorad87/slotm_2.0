@@ -71,6 +71,14 @@ export class AppConfig {
   readonly maxUploadSize: number;
   readonly allowedMimeTypes: Set<string>;
 
+  readonly complianceUploadsDir: string;
+  readonly maxPptxUploadSize: number;
+  readonly allowedPptxMimeTypes: Set<string>;
+  readonly claudeOAuthToken: string;
+  readonly claudeCliTimeoutMs: number;
+  readonly claudeModel: string;
+  readonly guidelineSeedPath: string;
+
   constructor(env: AppEnv, distDir: string) {
     this.port = Number(process.env.PORT || 4300);
     this.host = process.env.HOST || "0.0.0.0";
@@ -113,6 +121,17 @@ export class AppConfig {
 
     this.maxUploadSize = 2 * 1024 * 1024;
     this.allowedMimeTypes = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
+
+    this.complianceUploadsDir = path.join(this.uploadsDir, "compliance");
+    this.maxPptxUploadSize = 30 * 1024 * 1024;
+    this.allowedPptxMimeTypes = new Set([
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "application/octet-stream",
+    ]);
+    this.claudeOAuthToken = env.CLAUDE_CODE_OAUTH_TOKEN;
+    this.claudeCliTimeoutMs = 60000;
+    this.claudeModel = env.CLAUDE_MODEL;
+    this.guidelineSeedPath = path.join(distDir, "assets", "seed", "acme-brand-guidelines.md");
 
     if (!env.JWT_SECRET) {
       console.warn("[slotm] JWT_SECRET is not set; using development fallback secret");

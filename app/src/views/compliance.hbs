@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{title}}</title>
+    <link rel="icon" type="image/gif" href="/assets/images/blazingSun.gif">
+    <link rel="stylesheet" href="/assets/css/main.css">
+  </head>
+  <body class="theme-blazing-sun">
+    <canvas id="space" aria-hidden="true"></canvas>
+    <header class="topbar">
+      <div class="topbar__left">
+        <a class="blazing-sun-logo" href="/" aria-label="Blazing Sun home">
+          <img style="height: 4em" src="/assets/images/blazingSun.gif" alt="Blazing Sun logo">
+        </a>
+      </div>
+      <nav class="topbar__right">
+        <a href="/games">Games</a>
+        <a href="/compliance" aria-current="page">Brand Check</a>
+        <div class="topbar__profile">
+          <button class="topbar__avatar" type="button" aria-label="Profile menu" aria-haspopup="true" aria-expanded="false">
+            {{#if user_profile_picture}}
+              <img src="{{user_profile_picture}}" alt="Profile">
+            {{else}}
+              <span class="topbar__avatar-initials">{{user_initials}}</span>
+            {{/if}}
+          </button>
+          <div class="topbar__dropdown" hidden>
+            <a href="/profile">Profile</a>
+            <a href="/wallet">Wallet</a>
+            <a href="/logout">Logout</a>
+          </div>
+        </div>
+      </nav>
+    </header>
+
+    <main class="compliance" data-max-mb="{{max_upload_mb}}">
+      <div class="compliance__head">
+        <h1>Brand Compliance Check</h1>
+        <span class="compliance__head-links">
+          <a class="compliance__guidelines-link" href="/compliance/history">My uploads</a>
+          <a class="compliance__guidelines-link" href="/rules">Deterministic rules</a>
+          <a class="compliance__guidelines-link" href="/guidelines">Edit guidelines &rarr;</a>
+        </span>
+      </div>
+
+      <!-- Upload -->
+      <section class="compliance__upload" id="cmpUpload" aria-label="Upload a presentation">
+        <label class="compliance__dropzone" id="cmpDrop">
+          <input type="file" id="cmpFile" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation" hidden>
+          <span class="compliance__dropzone-icon" aria-hidden="true">&#8682;</span>
+          <span class="compliance__dropzone-text">Drop a <strong>.pptx</strong> here, or click to browse</span>
+          <span class="compliance__dropzone-hint">Max {{max_upload_mb}} MB &middot; PowerPoint only</span>
+        </label>
+        <p class="compliance__filename" id="cmpFilename" hidden></p>
+      </section>
+
+      <!-- Controls -->
+      <section class="compliance__controls">
+        <button class="btn btn--primary" id="cmpRunBtn" type="button" disabled>Run Brand Check</button>
+        <span class="status-chip status-chip--checking" id="cmpClaudeChip" role="status" aria-live="polite">
+          <span class="status-chip__dot" aria-hidden="true"></span>
+          <span class="status-chip__label">Checking Claude&hellip;</span>
+        </span>
+      </section>
+
+      <!-- Progress -->
+      <section class="compliance__progress" id="cmpProgress" aria-live="polite" hidden>
+        <ol class="compliance__steps">
+          <li class="compliance__step" data-step="parsing">Parsing</li>
+          <li class="compliance__step" data-step="deterministic">Brand rules</li>
+          <li class="compliance__step" data-step="ai">AI review</li>
+          <li class="compliance__step" data-step="rendering">Rendering</li>
+        </ol>
+        <p class="compliance__progress-label" id="cmpProgressLabel">Starting&hellip;</p>
+      </section>
+
+      <p class="flash-msg" id="cmpError" role="alert" hidden></p>
+
+      <!-- Summary -->
+      <section class="compliance__summary" id="cmpSummary" hidden>
+        <div class="compliance__score" id="cmpScore" aria-label="Compliance score">
+          <span class="compliance__score-num" id="cmpScoreNum">--</span>
+          <span class="compliance__score-cap">score</span>
+        </div>
+        <div class="compliance__counts" aria-live="polite">
+          <span class="compliance__count"><b id="cmpTotal">0</b> flags</span>
+          <span class="compliance__count compliance__count--ok"><b id="cmpAccepted">0</b> accepted</span>
+          <span class="compliance__count compliance__count--muted"><b id="cmpRejected">0</b> rejected</span>
+          <span class="compliance__count"><b id="cmpOpen">0</b> open</span>
+        </div>
+        <span class="compliance__ai-banner" id="cmpAiBanner" role="status" aria-live="polite" hidden></span>
+        <div class="compliance__filters" role="group" aria-label="Filters">
+          <button class="compliance__filter compliance__filter--active" data-sev="error" aria-pressed="true">Critical</button>
+          <button class="compliance__filter compliance__filter--active" data-sev="warning" aria-pressed="true">High</button>
+          <button class="compliance__filter" data-sev="info" aria-pressed="false">Low</button>
+          <button class="compliance__filter compliance__filter--active" data-hide-resolved aria-pressed="true">Hide resolved</button>
+          <button class="btn btn--ghost compliance__bulk" id="cmpAcceptAll" type="button">Accept all</button>
+          <button class="btn btn--ghost compliance__bulk" id="cmpRescan" type="button" title="Re-run the AI judgment pass against the current guidelines">↻ Re-scan with AI</button>
+        </div>
+      </section>
+
+      <!-- Review: flags on top, full-width slide preview below, thumbnails under it -->
+      <section class="compliance__review" id="cmpReview" hidden>
+        <div class="compliance__flags" id="cmpFlags" aria-label="Flags for the current slide"></div>
+        <div class="compliance__stage">
+          <div class="compliance__nav">
+            <div class="compliance__nav-arrows">
+              <button class="btn btn--ghost" id="cmpPrev" type="button" aria-label="Previous slide">&lsaquo; Prev</button>
+              <span class="compliance__slide-label" id="cmpSlideLabel">Slide 1</span>
+              <button class="btn btn--ghost" id="cmpNext" type="button" aria-label="Next slide">Next &rsaquo;</button>
+            </div>
+            <div class="compliance__versions" role="group" aria-label="Preview version">
+              <button class="compliance__version compliance__version--active" data-ver="annotated" aria-pressed="true">Annotated</button>
+              <button class="compliance__version" data-ver="original" aria-pressed="false" disabled>Original</button>
+              <button class="compliance__version" data-ver="corrected" aria-pressed="false" disabled>Corrected</button>
+            </div>
+          </div>
+          <div class="compliance__stage-img" id="cmpStageImg">
+            <img id="cmpSlideImg" alt="" hidden>
+            <p class="compliance__no-image" id="cmpNoImage" hidden>This preview is still rendering or unavailable; flags are listed above.</p>
+          </div>
+          <div class="compliance__thumbs" id="cmpThumbs" role="tablist" aria-label="Slides"></div>
+        </div>
+      </section>
+
+      <!-- Output -->
+      <section class="compliance__output" id="cmpOutput" hidden>
+        <button class="btn btn--primary" id="cmpApplyBtn" type="button">Apply accepted fixes &amp; build corrected PPTX</button>
+        <span class="compliance__apply-status" id="cmpApplyStatus" role="status" aria-live="polite" hidden>
+          <span class="compliance__spinner" aria-hidden="true"></span>
+          <span id="cmpApplyStatusText">Applying…</span>
+        </span>
+        <div class="compliance__downloads">
+          <a class="btn btn--ghost" id="cmpDlOriginal" href="#" hidden>Original</a>
+          <a class="btn btn--ghost" id="cmpDlPreview" href="#" hidden>Annotated preview</a>
+          <a class="btn btn--ghost" id="cmpDlCorrected" href="#" hidden>Corrected</a>
+        </div>
+      </section>
+
+      <div class="compliance__toast" id="cmpToast" role="status" aria-live="assertive" hidden></div>
+    </main>
+
+    <script>
+      (function() {
+        var btn = document.querySelector('.topbar__avatar');
+        var dd = document.querySelector('.topbar__dropdown');
+        if (!btn || !dd) return;
+        btn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          var open = !dd.hidden;
+          dd.hidden = open;
+          btn.setAttribute('aria-expanded', String(!open));
+        });
+        document.addEventListener('click', function() {
+          dd.hidden = true;
+          btn.setAttribute('aria-expanded', 'false');
+        });
+        dd.addEventListener('click', function(e) { e.stopPropagation(); });
+      })();
+    </script>
+    <script type="module" src="/assets/js/blazing-background.js"></script>
+    <script type="module" src="/assets/js/compliance.js"></script>
+  </body>
+</html>
