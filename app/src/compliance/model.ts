@@ -51,13 +51,20 @@ export interface ParsedTable {
 export interface ParsedShape {
   /** Deterministic order among drawable shapes in the slide's spTree. */
   shapeIndex: number;
-  kind: "text" | "table" | "other";
+  kind: "text" | "table" | "chart" | "diagram" | "group" | "other";
   /** Placeholder type from <p:ph type="..."> — "title"|"ctrTitle"|"body"|"subTitle"|… or null. */
   placeholder: string | null;
   bbox: BBoxEmu | null;
   text: string;
   paragraphs: ParsedParagraph[];
   table: ParsedTable | null;
+  /**
+   * Whether this shape's text lives directly in the slide and can be edited via
+   * FixOps. False for text pulled from a separate part (chart/SmartArt) or a
+   * nested group — those are surfaced read-only, so findings on them are
+   * flag-only (never auto-fixed).
+   */
+  editable: boolean;
 }
 
 export interface ParsedSlide {

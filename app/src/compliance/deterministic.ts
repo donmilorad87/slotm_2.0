@@ -49,6 +49,23 @@ function runsInScope(deck: ParsedDeck, slideIndex: number, scope: string): RunRe
           });
         }
       }
+    } else if (
+      (shape.kind === "chart" || shape.kind === "diagram" || shape.kind === "group") &&
+      scope === "any"
+    ) {
+      // Read-only text from a chart/SmartArt part or a nested group. Only text
+      // rules (forbidden_text) can match — font rules skip these because the
+      // synthesized runs carry no size/color/typeface. makeFlag forces them
+      // flag-only via shape.editable === false.
+      for (const para of shape.paragraphs) {
+        for (const run of para.runs) {
+          out.push({
+            run,
+            shape,
+            addr: { slideIndex, shapeIndex: shape.shapeIndex, paraIndex: run.paraIndex, runIndex: run.runIndex },
+          });
+        }
+      }
     } else if (shape.kind === "table" && shape.table && scope === "any") {
       for (const row of shape.table.rows) {
         for (const cell of row.cells) {
@@ -80,7 +97,10 @@ function makeFlag(
   message: string,
   fixOps: FixOp[],
 ): FlagDraft {
-  const autoFixable = rule.autoFix && fixOps.length > 0;
+  // Text pulled from a separate part (chart/SmartArt) or a nested group can't be
+  // edited via FixOps addressed against the slide, so such findings are flag-only.
+  const effectiveFixOps = ref.shape.editable ? fixOps : [];
+  const autoFixable = rule.autoFix && effectiveFixOps.length > 0;
   return {
     slideIndex,
     ruleId: `det_${rule.ruleType}_${rule.id}`,
@@ -89,13 +109,25 @@ function makeFlag(
     message: rule.name ? `${rule.name}: ${message}` : message,
     ...(autoFixable ? { suggestedFix: "Auto-fixable on apply." } : {}),
     autoFixable,
-    fixOps: rule.autoFix ? fixOps : [],
+    fixOps: rule.autoFix ? effectiveFixOps : [],
     location: {
       shapeIndex: ref.shape.shapeIndex,
       textSnippet: ref.run.text.trim().slice(0, 80) || ref.shape.text.slice(0, 80),
       ...(ref.shape.bbox ? { bboxEmu: ref.shape.bbox } : {}),
     },
-    dedupeKey: dedupeKey(["det", rule.id, slideIndex, ref.addr.shapeIndex, ref.addr.paraIndex, ref.addr.runIndex]),
+    // Must include row/cell so the same run position in different table cells
+    // (or repeated matches) yields distinct keys — otherwise the unique
+    // (analysis_set_id, dedupe_key) insert collides.
+    dedupeKey: dedupeKey([
+      "det",
+      rule.id,
+      slideIndex,
+      ref.addr.shapeIndex,
+      ref.addr.rowIndex ?? "-",
+      ref.addr.cellIndex ?? "-",
+      ref.addr.paraIndex,
+      ref.addr.runIndex,
+    ]),
   };
 }
 
@@ -146,6 +178,16 @@ function evalRuleOnSlide(rule: DeterministicRuleRecord, deck: ParsedDeck, slideI
         flags.push(
           makeFlag(rule, slideIndex, ref, `Contains forbidden text "${needle}".`, [
             { op: "setRunText", addr: ref.addr, find: needle, replace: "" },
+          ]),
+        );
+      }
+    } else if (rule.ruleType === "search_replace" && rule.textValue) {
+      const needle = rule.textValue;
+      const replacement = rule.replaceValue ?? "";
+      if (needle.length > 0 && run.text.includes(needle)) {
+        flags.push(
+          makeFlag(rule, slideIndex, ref, `Replace "${needle}" with "${replacement}".`, [
+            { op: "setRunText", addr: ref.addr, find: needle, replace: replacement },
           ]),
         );
       }

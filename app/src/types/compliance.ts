@@ -138,6 +138,8 @@ export interface DeterministicRuleInput {
   scope: string;
   numberValue: number | null;
   textValue: string | null;
+  /** Replacement text for search_replace rules; null for all other types. */
+  replaceValue: string | null;
   severity: string;
   autoFix: boolean;
   enabled: boolean;

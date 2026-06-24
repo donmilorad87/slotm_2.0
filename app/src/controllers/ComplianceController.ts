@@ -20,6 +20,7 @@ const RULE_TYPE_LABELS: Record<string, string> = {
   font_color: "Font color",
   font_family: "Font family",
   forbidden_text: "Forbidden text",
+  search_replace: "Search & replace",
 };
 
 export class ComplianceController extends BaseController {
@@ -102,6 +103,8 @@ export class ComplianceController extends BaseController {
         return `${scope} must use font “${rule.textValue}”`;
       case "forbidden_text":
         return `must not contain “${rule.textValue}”`;
+      case "search_replace":
+        return `replace “${rule.textValue}” → “${rule.replaceValue ?? ""}”`;
       default:
         return rule.ruleType;
     }
@@ -116,12 +119,17 @@ export class ComplianceController extends BaseController {
         const type = RULE_TYPE_LABELS[r.ruleType] ?? r.ruleType;
         const fix = r.autoFix ? "auto-fix" : "flag only";
         const esc = ComplianceController.escapeHtml;
+        // Show the user-given name (what they edit) as the description; fall back
+        // to the generated constraint summary, which is also kept as a tooltip.
+        const summary = ComplianceController.ruleSummary(r);
+        const desc = r.name && r.name.trim().length > 0 ? r.name : summary;
         const data = [
           `data-id="${r.id}"`,
           `data-rule-type="${esc(r.ruleType)}"`,
           `data-scope="${esc(r.scope)}"`,
           `data-number="${r.numberValue ?? ""}"`,
           `data-text="${esc(r.textValue ?? "")}"`,
+          `data-replace="${esc(r.replaceValue ?? "")}"`,
           `data-severity="${esc(r.severity)}"`,
           `data-autofix="${r.autoFix ? "1" : "0"}"`,
           `data-name="${esc(r.name ?? "")}"`,
@@ -129,7 +137,7 @@ export class ComplianceController extends BaseController {
         return `
           <li class="rules__item" ${data}>
             <span class="rules__type">${esc(type)}</span>
-            <span class="rules__desc">${esc(ComplianceController.ruleSummary(r))}</span>
+            <span class="rules__desc" title="${esc(summary)}">${esc(desc)}</span>
             <span class="rules__tag rules__tag--${r.severity}">${esc(r.severity)}</span>
             <span class="rules__tag">${fix}</span>
             <button class="btn btn--ghost rules__edit" type="button" data-id="${r.id}">Edit</button>
@@ -264,6 +272,19 @@ export class ComplianceController extends BaseController {
         res.status(200).json({ success: true, data: { setId } });
       } catch (error: unknown) {
         res.status(400).json({ success: false, message: toErrorMessage(error, "Re-scan failed") });
+      }
+    });
+  }
+
+  get handleStopAi(): RequestHandler {
+    return this.jsonHandler(async (req: Request, res: Response) => {
+      try {
+        const auth = this.requireAuthUser(req);
+        const setId = this.toInt(req.params.setId);
+        await this.complianceService.stopAi(auth.user.id, setId);
+        res.status(200).json({ success: true, data: { setId } });
+      } catch (error: unknown) {
+        res.status(400).json({ success: false, message: toErrorMessage(error, "Stop failed") });
       }
     });
   }

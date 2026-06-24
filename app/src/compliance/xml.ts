@@ -120,6 +120,42 @@ export function gatherText(node: XmlNode): string {
   return out;
 }
 
+/**
+ * Collect human-readable label text from a chart or diagram XML subtree.
+ * Gathers every `<a:t>` (rich text: titles, axis titles, data labels) and every
+ * string `<c:v>` (category / series labels), skipping numeric caches so a
+ * chart's raw data values don't flood the result. Formula refs (`<c:f>`) are
+ * ignored since they carry no human-readable text.
+ */
+export function collectLabelText(root: XmlNode): string[] {
+  const NUMERIC = new Set(["c:numRef", "c:numCache", "c:numLit"]);
+  const out: string[] = [];
+  const walk = (node: XmlNode, inNumeric: boolean): void => {
+    for (const child of childrenOf(node)) {
+      const tag = nodeTag(child);
+      if (tag === "a:t") {
+        const value = gatherText(child).trim();
+        if (value) {
+          out.push(value);
+        }
+        continue;
+      }
+      if (tag === "c:v") {
+        if (!inNumeric) {
+          const value = gatherText(child).trim();
+          if (value) {
+            out.push(value);
+          }
+        }
+        continue;
+      }
+      walk(child, inNumeric || NUMERIC.has(tag));
+    }
+  };
+  walk(root, false);
+  return out;
+}
+
 /** Make a `{ "#text": value }` node. */
 export function textNode(value: string): XmlNode {
   return { [TEXT_KEY]: value };

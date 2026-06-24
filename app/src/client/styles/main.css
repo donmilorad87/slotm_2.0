@@ -2,6 +2,15 @@
   box-sizing: border-box;
 }
 
+/*
+ * The `hidden` attribute must always win. An element with an explicit
+ * `display` (e.g. inline-flex) otherwise ignores `hidden`, so toggling
+ * el.hidden in JS has no visual effect. This reset makes el.hidden reliable.
+ */
+[hidden] {
+  display: none !important;
+}
+
 html, body {
   background: #292c2d;
 }
@@ -328,6 +337,8 @@ a {
   border: 1px solid var(--c-border);
   border-radius: 0.9rem;
   margin: 1rem 1rem 0;
+  position: relative;
+  z-index: 99;
 }
 
 .topbar__left {
@@ -1738,6 +1749,17 @@ input {
   padding: 0.2rem 0.6rem;
   border: 1px dashed #c084fc;
   border-radius: 999px;
+}
+.compliance__ai-stop {
+  font-size: 0.82rem;
+  padding: 0.2rem 0.7rem;
+  border-radius: 999px;
+  color: #f87171;
+  border-color: #f87171;
+}
+.compliance__ai-stop:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 .compliance__filters {
   display: flex;

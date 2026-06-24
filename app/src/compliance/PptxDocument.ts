@@ -16,7 +16,9 @@ import type {
 } from "./model.js";
 import {
   allChildren,
+  asNodeArray,
   childrenOf,
+  collectLabelText,
   descend,
   elementNode,
   firstChild,
@@ -73,6 +75,8 @@ export class PptxDocument {
     private readonly themeFonts: { major: string | null; minor: string | null },
     private readonly parser: XMLParser,
     private readonly builder: XMLBuilder,
+    /** Per-slide label text from referenced chart/diagram parts, keyed by relId. */
+    private readonly partTextBySlide: Map<number, Map<string, string[]>>,
   ) {}
 
   static async load(buffer: Buffer): Promise<PptxDocument> {
@@ -89,7 +93,96 @@ export class PptxDocument {
 
     const slideSize = await PptxDocument.readSlideSize(zip, parser);
     const themeFonts = await PptxDocument.readThemeFonts(zip, parser);
-    return new PptxDocument(zip, slideEntryNames, slideTrees, slideSize, themeFonts, parser, builder);
+    const partTextBySlide = await PptxDocument.extractPartText(zip, parser, slideEntryNames);
+    return new PptxDocument(
+      zip,
+      slideEntryNames,
+      slideTrees,
+      slideSize,
+      themeFonts,
+      parser,
+      builder,
+      partTextBySlide,
+    );
+  }
+
+  /**
+   * Pre-reads each slide's chart and SmartArt-diagram parts (they live outside
+   * the slide XML) and caches their label text keyed by the slide's relId, so
+   * the synchronous slide parse can surface it. Failures are swallowed per part
+   * — a malformed chart must not break analysis of the rest of the deck.
+   */
+  private static async extractPartText(
+    zip: JSZip,
+    parser: XMLParser,
+    slideEntryNames: string[],
+  ): Promise<Map<number, Map<string, string[]>>> {
+    const bySlide = new Map<number, Map<string, string[]>>();
+    for (let slideIndex = 0; slideIndex < slideEntryNames.length; slideIndex += 1) {
+      const name = slideEntryNames[slideIndex];
+      if (!name) {
+        continue;
+      }
+      const byRel = new Map<string, string[]>();
+      bySlide.set(slideIndex, byRel);
+      const slash = name.lastIndexOf("/");
+      const dir = slash >= 0 ? name.slice(0, slash) : "";
+      const file = slash >= 0 ? name.slice(slash + 1) : name;
+      const relsPath = `${dir}/_rels/${file}.rels`;
+      const relsFile = zip.file(relsPath);
+      if (!relsFile) {
+        continue;
+      }
+      const relsRoot = firstChild(parser.parse(await relsFile.async("string")), "Relationships");
+      if (!relsRoot) {
+        continue;
+      }
+      for (const rel of allChildren(childrenOf(relsRoot), "Relationship")) {
+        const type = getAttr(rel, "Type") ?? "";
+        const id = getAttr(rel, "Id");
+        const target = getAttr(rel, "Target");
+        if (!id || !target) {
+          continue;
+        }
+        // Only the parts that actually carry slide-visible label text.
+        if (!type.endsWith("/chart") && !type.endsWith("/diagramData")) {
+          continue;
+        }
+        const partPath = PptxDocument.resolvePartPath(name, target);
+        const partFile = zip.file(partPath);
+        if (!partFile) {
+          continue;
+        }
+        try {
+          const tree = parser.parse(await partFile.async("string"));
+          const lines: string[] = [];
+          for (const node of asNodeArray(tree)) {
+            lines.push(...collectLabelText(node));
+          }
+          byRel.set(id, lines);
+        } catch {
+          // ignore an unreadable/garbled part
+        }
+      }
+    }
+    return bySlide;
+  }
+
+  /** Resolve an OPC relationship Target (relative to a part) to a zip entry path. */
+  private static resolvePartPath(basePart: string, target: string): string {
+    if (target.startsWith("/")) {
+      return target.replace(/^\/+/, "");
+    }
+    const baseDir = basePart.includes("/") ? basePart.slice(0, basePart.lastIndexOf("/")) : "";
+    const segments = baseDir.length > 0 ? baseDir.split("/") : [];
+    for (const seg of target.split("/")) {
+      if (seg === "..") {
+        segments.pop();
+      } else if (seg !== "." && seg !== "") {
+        segments.push(seg);
+      }
+    }
+    return segments.join("/");
   }
 
   private static async readEntry(zip: JSZip, name: string): Promise<string> {
@@ -357,23 +450,139 @@ export class PptxDocument {
     return getAttr(ph, "type") ?? "body";
   }
 
+  /** Read-only shape (chart/diagram/group): text exists but FixOps can't edit it. */
+  private static readonlyShape(
+    shapeIndex: number,
+    kind: "chart" | "diagram" | "group",
+    placeholder: string | null,
+    bbox: BBoxEmu | null,
+    lines: readonly string[],
+  ): ParsedShape {
+    const paragraphs: ParsedParagraph[] = lines.map((line, paraIndex) => ({
+      runs: [
+        {
+          text: line,
+          sizeHundredths: null,
+          bold: false,
+          italic: false,
+          colorHex: null,
+          typeface: null,
+          paraIndex,
+          runIndex: 0,
+        },
+      ],
+      text: line,
+    }));
+    return {
+      shapeIndex,
+      kind,
+      placeholder,
+      bbox,
+      text: lines.join("\n"),
+      paragraphs,
+      table: null,
+      editable: false,
+    };
+  }
+
+  /** Chart/diagram label text for a graphicFrame, looked up by its relId. */
+  private static graphicFramePartText(
+    frame: XmlNode,
+    partText: Map<string, string[]>,
+  ): { kind: "chart" | "diagram"; lines: string[] } | null {
+    const gData = descend(frame, ["a:graphic", "a:graphicData"]);
+    if (!gData) {
+      return null;
+    }
+    const uri = getAttr(gData, "uri") ?? "";
+    if (uri.includes("/chart")) {
+      const chart = firstChild(childrenOf(gData), "c:chart");
+      const rid = chart ? getAttr(chart, "r:id") : undefined;
+      return { kind: "chart", lines: rid ? partText.get(rid) ?? [] : [] };
+    }
+    if (uri.includes("/diagram")) {
+      const rel = firstChild(childrenOf(gData), "dgm:relIds");
+      const rid = rel ? getAttr(rel, "r:dm") : undefined;
+      return { kind: "diagram", lines: rid ? partText.get(rid) ?? [] : [] };
+    }
+    return null;
+  }
+
+  /** Recursively gather text from a group's nested shapes, tables, and charts. */
+  private static collectGroupText(group: XmlNode, partText: Map<string, string[]>): string[] {
+    const out: string[] = [];
+    const walk = (node: XmlNode): void => {
+      for (const child of childrenOf(node)) {
+        const tag = nodeTag(child);
+        if (tag === "p:sp" || tag === "p:cxnSp") {
+          for (const para of PptxDocument.paragraphsOf(child)) {
+            if (para.text.trim().length > 0) {
+              out.push(para.text);
+            }
+          }
+        } else if (tag === "p:graphicFrame") {
+          const tbl = PptxDocument.tableOf(child);
+          if (tbl) {
+            for (const row of PptxDocument.parseTable(tbl).rows) {
+              if (row.text.trim().length > 0) {
+                out.push(row.text);
+              }
+            }
+          } else {
+            const part = PptxDocument.graphicFramePartText(child, partText);
+            if (part) {
+              out.push(...part.lines);
+            }
+          }
+        } else if (tag === "p:grpSp") {
+          walk(child);
+        }
+      }
+    };
+    walk(group);
+    return out;
+  }
+
   private parseSlide(slideIndex: number): ParsedSlide {
     const shapeNodes = this.shapeNodes(slideIndex);
+    const partText = this.partTextBySlide.get(slideIndex) ?? new Map<string, string[]>();
     const shapes: ParsedShape[] = shapeNodes.map((node, shapeIndex) => {
-      const tbl = PptxDocument.tableOf(node);
+      const tag = nodeTag(node);
       const bbox = PptxDocument.bboxOf(node);
       const placeholder = PptxDocument.placeholderOf(node);
+
+      // Charts / SmartArt diagrams: a graphicFrame whose text lives in a separate
+      // part. Surface it read-only so rules and the AI can see it.
+      if (tag === "p:graphicFrame") {
+        const tbl = PptxDocument.tableOf(node);
+        if (!tbl) {
+          const part = PptxDocument.graphicFramePartText(node, partText);
+          if (part) {
+            return PptxDocument.readonlyShape(shapeIndex, part.kind, placeholder, bbox, part.lines);
+          }
+        }
+      }
+
+      // Grouped shapes: never editable in place here, but their text matters.
+      if (tag === "p:grpSp") {
+        const lines = PptxDocument.collectGroupText(node, partText);
+        if (lines.length > 0) {
+          return PptxDocument.readonlyShape(shapeIndex, "group", placeholder, bbox, lines);
+        }
+      }
+
+      const tbl = PptxDocument.tableOf(node);
       if (tbl) {
         const table = PptxDocument.parseTable(tbl);
         const text = table.rows.map((r) => r.text).join(" · ");
-        return { shapeIndex, kind: "table", placeholder, bbox, text, paragraphs: [], table };
+        return { shapeIndex, kind: "table", placeholder, bbox, text, paragraphs: [], table, editable: true };
       }
       const paragraphs = PptxDocument.paragraphsOf(node);
       if (paragraphs.length > 0) {
         const text = paragraphs.map((p) => p.text).join("\n");
-        return { shapeIndex, kind: "text", placeholder, bbox, text, paragraphs, table: null };
+        return { shapeIndex, kind: "text", placeholder, bbox, text, paragraphs, table: null, editable: true };
       }
-      return { shapeIndex, kind: "other", placeholder, bbox, text: "", paragraphs: [], table: null };
+      return { shapeIndex, kind: "other", placeholder, bbox, text: "", paragraphs: [], table: null, editable: true };
     });
     const text = shapes
       .map((s) => s.text)

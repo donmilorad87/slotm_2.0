@@ -90,6 +90,7 @@ async function start(): Promise<void> {
     config,
   );
   await guidelineService.ensureSeeded();
+  await deterministicRuleService.ensureSeeded();
 
   const {
     optionalJwt,

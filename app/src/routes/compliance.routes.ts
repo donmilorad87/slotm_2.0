@@ -12,6 +12,7 @@ interface ComplianceRouteDeps {
   handleRejectFlag: RequestHandler;
   handleApply: RequestHandler;
   handleRescanAi: RequestHandler;
+  handleStopAi: RequestHandler;
   handleClaudeStatus: RequestHandler;
   handleListSets: RequestHandler;
   handleDeleteSet: RequestHandler;
@@ -27,6 +28,7 @@ export function buildComplianceRoutes({
   handleRejectFlag,
   handleApply,
   handleRescanAi,
+  handleStopAi,
   handleClaudeStatus,
   handleListSets,
   handleDeleteSet,
@@ -42,6 +44,7 @@ export function buildComplianceRoutes({
   router.post("/:setId/analyze", requireJwt, handleAnalyze);
   router.post("/:setId/apply", requireJwt, handleApply);
   router.post("/:setId/rescan-ai", requireJwt, handleRescanAi);
+  router.post("/:setId/stop-ai", requireJwt, handleStopAi);
   router.post("/:setId/delete", requireJwt, handleDeleteSet);
   router.get("/:setId", requireJwt, handleGetReview);
 

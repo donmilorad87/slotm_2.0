@@ -94,7 +94,12 @@ export class ComplianceRepository implements IComplianceRepository {
   async replaceFlags(setId: number, drafts: readonly FlagDraft[]): Promise<void> {
     await this.prisma.$transaction([
       this.prisma.flag.deleteMany({ where: { analysisSetId: setId } }),
-      this.prisma.flag.createMany({ data: ComplianceRepository.toRows(setId, drafts) }),
+      // skipDuplicates guards the unique (analysis_set_id, dedupe_key) index so a
+      // dedupe-key collision drops the dupe instead of failing the whole analysis.
+      this.prisma.flag.createMany({
+        data: ComplianceRepository.toRows(setId, drafts),
+        skipDuplicates: true,
+      }),
     ]);
   }
 

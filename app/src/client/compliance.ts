@@ -294,14 +294,45 @@ async function loadReview(): Promise<void> {
 
 function setAiBanner(set: ReviewSet): void {
   const el = $<HTMLElement>("cmpAiBanner");
-  if (!el) {
+  const stop = $<HTMLButtonElement>("cmpStopAi");
+  if (el) {
+    if (set.aiPending) {
+      el.textContent = `⏳ ${set.progressDetail || "AI review running…"}`;
+      el.hidden = false;
+    } else {
+      el.hidden = true;
+    }
+  }
+  if (stop) {
+    stop.hidden = !set.aiPending;
+    // Re-enable once a new pass is running (e.g. after a re-scan).
+    if (set.aiPending) {
+      stop.disabled = false;
+    }
+  }
+}
+
+/** Asks the server to stop the in-flight AI pass; flags found so far are kept. */
+async function stopAi(): Promise<void> {
+  if (!state.setId) {
     return;
   }
-  if (set.aiPending) {
-    el.textContent = `⏳ ${set.progressDetail || "AI review running…"}`;
-    el.hidden = false;
-  } else {
-    el.hidden = true;
+  const stop = $<HTMLButtonElement>("cmpStopAi");
+  if (stop) {
+    stop.disabled = true;
+    stop.textContent = "Stopping…";
+  }
+  try {
+    await postJson(`/api/compliance/${state.setId}/stop-ai`, {});
+  } catch (error: unknown) {
+    showError(error instanceof Error ? error.message : "Could not stop AI review");
+    if (stop) {
+      stop.disabled = false;
+    }
+  } finally {
+    if (stop) {
+      stop.textContent = "■ Stop AI review";
+    }
   }
 }
 
@@ -795,6 +826,7 @@ function init(): void {
   $("cmpRunBtn")?.addEventListener("click", () => void runCheck());
   $("cmpAcceptAll")?.addEventListener("click", () => void acceptAll());
   $("cmpRescan")?.addEventListener("click", () => void rescanAi());
+  $("cmpStopAi")?.addEventListener("click", () => void stopAi());
   $("cmpApplyBtn")?.addEventListener("click", () => void applyFixes());
   void refreshClaude();
   window.setInterval(() => void refreshClaude(), 30000);

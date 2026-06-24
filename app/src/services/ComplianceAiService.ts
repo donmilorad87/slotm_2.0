@@ -3,12 +3,16 @@ import { checkClaudeStatus, ClaudeCliError, runClaudePrint, type ClaudeStatus } 
 import type { FlagDraft, FlagLocation, FlagSeverity, ParsedRun, ParsedShape, ParsedSlide } from "../compliance/model.js";
 import { dedupeKey } from "../compliance/util.js";
 
-const MAX_FINDINGS = 6;
+const MAX_FINDINGS = 12;
 const MIN_CONFIDENCE = 0.6;
-const MAX_SLIDE_DESC = 3500;
-const MAX_SHAPE_TEXT = 240;
-const MAX_TABLE_ROWS = 14;
-const MAX_GUIDELINES = 7000;
+const MAX_SLIDE_DESC = 8000;
+const MAX_SHAPE_TEXT = 400;
+const MAX_TABLE_ROWS = 30;
+// Must comfortably exceed the real guideline length so no rules are dropped from
+// the prompt. The stored guideline is capped at 200k (GuidelineService), and we
+// warn (below) whenever a guideline actually exceeds this, so truncation is never
+// silent. See: "assure every rule is sent to the reviewer".
+const MAX_GUIDELINES = 60000;
 const EMU_PER_INCH = 914400;
 
 interface AiFinding {
@@ -70,6 +74,12 @@ function describeShape(shape: ParsedShape): string {
       .slice(0, MAX_SHAPE_TEXT);
     const styles = runStyles(shape.paragraphs.flatMap((p) => p.runs));
     return `[#${shape.shapeIndex}] TEXT ${pos} "${text}" | fonts: ${styles}`;
+  }
+  if (shape.kind === "chart" || shape.kind === "diagram" || shape.kind === "group") {
+    // Read-only text from a chart/SmartArt part or a nested group. No font info
+    // is available, so only text/terminology/labeling rules apply here.
+    const text = shape.text.replace(/\s+/g, " ").trim().slice(0, MAX_SHAPE_TEXT);
+    return `[#${shape.shapeIndex}] ${shape.kind.toUpperCase()} (labels, read-only) ${pos} "${text}"`;
   }
   return `[#${shape.shapeIndex}] ${shape.kind.toUpperCase()} ${pos}`;
 }
@@ -181,6 +191,11 @@ export class ComplianceAiService {
 
   get enabled(): boolean {
     return this.config.claudeOAuthToken.length > 0;
+  }
+
+  /** Max guideline chars sent per slide; beyond this, rules would be dropped. */
+  get maxGuidelinesChars(): number {
+    return MAX_GUIDELINES;
   }
 
   /**

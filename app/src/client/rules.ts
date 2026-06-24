@@ -9,6 +9,7 @@ const VALUE_HINTS: Record<string, { label: string; placeholder: string }> = {
   font_color: { label: "Required color (hex)", placeholder: "e.g. FF0000" },
   font_family: { label: "Required font", placeholder: "e.g. Calibri" },
   forbidden_text: { label: "Text to forbid", placeholder: "e.g. DRAFT" },
+  search_replace: { label: "Find text", placeholder: "e.g. Percentile" },
 };
 
 const typeSel = byId<HTMLSelectElement>("ruleType");
@@ -16,6 +17,8 @@ const scopeSel = byId<HTMLSelectElement>("ruleScope");
 const sevSel = byId<HTMLSelectElement>("ruleSeverity");
 const valueLabel = byId<HTMLLabelElement>("ruleValueLabel");
 const valueInput = byId<HTMLInputElement>("ruleValue");
+const replaceLabel = byId<HTMLLabelElement>("ruleReplaceLabel");
+const replaceInput = byId<HTMLInputElement>("ruleReplace");
 const nameInput = byId<HTMLInputElement>("ruleName");
 const autoFixInput = byId<HTMLInputElement>("ruleAutoFix");
 const form = byId<HTMLFormElement>("ruleForm");
@@ -34,6 +37,10 @@ function syncValueHint(): void {
     valueLabel.childNodes[0].textContent = `${hint.label} `;
     valueInput.placeholder = hint.placeholder;
   }
+  // The "Replace with" field only applies to search & replace rules.
+  if (replaceLabel) {
+    replaceLabel.hidden = typeSel.value !== "search_replace";
+  }
 }
 
 function resetForm(): void {
@@ -41,6 +48,7 @@ function resetForm(): void {
   if (addBtn) addBtn.textContent = "Add rule";
   if (cancelBtn) cancelBtn.hidden = true;
   if (valueInput) valueInput.value = "";
+  if (replaceInput) replaceInput.value = "";
   if (nameInput) nameInput.value = "";
   if (autoFixInput) autoFixInput.checked = true;
   if (status) status.textContent = "";
@@ -54,6 +62,7 @@ function startEdit(item: HTMLElement): void {
   if (scopeSel) scopeSel.value = d.scope ?? "any";
   if (sevSel) sevSel.value = d.severity ?? "warning";
   if (valueInput) valueInput.value = d.ruleType === "font_size" ? (d.number ?? "") : (d.text ?? "");
+  if (replaceInput) replaceInput.value = d.replace ?? "";
   if (nameInput) nameInput.value = d.name ?? "";
   if (autoFixInput) autoFixInput.checked = d.autofix !== "0";
   if (addBtn) addBtn.textContent = "Update rule";
@@ -81,6 +90,7 @@ form?.addEventListener("submit", async (e) => {
     autoFix: autoFixInput?.checked ?? true,
     numberValue: ruleType === "font_size" ? value : null,
     textValue: ruleType === "font_size" ? null : value,
+    replaceValue: ruleType === "search_replace" ? (replaceInput?.value ?? "") : null,
   };
   if (status) status.textContent = "Saving…";
   try {

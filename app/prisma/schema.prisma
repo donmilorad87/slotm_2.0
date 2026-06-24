@@ -46,12 +46,13 @@ model Guideline {
 
 model DeterministicRule {
   id          Int      @id @default(autoincrement())
-  ruleType    String   @map("rule_type") // font_size | font_color | font_family | forbidden_text
-  scope       String   @default("any") // title | body | any
-  numberValue Int?     @map("number_value") // e.g. font size in pt
-  textValue   String?  @map("text_value") // hex (no #), family name, or forbidden text
-  severity    String   @default("warning")
-  autoFix     Boolean  @default(true) @map("auto_fix")
+  ruleType     String  @map("rule_type") // font_size | font_color | font_family | forbidden_text | search_replace
+  scope        String  @default("any") // title | body | any
+  numberValue  Int?    @map("number_value") // e.g. font size in pt
+  textValue    String? @map("text_value") // hex (no #), family name, forbidden text, or search term
+  replaceValue String? @map("replace_value") // replacement text for search_replace rules
+  severity     String  @default("warning")
+  autoFix      Boolean @default(true) @map("auto_fix")
   enabled     Boolean  @default(true)
   name        String?
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz

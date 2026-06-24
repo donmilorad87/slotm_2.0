@@ -33,6 +33,7 @@ export class DeterministicRuleRepository implements IDeterministicRuleRepository
       scope: row.scope,
       numberValue: row.numberValue,
       textValue: row.textValue,
+      replaceValue: row.replaceValue,
       severity: row.severity,
       autoFix: row.autoFix,
       enabled: row.enabled,

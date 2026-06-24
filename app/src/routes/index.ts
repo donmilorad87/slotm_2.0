@@ -113,6 +113,7 @@ export function registerRoutes(app: Application, deps: RegisterRoutesDeps): void
       handleRejectFlag: deps.complianceController.handleRejectFlag,
       handleApply: deps.complianceController.handleApply,
       handleRescanAi: deps.complianceController.handleRescanAi,
+      handleStopAi: deps.complianceController.handleStopAi,
       handleClaudeStatus: deps.complianceController.handleClaudeStatus,
       handleListSets: deps.complianceController.handleListSets,
       handleDeleteSet: deps.complianceController.handleDeleteSet,

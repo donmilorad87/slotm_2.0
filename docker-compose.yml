@@ -79,6 +79,10 @@ services:
       dockerfile: Dockerfile
     container_name: slotm-nginx
     restart: unless-stopped
+    # Run tini as PID 1 so it (not the nginx master) reaps the healthcheck's
+    # wget children. Without this, nginx-as-PID-1 logs every reap at notice
+    # level: "signal 17 (SIGCHLD) received" / "unknown process N exited".
+    init: true
     depends_on:
       node:
         condition: service_healthy

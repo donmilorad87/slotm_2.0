@@ -23,7 +23,7 @@ import type { ComplianceAiService } from "./ComplianceAiService.js";
 import type { GuidelineService } from "./GuidelineService.js";
 
 const SEVERITY_PENALTY: Record<string, number> = { error: 9, warning: 4, info: 1 };
-const AI_CONCURRENCY = 3;
+const AI_CONCURRENCY = 6;
 // Scan any slide that has text; only truly empty (image-only) slides are skipped.
 const AI_MIN_TEXT = 1;
 
@@ -39,6 +39,8 @@ function publicPathFor(filename: string): string {
 export class ComplianceService {
   /** Ephemeral, in-memory progress detail per analysis set (read by the poll). */
   private readonly progress = new Map<number, string>();
+  /** Set ids for which the user has requested the in-flight AI pass to stop. */
+  private readonly cancelRequested = new Set<number>();
 
   constructor(
     private readonly repo: IComplianceRepository,
@@ -176,6 +178,13 @@ export class ComplianceService {
       return [];
     }
     const guidelinesMarkdown = await this.guidelines.getMarkdown();
+    if (guidelinesMarkdown.length > this.ai.maxGuidelinesChars) {
+      console.warn(
+        `[compliance] Guidelines are ${guidelinesMarkdown.length} chars but only ` +
+          `${this.ai.maxGuidelinesChars} are sent per slide — rules beyond that are NOT checked. ` +
+          `Shorten the guidelines or raise MAX_GUIDELINES.`,
+      );
+    }
     const targets = slides.filter((s) => s.text.trim().length >= AI_MIN_TEXT);
     const total = targets.length;
     if (total === 0) {
@@ -184,10 +193,15 @@ export class ComplianceService {
     const collected: FlagDraft[] = [];
     let done = 0;
     let cursor = 0;
+    // Fresh pass: clear any stale stop request from a previous run.
+    this.cancelRequested.delete(setId);
     this.progress.set(setId, `AI review: 0 of ${total} slides`);
 
     const worker = async (): Promise<void> => {
       for (;;) {
+        if (this.cancelRequested.has(setId)) {
+          return; // user asked to stop — finish with what we have so far
+        }
         const index = cursor;
         cursor += 1;
         const slide = targets[index];
@@ -207,7 +221,24 @@ export class ComplianceService {
 
     const pool = Math.min(AI_CONCURRENCY, total);
     await Promise.all(Array.from({ length: pool }, () => worker()));
+    this.cancelRequested.delete(setId);
     return collected;
+  }
+
+  /**
+   * Requests the in-flight AI pass for a set to stop. Workers stop pulling new
+   * slides; whatever was found so far is kept and the deck finishes normally.
+   */
+  async stopAi(userId: number, setId: number): Promise<void> {
+    const set = await this.repo.getSetForUser(userId, setId);
+    if (!set) {
+      throw new Error("Analysis set not found");
+    }
+    if (!this.progress.has(setId)) {
+      return; // nothing running — no-op
+    }
+    this.cancelRequested.add(setId);
+    this.progress.set(setId, "Stopping AI review…");
   }
 
   /**
@@ -298,12 +329,11 @@ export class ComplianceService {
     const deck = doc.getDeck();
     const flags = await this.repo.getFlags(setId);
     const accepted = flags.filter((f) => f.status === "accepted");
-    const aiTotal = accepted.filter((f) => f.category === "judgment" && f.autoFixable).length;
     const ops: FixOp[] = [];
     let appliedFlags = 0;
     let advisoryAccepted = 0;
-    let aiDone = 0;
-    let guidelinesMarkdown: string | null = null;
+    // Accepted judgment flags whose fix is an AI text rewrite (the slow part).
+    const aiCandidates: { slideIndex: number; shapeIndex: number; message: string; current: string[] }[] = [];
 
     this.progress.set(setId, "Preparing fixes…");
     try {
@@ -314,10 +344,8 @@ export class ComplianceService {
           appliedFlags += 1;
           continue;
         }
-        // AI text fix for accepted judgment flags that target a text shape.
+        // Defer AI text fixes for accepted judgment flags that target a text shape.
         if (flag.category === "judgment" && flag.autoFixable && this.ai.enabled) {
-          aiDone += 1;
-          this.progress.set(setId, `Applying AI fix ${aiDone} of ${aiTotal}…`);
           const loc = ComplianceService.parseLocation(flag.locationJson);
           const slide = deck.slides[flag.slideIndex];
           const shape =
@@ -325,21 +353,61 @@ export class ComplianceService {
               ? slide.shapes.find((s) => s.shapeIndex === loc.shapeIndex)
               : undefined;
           if (shape && shape.kind === "text" && shape.paragraphs.length > 0 && loc.shapeIndex !== undefined) {
-            guidelinesMarkdown = guidelinesMarkdown ?? (await this.guidelines.getMarkdown());
-            const current = shape.paragraphs.map((p) => p.text);
-            const fixed = await this.ai.fixShape(current, flag.message, guidelinesMarkdown);
-            if (fixed.length === current.length && fixed.some((t, i) => t !== current[i])) {
-              ops.push({
-                op: "setShapeParagraphs",
-                addr: { slideIndex: flag.slideIndex, shapeIndex: loc.shapeIndex },
-                paragraphs: fixed,
-              });
-              appliedFlags += 1;
-              continue;
-            }
+            aiCandidates.push({
+              slideIndex: flag.slideIndex,
+              shapeIndex: loc.shapeIndex,
+              message: flag.message,
+              current: shape.paragraphs.map((p) => p.text),
+            });
+            continue;
           }
         }
         advisoryAccepted += 1;
+      }
+
+      // Run the AI rewrites concurrently — sequential sonnet calls made apply drag.
+      if (aiCandidates.length > 0) {
+        const guidelinesMarkdown = await this.guidelines.getMarkdown();
+        const total = aiCandidates.length;
+        const results: (FixOp | null)[] = new Array<FixOp | null>(total).fill(null);
+        let done = 0;
+        let cursor = 0;
+        this.progress.set(setId, `Applying AI fixes: 0 of ${total}…`);
+        const worker = async (): Promise<void> => {
+          for (;;) {
+            const index = cursor;
+            cursor += 1;
+            const cand = aiCandidates[index];
+            if (!cand) {
+              return;
+            }
+            try {
+              const fixed = await this.ai.fixShape(cand.current, cand.message, guidelinesMarkdown);
+              if (fixed.length === cand.current.length && fixed.some((t, j) => t !== cand.current[j])) {
+                results[index] = {
+                  op: "setShapeParagraphs",
+                  addr: { slideIndex: cand.slideIndex, shapeIndex: cand.shapeIndex },
+                  paragraphs: fixed,
+                };
+              }
+            } catch (error: unknown) {
+              const message = error instanceof Error ? error.message : String(error);
+              console.warn(`[compliance] AI fix failed for slide ${cand.slideIndex + 1}: ${message}`);
+            }
+            done += 1;
+            this.progress.set(setId, `Applying AI fixes: ${done} of ${total}…`);
+          }
+        };
+        const pool = Math.min(AI_CONCURRENCY, total);
+        await Promise.all(Array.from({ length: pool }, () => worker()));
+        for (const op of results) {
+          if (op) {
+            ops.push(op);
+            appliedFlags += 1;
+          } else {
+            advisoryAccepted += 1;
+          }
+        }
       }
 
       this.progress.set(setId, "Building corrected deck…");
@@ -349,7 +417,10 @@ export class ComplianceService {
       const out = await doc.toBuffer();
       await fs.writeFile(correctedPath, out);
       await this.addOrReplaceFile(setId, "corrected", correctedName, out.length);
-      this.progress.set(setId, "Rendering corrected slides…");
+      this.progress.set(
+        setId,
+        `Rendering ${deck.slides.length} corrected slide${deck.slides.length === 1 ? "" : "s"}… (this can take a moment)`,
+      );
       await this.renderVersion(setId, correctedPath, `${setId}-corrected`, "corrected", doc.getDeck().slideSize);
       await this.repo.updateSet(setId, { status: "applied" });
       return { correctedUrl: publicPathFor(correctedName), appliedFlags, advisoryAccepted };

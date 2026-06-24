@@ -54,6 +54,7 @@
               <option value="font_color">Font color (hex)</option>
               <option value="font_family">Font family</option>
               <option value="forbidden_text">Forbidden text</option>
+              <option value="search_replace">Search &amp; replace</option>
             </select>
           </label>
           <label>Applies to
@@ -65,6 +66,9 @@
           </label>
           <label id="ruleValueLabel">Required size (pt)
             <input id="ruleValue" type="text" placeholder="e.g. 40">
+          </label>
+          <label id="ruleReplaceLabel" hidden>Replace with
+            <input id="ruleReplace" type="text" placeholder="e.g. %ile">
           </label>
           <label>Severity
             <select id="ruleSeverity">
