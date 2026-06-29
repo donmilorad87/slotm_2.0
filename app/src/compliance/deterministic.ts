@@ -1,6 +1,6 @@
 import type { FixOp, FlagDraft, FlagSeverity, ParsedDeck, ParsedRun, ParsedShape, RunAddress } from "./model.js";
 import type { DeterministicRuleRecord } from "../types/compliance.js";
-import { dedupeKey } from "./util.js";
+import { cellBBoxEmu, dedupeKey } from "./util.js";
 
 const SYMBOL_FONT_RE = /wingdings|webdings|symbol|monotype sorts|marlett/i;
 
@@ -101,6 +101,11 @@ function makeFlag(
   // edited via FixOps addressed against the slide, so such findings are flag-only.
   const effectiveFixOps = ref.shape.editable ? fixOps : [];
   const autoFixable = rule.autoFix && effectiveFixOps.length > 0;
+  // For a table cell, point at the specific cell rather than the whole table.
+  const bboxEmu =
+    ref.shape.bbox && ref.shape.table && ref.addr.rowIndex !== undefined && ref.addr.cellIndex !== undefined
+      ? cellBBoxEmu(ref.shape.bbox, ref.shape.table, ref.addr.rowIndex, ref.addr.cellIndex)
+      : ref.shape.bbox;
   return {
     slideIndex,
     ruleId: `det_${rule.ruleType}_${rule.id}`,
@@ -113,7 +118,7 @@ function makeFlag(
     location: {
       shapeIndex: ref.shape.shapeIndex,
       textSnippet: ref.run.text.trim().slice(0, 80) || ref.shape.text.slice(0, 80),
-      ...(ref.shape.bbox ? { bboxEmu: ref.shape.bbox } : {}),
+      ...(bboxEmu ? { bboxEmu } : {}),
     },
     // Must include row/cell so the same run position in different table cells
     // (or repeated matches) yields distinct keys — otherwise the unique

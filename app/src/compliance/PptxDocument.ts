@@ -417,6 +417,10 @@ export class PptxDocument {
   }
 
   private static parseTable(tbl: XmlNode): ParsedTable {
+    const grid = firstChild(childrenOf(tbl), "a:tblGrid");
+    const colWidthsEmu = grid
+      ? allChildren(childrenOf(grid), "a:gridCol").map((col) => Number(getAttr(col, "w") ?? "0") || 0)
+      : [];
     const rows: ParsedRow[] = allChildren(childrenOf(tbl), "a:tr").map((row, rowIndex) => {
       const cells: ParsedCell[] = allChildren(childrenOf(row), "a:tc").map(
         (cell, cellIndex) => {
@@ -436,9 +440,14 @@ export class PptxDocument {
           };
         },
       );
-      return { rowIndex, cells, text: cells.map((c) => c.text).join(" ").trim() };
+      return {
+        rowIndex,
+        cells,
+        text: cells.map((c) => c.text).join(" ").trim(),
+        heightEmu: Number(getAttr(row, "h") ?? "0") || 0,
+      };
     });
-    return { rows };
+    return { rows, colWidthsEmu };
   }
 
   private static placeholderOf(shape: XmlNode): string | null {

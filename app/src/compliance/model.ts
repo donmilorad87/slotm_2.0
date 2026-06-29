@@ -42,10 +42,14 @@ export interface ParsedRow {
   rowIndex: number;
   cells: ParsedCell[];
   text: string;
+  /** Declared row height in EMU (<a:tr h>), 0 if unspecified. */
+  heightEmu: number;
 }
 
 export interface ParsedTable {
   rows: ParsedRow[];
+  /** Grid column widths in EMU (<a:tblGrid><a:gridCol w>), index = column. */
+  colWidthsEmu: number[];
 }
 
 export interface ParsedShape {

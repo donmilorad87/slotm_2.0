@@ -85,14 +85,21 @@ export function assignMarkerNumbers(flags: readonly MarkerInput[]): Map<string, 
 }
 
 /**
- * Builds a *preview* deck: a numbered marker with an arrow pointing at each
- * flagged region (no captions or highlight boxes). The marker numbers match the
- * numbers shown on the flag cards. Throwaway visualization, never the corrected
- * output.
+ * Builds a *preview* deck: a highlight rectangle over each flagged region plus a
+ * numbered marker with an arrow pointing at it (no caption box). Marker numbers
+ * match the numbers shown on the flag cards. For table-cell findings the region
+ * is the specific cell, not the whole table. Throwaway visualization, never the
+ * corrected output.
  */
 export async function buildPreviewDeck(originalBuffer: Buffer, flags: readonly FlagDraft[]): Promise<Buffer> {
   const doc = await PptxDocument.load(originalBuffer);
   const numbers = assignMarkerNumbers(flags);
+  // Highlights first (behind), then markers on top.
+  for (const flag of flags) {
+    if (flag.location?.bboxEmu) {
+      doc.addHighlight(flag.slideIndex, flag.location.bboxEmu);
+    }
+  }
   for (const flag of flags) {
     const bbox = flag.location?.bboxEmu;
     const number = numbers.get(flag.dedupeKey);
