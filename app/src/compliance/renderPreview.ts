@@ -2,11 +2,8 @@ import { spawn } from "node:child_process";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
-import type { FlagDraft } from "./model.js";
+import type { BBoxEmu, FlagDraft } from "./model.js";
 import { PptxDocument } from "./PptxDocument.js";
-
-const SEVERITY_RANK: Record<string, number> = { error: 0, warning: 1, info: 2 };
-const MAX_CAPTION_LINES = 6;
 
 interface CommandResult {
   code: number | null;
@@ -55,39 +52,54 @@ function runCommand(
   });
 }
 
+/** Minimal shape needed to number a flag's marker. */
+interface MarkerInput {
+  slideIndex: number;
+  dedupeKey: string;
+  location?: { bboxEmu?: BBoxEmu };
+}
+
 /**
- * Builds a *preview* deck: translucent highlight rectangles over flagged regions
- * plus a caption box per slide summarizing the findings. This is a throwaway
- * visualization (never the corrected output), so it can be liberal with overlays.
+ * Assigns each *positioned* flag a 1-based number per slide, ordered top-to-bottom
+ * then left-to-right by its bounding box. Keyed by `dedupeKey` so the annotated
+ * image (built from drafts) and the API DTOs (built from rows) agree on numbers
+ * regardless of array order. Unpositioned flags get no number.
+ */
+export function assignMarkerNumbers(flags: readonly MarkerInput[]): Map<string, number> {
+  const result = new Map<string, number>();
+  const bySlide = new Map<number, { key: string; bbox: BBoxEmu }[]>();
+  for (const flag of flags) {
+    const bbox = flag.location?.bboxEmu;
+    if (!bbox) {
+      continue;
+    }
+    const list = bySlide.get(flag.slideIndex) ?? [];
+    list.push({ key: flag.dedupeKey, bbox });
+    bySlide.set(flag.slideIndex, list);
+  }
+  for (const list of bySlide.values()) {
+    list.sort((a, b) => (a.bbox.y !== b.bbox.y ? a.bbox.y - b.bbox.y : a.bbox.x - b.bbox.x));
+    list.forEach((entry, idx) => result.set(entry.key, idx + 1));
+  }
+  return result;
+}
+
+/**
+ * Builds a *preview* deck: a numbered marker with an arrow pointing at each
+ * flagged region (no captions or highlight boxes). The marker numbers match the
+ * numbers shown on the flag cards. Throwaway visualization, never the corrected
+ * output.
  */
 export async function buildPreviewDeck(originalBuffer: Buffer, flags: readonly FlagDraft[]): Promise<Buffer> {
   const doc = await PptxDocument.load(originalBuffer);
-  const bySlide = new Map<number, FlagDraft[]>();
+  const numbers = assignMarkerNumbers(flags);
   for (const flag of flags) {
-    const list = bySlide.get(flag.slideIndex) ?? [];
-    list.push(flag);
-    bySlide.set(flag.slideIndex, list);
-  }
-
-  for (const [slideIndex, slideFlags] of bySlide) {
-    for (const flag of slideFlags) {
-      if (flag.location?.bboxEmu) {
-        doc.addHighlight(slideIndex, flag.location.bboxEmu);
-      }
+    const bbox = flag.location?.bboxEmu;
+    const number = numbers.get(flag.dedupeKey);
+    if (bbox && number) {
+      doc.addMarker(flag.slideIndex, bbox, number);
     }
-    const sorted = [...slideFlags].sort(
-      (a, b) => (SEVERITY_RANK[a.severity] ?? 9) - (SEVERITY_RANK[b.severity] ?? 9),
-    );
-    const lines: string[] = [`! ${slideFlags.length} brand issue${slideFlags.length === 1 ? "" : "s"} flagged:`];
-    sorted.slice(0, MAX_CAPTION_LINES - 1).forEach((flag, idx) => {
-      lines.push(`${idx + 1}. ${flag.message}`);
-    });
-    if (sorted.length > MAX_CAPTION_LINES - 1) {
-      lines.push(`…and ${sorted.length - (MAX_CAPTION_LINES - 1)} more (see panel).`);
-    }
-    doc.addCaption(slideIndex, lines);
   }
-
   return doc.toBuffer();
 }
 

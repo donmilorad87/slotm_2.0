@@ -840,6 +840,98 @@ export class PptxDocument {
     pushChild(spTree, shape);
   }
 
+  /**
+   * Append a numbered circular badge with an arrow pointing at a flagged region.
+   * The badge sits up-and-left of the region so the arrow reads top-left → region.
+   */
+  addMarker(slideIndex: number, bbox: BBoxEmu, label: number): void {
+    const spTree = this.spTreeNode(slideIndex);
+    if (!spTree) {
+      return;
+    }
+    const RED = "E80000";
+    const badge = 392000; // ~0.41" diameter
+    // Aim the arrow a little inside the region's top-left corner.
+    const targetX = bbox.x + Math.min(Math.max(bbox.cx, 0) * 0.12, 160000);
+    const targetY = bbox.y + Math.min(Math.max(bbox.cy, 0) * 0.12, 110000);
+    // Place the badge up-left of the target, clamped to the slide.
+    const badgeX = Math.max(targetX - badge - 320000, 20000);
+    const badgeY = Math.max(targetY - badge - 240000, 20000);
+    // Arrow from the badge's bottom-right toward the target (so head lands on region).
+    const startX = badgeX + badge;
+    const startY = badgeY + badge;
+    const offX = Math.min(startX, targetX);
+    const offY = Math.min(startY, targetY);
+    const extX = Math.max(Math.abs(targetX - startX), 1);
+    const extY = Math.max(Math.abs(targetY - startY), 1);
+    const xfrmAttrs: Record<string, string> = {};
+    if (startX > targetX) xfrmAttrs.flipH = "1";
+    if (startY > targetY) xfrmAttrs.flipV = "1";
+
+    this.highlightCounter += 1;
+    const arrowId = String(this.highlightCounter);
+    const arrow = elementNode("p:sp", undefined, [
+      elementNode("p:nvSpPr", undefined, [
+        elementNode("p:cNvPr", { id: arrowId, name: `acme-arrow-${arrowId}` }),
+        elementNode("p:cNvSpPr"),
+        elementNode("p:nvPr"),
+      ]),
+      elementNode("p:spPr", undefined, [
+        elementNode("a:xfrm", xfrmAttrs, [
+          elementNode("a:off", { x: String(offX), y: String(offY) }),
+          elementNode("a:ext", { cx: String(extX), cy: String(extY) }),
+        ]),
+        elementNode("a:prstGeom", { prst: "line" }, [elementNode("a:avLst")]),
+        elementNode("a:ln", { w: "38100", cap: "rnd" }, [
+          elementNode("a:solidFill", undefined, [elementNode("a:srgbClr", { val: RED })]),
+          elementNode("a:tailEnd", { type: "triangle", w: "lg", len: "lg" }),
+        ]),
+      ]),
+      elementNode("p:txBody", undefined, [
+        elementNode("a:bodyPr"),
+        elementNode("a:lstStyle"),
+        elementNode("a:p"),
+      ]),
+    ]);
+    pushChild(spTree, arrow);
+
+    this.highlightCounter += 1;
+    const badgeId = String(this.highlightCounter);
+    const badgeShape = elementNode("p:sp", undefined, [
+      elementNode("p:nvSpPr", undefined, [
+        elementNode("p:cNvPr", { id: badgeId, name: `acme-marker-${badgeId}` }),
+        elementNode("p:cNvSpPr"),
+        elementNode("p:nvPr"),
+      ]),
+      elementNode("p:spPr", undefined, [
+        elementNode("a:xfrm", undefined, [
+          elementNode("a:off", { x: String(badgeX), y: String(badgeY) }),
+          elementNode("a:ext", { cx: String(badge), cy: String(badge) }),
+        ]),
+        elementNode("a:prstGeom", { prst: "ellipse" }, [elementNode("a:avLst")]),
+        elementNode("a:solidFill", undefined, [elementNode("a:srgbClr", { val: RED })]),
+        elementNode("a:ln", { w: "25400" }, [
+          elementNode("a:solidFill", undefined, [elementNode("a:srgbClr", { val: "FFFFFF" })]),
+        ]),
+      ]),
+      elementNode("p:txBody", undefined, [
+        elementNode("a:bodyPr", { anchor: "ctr", anchorCtr: "1", wrap: "none", lIns: "0", tIns: "0", rIns: "0", bIns: "0" }),
+        elementNode("a:lstStyle"),
+        elementNode("a:p", undefined, [
+          elementNode("a:pPr", { algn: "ctr" }),
+          elementNode("a:r", undefined, [
+            elementNode("a:rPr", { lang: "en-US", sz: "1600", b: "1", dirty: "0" }, [
+              elementNode("a:solidFill", undefined, [elementNode("a:srgbClr", { val: "FFFFFF" })]),
+              elementNode("a:latin", { typeface: "Calibri" }),
+            ]),
+            elementNode("a:t", undefined, [textNode(String(label))]),
+          ]),
+        ]),
+      ]),
+    ]);
+    pushChild(spTree, badgeShape);
+  }
+
   /** Append a caption textbox near the bottom of the slide listing findings. */
   addCaption(slideIndex: number, lines: readonly string[]): void {
     const spTree = this.spTreeNode(slideIndex);

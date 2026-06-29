@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { transform } from "esbuild";
+import * as sass from "sass";
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(SCRIPT_DIR, "..");
@@ -38,6 +39,11 @@ async function copyTree(currentPath) {
     return;
   }
 
+  // SCSS is compiled to a single stylesheet separately; never copy it verbatim.
+  if (currentPath.endsWith(".scss")) {
+    return;
+  }
+
   const outputPath = toOutputPath(currentPath);
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
 
@@ -60,10 +66,19 @@ async function copyTree(currentPath) {
   await fs.copyFile(currentPath, outputPath);
 }
 
+async function compileStyles() {
+  const entry = path.join(SRC_DIR, "client", "styles", "main.scss");
+  const outPath = path.join(DIST_DIR, "client", "styles", "main.css");
+  const result = await sass.compileAsync(entry, { style: "compressed" });
+  await fs.mkdir(path.dirname(outPath), { recursive: true });
+  await fs.writeFile(outPath, result.css, "utf8");
+}
+
 async function main() {
   await removeDir(DIST_DIR);
   await fs.mkdir(DIST_DIR, { recursive: true });
   await copyTree(SRC_DIR);
+  await compileStyles();
   console.log("Built slotm into dist/");
 }
 

@@ -16,6 +16,7 @@ interface Flag {
   autoFixable: boolean;
   confidence: number | null;
   location: FlagLocation;
+  markerNumber: number | null;
 }
 type Version = "original" | "annotated" | "corrected";
 interface Slide {
@@ -464,6 +465,10 @@ function flagCard(flag: Flag): string {
   const snippet = flag.location.textSnippet
     ? `<div class="flag-card__snippet">“${escapeHtml(flag.location.textSnippet)}”</div>`
     : "";
+  const marker =
+    flag.markerNumber !== null
+      ? `<span class="flag-card__marker" title="Marker ${flag.markerNumber} on the annotated slide">${flag.markerNumber}</span>`
+      : "";
   const actions =
     flag.status === "pending"
       ? `<button class="flag-card__accept" data-action="accept" data-id="${flag.id}">✓ Accept</button>
@@ -473,6 +478,7 @@ function flagCard(flag: Flag): string {
   return `
     <div class="flag-card ${catClass}${stateClass}" data-id="${flag.id}">
       <div class="flag-card__top">
+        ${marker}
         <span class="flag-card__severity flag-card__severity--${flag.severity}" aria-hidden="true"></span>
         <span class="flag-card__rule">${escapeHtml(flag.ruleId)}</span>
         <span class="flag-card__badge flag-card__badge--${flag.category}">${badge}</span>
@@ -499,12 +505,17 @@ function renderFlags(): void {
   }
   const deterministic = all.filter((f) => f.category !== "judgment");
   const ai = all.filter((f) => f.category === "judgment");
-  let html = deterministic.map(flagCard).join("");
-  if (ai.length > 0) {
-    html += `<details class="compliance__ai-group"${deterministic.length === 0 ? " open" : ""}>
-      <summary>AI suggestions (${ai.length})</summary>
-      ${ai.map(flagCard).join("")}
+  const group = (label: string, cards: readonly Flag[]): string =>
+    `<details class="compliance__ai-group" open>
+      <summary>${label} (${cards.length})</summary>
+      <div class="compliance__group-body">${cards.map(flagCard).join("")}</div>
     </details>`;
+  let html = "";
+  if (deterministic.length > 0) {
+    html += group("Suggestions based on deterministic rules", deterministic);
+  }
+  if (ai.length > 0) {
+    html += group("AI suggestions", ai);
   }
   wrap.innerHTML = html;
 }

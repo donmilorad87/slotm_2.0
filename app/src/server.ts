@@ -14,14 +14,9 @@ import rateLimit from "express-rate-limit";
 import { AppConfig } from "./config/AppConfig.js";
 import { AuthController } from "./controllers/AuthController.js";
 import { ComplianceController } from "./controllers/ComplianceController.js";
-import { GameController } from "./controllers/GameController.js";
 import { PageController } from "./controllers/PageController.js";
 import { ProfileController } from "./controllers/ProfileController.js";
 import { WalletController } from "./controllers/WalletController.js";
-import { GameEngineRegistry } from "./game/engines/GameEngineRegistry.js";
-import { LegacyMiniGameEngine } from "./game/engines/LegacyMiniGameEngine.js";
-import { SlotSpinEngine } from "./game/engines/SlotSpinEngine.js";
-import { TicketMiniGameEngine } from "./game/engines/TicketMiniGameEngine.js";
 import { loadAppEnv } from "./lib/env.js";
 import { StripeClient } from "./lib/stripe.js";
 import { createJwtAuthMiddlewares } from "./middlewares/auth.middleware.js";
@@ -30,7 +25,6 @@ import { attachRequestContext } from "./middlewares/request-context.middleware.j
 import { connectPrisma, disconnectPrisma, getPrisma } from "./repositories/PrismaConnection.js";
 import { ComplianceRepository } from "./repositories/ComplianceRepository.js";
 import { DeterministicRuleRepository } from "./repositories/DeterministicRuleRepository.js";
-import { GameRepository } from "./repositories/GameRepository.js";
 import { GuidelineRepository } from "./repositories/GuidelineRepository.js";
 import { TransactionRepository } from "./repositories/TransactionRepository.js";
 import { UserRepository } from "./repositories/UserRepository.js";
@@ -39,7 +33,6 @@ import { AuthService } from "./services/AuthService.js";
 import { ComplianceAiService } from "./services/ComplianceAiService.js";
 import { ComplianceService } from "./services/ComplianceService.js";
 import { DeterministicRuleService } from "./services/DeterministicRuleService.js";
-import { GameService } from "./services/GameService.js";
 import { GuidelineService } from "./services/GuidelineService.js";
 import { ProfileService } from "./services/ProfileService.js";
 import { WalletService } from "./services/WalletService.js";
@@ -57,27 +50,13 @@ async function start(): Promise<void> {
   const prisma = getPrisma();
   const userRepo = new UserRepository(prisma);
   const txRepo = new TransactionRepository(prisma);
-  const gameRepo = new GameRepository(prisma);
   const guidelineRepo = new GuidelineRepository(prisma);
   const complianceRepo = new ComplianceRepository(prisma);
   const deterministicRuleRepo = new DeterministicRuleRepository(prisma);
   const stripe = new StripeClient(config.stripeSecret);
 
-  const registry = new GameEngineRegistry();
-  const slotSpinEngine = new SlotSpinEngine(txRepo, gameRepo);
-  const legacyMiniGameEngine = new LegacyMiniGameEngine(txRepo, gameRepo);
-  const ticketMiniGameEngine = new TicketMiniGameEngine(txRepo, gameRepo);
-  registry.register("slot_spin", slotSpinEngine);
-  registry.registerMiniGameResolver((payload) => {
-    if (Object.prototype.hasOwnProperty.call(payload, "tickets")) {
-      return ticketMiniGameEngine;
-    }
-    return legacyMiniGameEngine;
-  });
-
   const authService = new AuthService(userRepo, config);
   const walletService = new WalletService(userRepo, txRepo, stripe, config);
-  const gameService = new GameService(txRepo, gameRepo, registry);
   const profileService = new ProfileService(userRepo);
   const guidelineService = new GuidelineService(guidelineRepo, config);
   const complianceAi = new ComplianceAiService(config);
@@ -121,7 +100,6 @@ async function start(): Promise<void> {
 
   const authController = new AuthController(authService, setJwtCookie, clearJwtCookie, clearSessionCookies);
   const pageController = new PageController(walletService, userRepo, stripe, config);
-  const gameController = new GameController(gameService, gameRepo, config);
   const walletController = new WalletController(walletService, config);
   const profileController = new ProfileController(profileService);
   const complianceController = new ComplianceController(
@@ -233,7 +211,6 @@ async function start(): Promise<void> {
     uploadPptx,
     authController,
     pageController,
-    gameController,
     walletController,
     profileController,
     complianceController,

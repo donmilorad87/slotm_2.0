@@ -1,0 +1,47 @@
+@use "mixins" as *;
+
+// =============================================================================
+// Login / Register
+// =============================================================================
+.auth-card {
+  width: 100%;
+  max-width: 408px;
+  @include card(var(--sp-6));
+  box-shadow: var(--shadow-lg);
+  position: relative;
+  overflow: hidden;
+
+  // Accent header band
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--accent-active));
+  }
+
+  h1 { font-size: var(--fs-xl); margin-bottom: var(--sp-1); }
+}
+
+.auth-subtitle {
+  color: var(--text-muted);
+  font-size: var(--fs-cap);
+  margin-bottom: var(--sp-5);
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+
+  .btn { margin-top: var(--sp-1); width: 100%; }
+}
+
+.auth-switch {
+  margin-top: var(--sp-5);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--divider);
+  font-size: var(--fs-cap);
+  color: var(--text-muted);
+  text-align: center;
+}

@@ -1,0 +1,72 @@
+@use "mixins" as *;
+
+// =============================================================================
+// Upload history (host element carries .app-main .app-main--narrow)
+// =============================================================================
+.history__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-5);
+}
+
+.history__list {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.history__item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-sm);
+  transition: border-color var(--dur-1) var(--ease), box-shadow var(--dur-1) var(--ease),
+              transform var(--dur-1) var(--ease);
+
+  &:hover { border-color: var(--accent-border); box-shadow: var(--shadow-md); transform: translateY(-1px); }
+}
+
+.history__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.history__title { font-weight: var(--fw-semibold); color: var(--text-primary); @include truncate; }
+.history__meta { color: var(--text-muted); font-size: var(--fs-sm); }
+
+.history__status {
+  @include pill(var(--text-muted), var(--surface-sunken), var(--border));
+  text-transform: capitalize;
+
+  &--reviewing,
+  &--analyzed { @include pill(var(--info), var(--info-soft), var(--info-border)); }
+  &--applied,
+  &--complete,
+  &--completed { @include pill(var(--ok), var(--ok-soft), var(--ok-border)); }
+  &--uploaded,
+  &--parsing { @include pill(var(--warn), var(--warn-soft), var(--warn-border)); }
+}
+
+.history__empty {
+  padding: var(--sp-7) var(--sp-4);
+  text-align: center;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-card);
+}
+
+@media (max-width: 560px) {
+  .history__item { flex-wrap: wrap; }
+}

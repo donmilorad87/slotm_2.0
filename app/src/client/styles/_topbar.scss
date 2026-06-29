@@ -1,0 +1,197 @@
+@use "mixins" as *;
+
+// =============================================================================
+// Top app bar (Fluent command-bar feel)
+// =============================================================================
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  height: var(--topbar-h);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: saturate(1.4) blur(12px);
+  -webkit-backdrop-filter: saturate(1.4) blur(12px);
+  border-bottom: 1px solid var(--border);
+  // Thin accent rule along the top edge — the one signature detail.
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+.topbar__inner {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  height: 100%;
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: 0 var(--sp-5);
+}
+
+// ----- Brand wordmark --------------------------------------------------------
+.brandmark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  color: var(--text-primary);
+  font-weight: var(--fw-semibold);
+  letter-spacing: -0.01em;
+  &:hover { text-decoration: none; color: var(--text-primary); }
+}
+
+.brandmark__glyph {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  color: var(--accent-fg);
+  background: linear-gradient(135deg, var(--accent), var(--accent-active));
+  box-shadow: var(--shadow-sm);
+  svg { width: 17px; height: 17px; }
+}
+
+.brandmark__text {
+  font-size: var(--fs-md);
+  b { font-weight: var(--fw-bold); color: var(--accent); }
+}
+
+// ----- Primary nav -----------------------------------------------------------
+.topbar__nav {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  margin-left: var(--sp-3);
+}
+
+.topbar__link {
+  position: relative;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-control);
+  color: var(--text-secondary);
+  font-size: var(--fs-cap);
+  font-weight: var(--fw-medium);
+  transition: background var(--dur-1) var(--ease), color var(--dur-1) var(--ease);
+
+  &:hover { background: var(--surface-hover); color: var(--text-primary); text-decoration: none; }
+  &[aria-current="page"] {
+    color: var(--accent);
+    &::after {
+      content: "";
+      position: absolute;
+      left: var(--sp-3);
+      right: var(--sp-3);
+      bottom: -1px;
+      height: 2px;
+      border-radius: 2px;
+      background: var(--accent);
+    }
+  }
+}
+
+.topbar__right {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-left: auto;
+}
+
+.topbar__muted {
+  color: var(--text-muted);
+  font-size: var(--fs-cap);
+}
+
+// ----- Profile menu ----------------------------------------------------------
+.topbar__profile { position: relative; }
+
+.topbar__avatar {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+  overflow: hidden;
+  transition: border-color var(--dur-1) var(--ease), box-shadow var(--dur-1) var(--ease);
+  @include focusable;
+
+  &:hover { border-color: var(--accent); }
+  &[aria-expanded="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+  img { width: 100%; height: 100%; object-fit: cover; }
+}
+
+.topbar__avatar-initials {
+  font-size: var(--fs-cap);
+  font-weight: var(--fw-semibold);
+  text-transform: uppercase;
+}
+
+.topbar__dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 184px;
+  padding: var(--sp-1);
+  background: var(--overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-pop);
+  display: flex;
+  flex-direction: column;
+  animation: dropdown-in var(--dur-2) var(--ease);
+
+  &[hidden] { display: none; }
+
+  a {
+    padding: var(--sp-2) var(--sp-3);
+    border-radius: var(--radius-control);
+    color: var(--text-secondary);
+    font-size: var(--fs-cap);
+    &:hover { background: var(--surface-hover); color: var(--text-primary); text-decoration: none; }
+  }
+}
+
+@keyframes dropdown-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+// ----- Theme toggle ----------------------------------------------------------
+.theme-toggle {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--text-secondary);
+  transition: background var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease),
+              color var(--dur-1) var(--ease);
+  @include focusable;
+
+  &:hover { background: var(--surface-hover); border-color: var(--border-strong); color: var(--text-primary); }
+  svg { width: 18px; height: 18px; }
+
+  // Show the right icon for the active theme.
+  .theme-toggle__sun { display: none; }
+  .theme-toggle__moon { display: block; }
+}
+
+[data-theme="dark"] .theme-toggle {
+  .theme-toggle__sun { display: block; }
+  .theme-toggle__moon { display: none; }
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="dark"]) .theme-toggle {
+    .theme-toggle__sun { display: block; }
+    .theme-toggle__moon { display: none; }
+  }
+}
+
+@media (max-width: 720px) {
+  .topbar__nav { display: none; }
+  .topbar__inner { padding: 0 var(--sp-4); }
+}

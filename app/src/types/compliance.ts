@@ -78,6 +78,8 @@ export interface ComplianceFlagDto {
   autoFixable: boolean;
   confidence: number | null;
   location: FlagLocationDto;
+  /** 1-based marker number shown on the annotated slide and the flag card (null if unpositioned). */
+  markerNumber: number | null;
 }
 
 export interface SlideImageSet {

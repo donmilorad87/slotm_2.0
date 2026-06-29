@@ -1,0 +1,93 @@
+@use "mixins" as *;
+
+// =============================================================================
+// Form controls
+// =============================================================================
+label {
+  display: block;
+  font-size: var(--fs-cap);
+  font-weight: var(--fw-medium);
+  color: var(--text-secondary);
+}
+
+%control {
+  width: 100%;
+  padding: 0.5rem 0.7rem;
+  min-height: 36px;
+  font-size: var(--fs-base);
+  color: var(--text-primary);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  transition: border-color var(--dur-1) var(--ease), box-shadow var(--dur-1) var(--ease),
+              background var(--dur-1) var(--ease);
+
+  &::placeholder { color: var(--text-faint); }
+
+  &:hover { border-color: var(--text-faint); }
+
+  &:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
+  &:disabled { background: var(--surface-sunken); color: var(--text-muted); cursor: not-allowed; }
+}
+
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="search"],
+textarea,
+select { @extend %control; }
+
+// Labels that wrap an input: stack the control under the label text.
+label > input,
+label > select,
+label > textarea {
+  margin-top: var(--sp-1);
+  font-weight: var(--fw-regular);
+}
+
+textarea {
+  resize: vertical;
+  min-height: 120px;
+  line-height: var(--lh-base);
+}
+
+select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23605e5c' d='M2.5 4.5L6 8l3.5-3.5z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.6rem center;
+  padding-right: 2rem;
+}
+
+// Checkbox accent
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--accent);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+// Inline messages
+.form-error,
+.flash-msg {
+  color: var(--critical);
+  font-size: var(--fs-cap);
+  min-height: 1.2em;
+}
+.form-success { color: var(--ok); font-size: var(--fs-cap); min-height: 1.2em; }
+
+.flash-msg:empty { display: none; }
+
+// Generic field group
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}

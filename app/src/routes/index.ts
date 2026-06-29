@@ -3,14 +3,12 @@ import type multer from "multer";
 
 import type { AuthController } from "../controllers/AuthController.js";
 import type { ComplianceController } from "../controllers/ComplianceController.js";
-import type { GameController } from "../controllers/GameController.js";
 import type { PageController } from "../controllers/PageController.js";
 import type { ProfileController } from "../controllers/ProfileController.js";
 import type { WalletController } from "../controllers/WalletController.js";
 
 import { buildAuthRoutes } from "./auth.routes.js";
 import { buildComplianceRoutes } from "./compliance.routes.js";
-import { buildGameRoutes } from "./game.routes.js";
 import { buildGuidelineRoutes } from "./guideline.routes.js";
 import { buildPageRoutes } from "./page.routes.js";
 import { buildProfileRoutes } from "./profile.routes.js";
@@ -30,7 +28,6 @@ interface RoutesMiddleware {
 interface RoutesControllers {
   authController: AuthController;
   pageController: PageController;
-  gameController: GameController;
   walletController: WalletController;
   profileController: ProfileController;
   complianceController: ComplianceController;
@@ -45,11 +42,9 @@ export function registerRoutes(app: Application, deps: RegisterRoutesDeps): void
       optionalJwt: deps.optionalJwt,
       requireJwt: deps.requireJwt,
       handleRootPage: deps.pageController.handleRootPage,
-      handleGamesPage: deps.pageController.handleGamesPage,
       handleLoginPage: deps.pageController.handleLoginPage,
       handleRegisterPage: deps.pageController.handleRegisterPage,
       handleLogoutPage: deps.authController.handleLogoutPage,
-      handleGamePage: deps.pageController.handleGamePage,
       handleWalletPage: deps.pageController.handleWalletPage,
       handleProfilePage: deps.pageController.handleProfilePage,
       handleCompliancePage: deps.complianceController.handleCompliancePage,
@@ -66,15 +61,6 @@ export function registerRoutes(app: Application, deps: RegisterRoutesDeps): void
       handleAuthRegister: deps.authController.handleRegister,
       handleAuthLogin: deps.authController.handleLogin,
       handleAuthLogout: deps.authController.handleLogout,
-    }),
-  );
-
-  app.use(
-    "/api/games",
-    buildGameRoutes({
-      requireJwt: deps.requireJwt,
-      handleApiGames: deps.gameController.handleApiGames,
-      handleHistoryApi: deps.gameController.handleHistoryApi,
     }),
   );
 

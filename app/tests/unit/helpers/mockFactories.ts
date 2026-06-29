@@ -1,7 +1,6 @@
 import { jest } from "@jest/globals";
 import type { IUserRepository } from "../../../src/interfaces/IUserRepository.js";
 import type { ITransactionRepository, DeductBalanceResult } from "../../../src/interfaces/ITransactionRepository.js";
-import type { IGameRepository } from "../../../src/interfaces/IGameRepository.js";
 import type { IPaymentGateway } from "../../../src/interfaces/IPaymentGateway.js";
 import type { SlotUser } from "../../../src/types/domain.js";
 import type { AppConfig } from "../../../src/config/AppConfig.js";
@@ -51,28 +50,6 @@ export function createMockTxRepo(): jest.Mocked<ITransactionRepository> {
   };
 }
 
-export function createMockGameRepo(): jest.Mocked<IGameRepository> {
-  return {
-    saveSpin: jest.fn<IGameRepository["saveSpin"]>().mockResolvedValue(1),
-    consumePendingMiniGame: jest.fn<IGameRepository["consumePendingMiniGame"]>().mockResolvedValue(1),
-    attachMiniGameToHistory: jest.fn<IGameRepository["attachMiniGameToHistory"]>().mockResolvedValue(undefined),
-    getUserHistory: jest.fn<IGameRepository["getUserHistory"]>().mockResolvedValue({ total: 0, items: [] }),
-    getUserStats: jest.fn<IGameRepository["getUserStats"]>().mockResolvedValue({
-      user_id: 1,
-      total_spins: 0,
-      total_wagered: 0,
-      total_won: 0,
-      total_net: 0,
-      wins: 0,
-      losses: 0,
-      win_rate: 0,
-      biggest_win: 0,
-      biggest_loss: 0,
-      mini_games_triggered: 0,
-    }),
-  };
-}
-
 export function createMockPaymentGateway(): jest.Mocked<IPaymentGateway> {
   return {
     isConfigured: jest.fn<IPaymentGateway["isConfigured"]>().mockReturnValue(true),
@@ -115,7 +92,6 @@ export function createTestConfig(overrides: Partial<AppConfig> = {}): AppConfig 
     clientStylesDir: "/tmp/test-dist/client/styles",
     clientImagesDir: "/tmp/test-dist/client/images",
     uploadsDir: "/tmp/test-dist/uploads",
-    slotMachineMarkupPath: "/tmp/test-dist/views/slot-machine-markup.html",
     historyPageSize: 20,
     walletTxPageSize: 20,
     maxUploadSize: 2 * 1024 * 1024,

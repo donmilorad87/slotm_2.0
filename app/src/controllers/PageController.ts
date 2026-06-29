@@ -1,4 +1,3 @@
-import { promises as fs } from "node:fs";
 import path from "node:path";
 
 import type { Request, RequestHandler, Response } from "express";
@@ -20,16 +19,6 @@ type BaseTemplateContext = TemplateContext & UserTemplateData & { title: string 
 
 /** Login/register pages: unauthenticated, with redirect target. */
 type AuthPageContext = TemplateContext & { title: string; next_path: string };
-
-/** Slot machine page context. */
-type GamePageContext = BaseTemplateContext & {
-  user_id: string;
-  user_balance_coins: string;
-  jwt_token: string;
-  slot_machine_markup: string;
-  stripe_public_key: string;
-  flash_message: string;
-};
 
 /** Wallet page context. */
 type WalletPageContext = BaseTemplateContext & {
@@ -97,8 +86,6 @@ function cardRowsHtml(cards: StripePaymentMethod[], defaultPaymentMethodId: stri
 }
 
 export class PageController extends BaseController {
-  private slotMachineMarkupCache = "";
-
   constructor(
     private readonly walletService: WalletService,
     private readonly userRepo: IUserRepository,
@@ -108,64 +95,11 @@ export class PageController extends BaseController {
     super();
   }
 
-  private async getSlotMachineMarkup(): Promise<string> {
-    if (this.slotMachineMarkupCache) {
-      return this.slotMachineMarkupCache;
-    }
-    this.slotMachineMarkupCache = await fs.readFile(this.config.slotMachineMarkupPath, "utf8");
-    return this.slotMachineMarkupCache;
-  }
-
   get handleRootPage(): RequestHandler {
     return this.pageHandler(async (req: Request, res: Response) => {
-      const auth = this.requireAuthUser(req);
-      const ctx: BaseTemplateContext = {
-        title: "Blazing Sun - Home",
-        ...this.userTemplateData(auth.user),
-      };
-      const html = await renderTemplate(path.join(this.config.templateDir, "home.hbs"), ctx);
-      res.status(200).set("Content-Type", "text/html; charset=utf-8").send(html);
-    });
-  }
-
-  get handleGamesPage(): RequestHandler {
-    return this.pageHandler(async (req: Request, res: Response) => {
-      const auth = this.requireAuthUser(req);
-      const ctx: BaseTemplateContext = {
-        title: "Games - slotm",
-        ...this.userTemplateData(auth.user),
-      };
-      const html = await renderTemplate(path.join(this.config.templateDir, "games.hbs"), ctx);
-      res.status(200).set("Content-Type", "text/html; charset=utf-8").send(html);
-    });
-  }
-
-  get handleGamePage(): RequestHandler {
-    return this.pageHandler(async (req: Request, res: Response) => {
-      const auth = this.requireAuthUser(req);
-      const user = auth.user;
-      const finalize = await this.walletService.finalizeStripeFromQuery(user, {
-        session_id: this.queryString(req.query, "session_id"),
-        topup: this.queryString(req.query, "topup"),
-        setup: this.queryString(req.query, "setup"),
-      });
-      const freshUser = await this.userRepo.getUserById(user.id);
-      const userBalanceCoins = await this.walletService.getBalanceCoins(user.id);
-
-      const profileUser = freshUser || user;
-      const ctx: GamePageContext = {
-        title: "Slot Machine - slotm",
-        user_id: String(user.id),
-        user_balance_coins: String(userBalanceCoins),
-        jwt_token: auth.token || "",
-        slot_machine_markup: await this.getSlotMachineMarkup(),
-        stripe_public_key: this.config.stripePublicKey,
-        flash_message: finalize.flash || "",
-        ...this.userTemplateData(profileUser),
-      };
-      const html = await renderTemplate(path.join(this.config.templateDir, "slot-machine.hbs"), ctx);
-
-      res.status(200).set("Content-Type", "text/html; charset=utf-8").send(html);
+      // The brand-check tool is the app's home; / redirects to it.
+      this.requireAuthUser(req);
+      res.redirect("/compliance");
     });
   }
 

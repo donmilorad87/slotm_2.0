@@ -204,8 +204,8 @@ async function loadTransactionsPage(page: string | number): Promise<void> {
     txHistoryTotalPages = Number.isFinite(totalPages) && totalPages > 0 ? totalPages : 1;
     txHistoryPage = Number.isFinite(currentPage) && currentPage > 0 ? currentPage : 1;
     txHistoryTotalItems = Number.isFinite(totalItems) && totalItems > 0 ? totalItems : 0;
-    txHistoryItems = Array.isArray(json.data?.transactions)
-      ? (json.data.transactions as TransactionItem[])
+    txHistoryItems = Array.isArray(json.data?.items)
+      ? (json.data.items as TransactionItem[])
       : [];
     txHistoryLoading = false;
 

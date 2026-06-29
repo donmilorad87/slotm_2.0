@@ -1,0 +1,51 @@
+@use "mixins" as *;
+
+// =============================================================================
+// Brand guidelines editor (host element also carries .app-main .app-main--narrow)
+// =============================================================================
+.guidelines__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-2);
+}
+
+.guidelines__meta { color: var(--text-muted); font-size: var(--fs-sm); }
+
+.guidelines__note {
+  color: var(--text-muted);
+  font-size: var(--fs-cap);
+  line-height: var(--lh-base);
+  margin-bottom: var(--sp-5);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-card);
+}
+
+.guidelines__editor-label {
+  font-weight: var(--fw-semibold);
+  color: var(--text-secondary);
+  margin-bottom: var(--sp-2);
+}
+
+.guidelines__editor {
+  width: 100%;
+  min-height: 460px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-cap);
+  line-height: 1.7;
+  tab-size: 2;
+  @include thin-scrollbar;
+}
+
+.guidelines__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-top: var(--sp-4);
+}
+
+.guidelines__status { color: var(--text-muted); font-size: var(--fs-cap); }

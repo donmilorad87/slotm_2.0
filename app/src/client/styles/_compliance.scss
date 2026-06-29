@@ -1,0 +1,488 @@
+@use "mixins" as *;
+
+// =============================================================================
+// Brand Check (compliance) — the core tool. Host carries .app-main .compliance
+// =============================================================================
+.compliance {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+
+.compliance__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+
+  h1 { font-size: var(--fs-2xl); }
+}
+
+// Hidden on desktop (the same links live in the header nav); shown on mobile,
+// where the header nav collapses.
+.compliance__head-links {
+  display: none;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+}
+
+.compliance__guidelines-link {
+  font-size: var(--fs-cap);
+  font-weight: var(--fw-medium);
+  color: var(--text-muted);
+  &:hover { color: var(--accent); }
+}
+
+// ----- Upload dropzone -------------------------------------------------------
+.compliance__dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  min-height: 200px;
+  padding: var(--sp-6);
+  text-align: center;
+  cursor: pointer;
+  background:
+    repeating-linear-gradient(45deg, transparent, transparent 11px, var(--surface-sunken) 11px, var(--surface-sunken) 12px),
+    var(--surface);
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  transition: border-color var(--dur-2) var(--ease), background var(--dur-2) var(--ease),
+              transform var(--dur-2) var(--ease);
+
+  &:hover { border-color: var(--accent); }
+  &--dragover {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    transform: scale(1.005);
+  }
+}
+
+.compliance__dropzone-icon {
+  font-size: 2.4rem;
+  line-height: 1;
+  color: var(--accent);
+}
+.compliance__dropzone-text { font-size: var(--fs-md); color: var(--text-secondary); strong { color: var(--accent); } }
+.compliance__dropzone-hint { font-size: var(--fs-sm); color: var(--text-faint); }
+
+.compliance__filename {
+  font-family: var(--font-mono);
+  font-size: var(--fs-cap);
+  color: var(--text-secondary);
+  margin-top: var(--sp-2);
+  &[hidden] { display: none; }
+}
+
+// ----- Controls + Claude chip ------------------------------------------------
+.compliance__controls {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+
+.status-chip {
+  @include pill(var(--text-muted), var(--surface-sunken), var(--border));
+  font-size: var(--fs-sm);
+
+  &__dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: currentColor;
+    box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 22%, transparent);
+  }
+  &--checking { @include pill(var(--warn), var(--warn-soft), var(--warn-border)); .status-chip__dot { animation: pulse 1.2s var(--ease) infinite; } }
+  &--connected { @include pill(var(--ok), var(--ok-soft), var(--ok-border)); }
+  &--disconnected { @include pill(var(--critical), var(--critical-soft), var(--critical-border)); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+// ----- Progress steps --------------------------------------------------------
+.compliance__progress {
+  @include card(var(--sp-4));
+  &[hidden] { display: none; }
+}
+
+.compliance__steps {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  counter-reset: step;
+}
+
+.compliance__step {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-3) var(--sp-1) var(--sp-1);
+  font-size: var(--fs-cap);
+  color: var(--text-muted);
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+
+  &::before {
+    counter-increment: step;
+    content: counter(step);
+    display: grid;
+    place-items: center;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--border);
+    color: var(--text-muted);
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-semibold);
+  }
+
+  &--active {
+    color: var(--accent);
+    background: var(--accent-soft);
+    &::before { background: var(--accent); color: var(--accent-fg); }
+  }
+  &--done {
+    color: var(--ok);
+    &::before { content: "✓"; background: var(--ok); color: #fff; }
+  }
+}
+
+.compliance__progress-label { margin-top: var(--sp-3); color: var(--text-muted); font-size: var(--fs-cap); }
+
+// ----- Summary / score -------------------------------------------------------
+.compliance__summary {
+  @include card;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+  flex-wrap: wrap;
+  &[hidden] { display: none; }
+}
+
+.compliance__score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 92px; height: 92px;
+  flex: none;
+  border-radius: var(--radius-pill);
+  background: conic-gradient(var(--accent) calc(var(--score, 0) * 1%), var(--surface-sunken) 0);
+  position: relative;
+
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 7px;
+    border-radius: 50%;
+    background: var(--surface);
+  }
+}
+.compliance__score-num {
+  position: relative;
+  font-size: var(--fs-2xl);
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+.compliance__score-cap { position: relative; font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint); }
+
+.compliance__counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-4);
+}
+.compliance__count {
+  font-size: var(--fs-cap);
+  color: var(--text-muted);
+  b { display: block; font-size: var(--fs-xl); font-weight: var(--fw-bold); color: var(--text-primary); font-variant-numeric: tabular-nums; }
+  &--ok b { color: var(--ok); }
+  &--muted b { color: var(--text-faint); }
+}
+
+.compliance__ai-banner {
+  @include pill(var(--info), var(--info-soft), var(--info-border));
+  &[hidden] { display: none; }
+}
+
+.compliance__ai-stop { &[hidden] { display: none; } }
+
+.compliance__filters {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.compliance__filter {
+  padding: var(--sp-1) var(--sp-3);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  color: var(--text-muted);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  transition: all var(--dur-1) var(--ease);
+
+  &:hover { border-color: var(--accent); color: var(--accent); }
+  &--active { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+}
+
+.compliance__bulk { font-size: var(--fs-sm); }
+
+// ----- Review area -----------------------------------------------------------
+.compliance__review {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  &[hidden] { display: none; }
+
+  // Desktop: slide stage fills the main column, the flags panel floats on
+  // the right and sticks in view so problems + slide are visible together.
+  @media (min-width: 900px) {
+    flex-direction: row;
+    align-items: flex-start;
+
+    .compliance__stage { order: 1; flex: 1 1 auto; min-width: 0; }
+
+    .compliance__flags {
+      order: 2;
+      flex: 0 0 360px;
+      position: sticky;
+      top: calc(var(--topbar-h) + var(--sp-4));
+      max-height: calc(100vh - var(--topbar-h) - var(--sp-6));
+      overflow-y: auto;
+      padding-right: 2px;
+      @include thin-scrollbar;
+    }
+  }
+}
+
+.compliance__flags {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+// Accordion toggle for the flags panel — mobile only.
+.compliance__flags-toggle {
+  display: none;
+  order: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  width: 100%;
+  padding: var(--sp-3) var(--sp-4);
+  font-size: var(--fs-cap);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-sm);
+}
+
+.compliance__flags-toggle-icon {
+  width: 10px;
+  height: 10px;
+  border-right: 2px solid var(--text-muted);
+  border-bottom: 2px solid var(--text-muted);
+  transform: rotate(45deg);
+  transition: transform var(--dur-2) var(--ease);
+}
+.compliance__flags-toggle[aria-expanded="false"] .compliance__flags-toggle-icon {
+  transform: rotate(-45deg);
+}
+
+.compliance__empty {
+  padding: var(--sp-5);
+  text-align: center;
+  color: var(--text-muted);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-card);
+}
+
+.compliance__ai-group {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  padding: var(--sp-2) var(--sp-3);
+
+  > summary {
+    cursor: pointer;
+    font-size: var(--fs-cap);
+    font-weight: var(--fw-semibold);
+    color: var(--text-secondary);
+    padding: var(--sp-1) 0;
+    list-style: none;
+    &::-webkit-details-marker { display: none; }
+    &::before { content: "▸ "; color: var(--text-faint); }
+  }
+  &[open] > summary { margin-bottom: var(--sp-2); }
+  &[open] > summary::before { content: "▾ "; }
+
+  & + & { margin-top: var(--sp-3); }
+}
+
+// Gap between the flag cards inside a group accordion.
+.compliance__group-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding-top: var(--sp-1);
+}
+
+// ----- Stage (slide preview) -------------------------------------------------
+.compliance__stage { @include card(var(--sp-4)); }
+
+.compliance__nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-3);
+}
+.compliance__nav-arrows { display: flex; align-items: center; gap: var(--sp-3); }
+.compliance__slide-label { font-weight: var(--fw-semibold); font-size: var(--fs-cap); min-width: 64px; text-align: center; }
+
+.compliance__versions { display: flex; gap: var(--sp-1); background: var(--surface-sunken); padding: 3px; border-radius: var(--radius-control); }
+.compliance__version {
+  padding: var(--sp-1) var(--sp-3);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  &:hover:not(:disabled) { color: var(--text-primary); }
+  &:disabled { opacity: 0.45; cursor: not-allowed; }
+  &--active { background: var(--surface); color: var(--accent); box-shadow: var(--shadow-sm); }
+}
+
+.compliance__stage-img {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 280px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  overflow: hidden;
+
+  img { max-width: 100%; height: auto; box-shadow: var(--shadow-md); }
+  img[hidden] { display: none; }
+}
+.compliance__no-image { color: var(--text-muted); font-size: var(--fs-cap); padding: var(--sp-5); text-align: center; }
+
+.compliance__thumbs {
+  display: flex;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+  // overflow-x:auto clips BOTH axes, so the count badges (which sit at
+  // top/right of each thumb) need interior room or they get cut off.
+  padding: var(--sp-2) var(--sp-2) var(--sp-3);
+  overflow-x: auto;
+  @include thin-scrollbar;
+}
+.compliance__thumb {
+  position: relative;
+  flex: none;
+  min-width: 40px;
+  height: 36px;
+  padding: 0 var(--sp-2);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  &:hover { border-color: var(--accent); }
+  &--active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+}
+.compliance__thumb-badge {
+  position: absolute;
+  top: -6px; right: -6px;
+  min-width: 16px; height: 16px;
+  padding: 0 4px;
+  display: grid; place-items: center;
+  font-size: 10px; font-weight: var(--fw-bold);
+  color: #fff; background: var(--critical);
+  border-radius: var(--radius-pill);
+}
+
+// ----- Output ----------------------------------------------------------------
+.compliance__output {
+  @include card;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  &[hidden] { display: none; }
+}
+.compliance__downloads { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin-left: auto; }
+.compliance__apply-status { display: flex; align-items: center; gap: var(--sp-2); color: var(--text-muted); font-size: var(--fs-cap); &[hidden] { display: none; } }
+
+.compliance__spinner,
+.compliance__apply-status .compliance__spinner {
+  width: 16px; height: 16px;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+// ----- Toast -----------------------------------------------------------------
+.compliance__toast {
+  position: fixed;
+  bottom: var(--sp-5);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  padding: var(--sp-3) var(--sp-5);
+  background: var(--text-primary);
+  color: var(--bg-canvas);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-pop);
+  font-size: var(--fs-cap);
+  font-weight: var(--fw-medium);
+  animation: toast-in var(--dur-3) var(--ease);
+  &[hidden] { display: none; }
+}
+@keyframes toast-in {
+  from { opacity: 0; transform: translate(-50%, 12px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+@media (max-width: 720px) {
+  .compliance__filters { margin-left: 0; width: 100%; }
+  .compliance__summary { gap: var(--sp-4); }
+  // Header nav collapses here, so surface the section links instead.
+  .compliance__head-links { display: flex; }
+}
+
+// Mobile: flags become a collapsible accordion, and the long apply button wraps.
+@media (max-width: 899.98px) {
+  .compliance__flags-toggle { display: flex; }
+  .compliance__flags-toggle[aria-expanded="false"] + .compliance__flags { display: none; }
+
+  .compliance__output { flex-direction: column; align-items: stretch; }
+  .compliance__downloads { margin-left: 0; }
+
+  #cmpApplyBtn {
+    white-space: normal;
+    width: 100%;
+    min-height: auto;
+    padding-block: var(--sp-3);
+    line-height: var(--lh-snug);
+    text-align: center;
+  }
+}

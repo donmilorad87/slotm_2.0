@@ -1,0 +1,179 @@
+@use "mixins" as *;
+
+// =============================================================================
+// Flag card — a single brand-compliance finding
+// =============================================================================
+.flag-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-4);
+  padding-left: calc(var(--sp-4) + 4px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-sm);
+  transition: border-color var(--dur-1) var(--ease), box-shadow var(--dur-1) var(--ease),
+              opacity var(--dur-2) var(--ease);
+
+  // Left status spine — colour set by severity below.
+  &::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 4px;
+    border-radius: var(--radius-card) 0 0 var(--radius-card);
+    background: var(--border-strong);
+  }
+
+  &:hover { box-shadow: var(--shadow-md); }
+
+  &--accepted {
+    &::before { background: var(--ok); }
+    background: var(--ok-soft);
+    border-color: var(--ok-border);
+  }
+  &--rejected {
+    opacity: 0.6;
+    &::before { background: var(--text-faint); }
+  }
+}
+
+// Spine colour follows severity (set via the severity dot's modifier sibling).
+.flag-card:has(.flag-card__severity--error)::before { background: var(--critical); }
+.flag-card:has(.flag-card__severity--warning)::before { background: var(--warn-strong); }
+.flag-card:has(.flag-card__severity--info)::before { background: var(--info); }
+.flag-card--accepted::before { background: var(--ok) !important; }
+.flag-card--rejected::before { background: var(--text-faint) !important; }
+
+.flag-card__top {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+// Numbered marker that mirrors the red pin drawn on the annotated slide.
+.flag-card__marker {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #e80000;
+  color: #fff;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 2px var(--surface), var(--shadow-sm);
+}
+
+.flag-card__severity {
+  width: 10px; height: 10px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--border-strong);
+  &--error { background: var(--critical); }
+  &--warning { background: var(--warn-strong); }
+  &--info { background: var(--info); }
+}
+
+.flag-card__rule {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  letter-spacing: 0.02em;
+}
+
+.flag-card__badge {
+  @include pill(var(--text-muted), var(--surface-sunken), var(--border));
+  margin-left: auto;
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  &--judgment { @include pill(var(--accent), var(--accent-soft), var(--accent-border)); }
+}
+
+.flag-card__message {
+  font-size: var(--fs-base);
+  line-height: var(--lh-snug);
+  color: var(--text-primary);
+}
+
+.flag-card__snippet {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--surface-sunken);
+  border-left: 2px solid var(--border-strong);
+  border-radius: 0 var(--radius-control) var(--radius-control) 0;
+}
+
+.flag-card__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+.flag-card__sevtag {
+  @include pill(var(--text-muted), var(--surface-sunken), var(--border));
+  font-size: var(--fs-xs);
+  &--error { @include pill(var(--critical), var(--critical-soft), var(--critical-border)); }
+  &--warning { @include pill(var(--warn), var(--warn-soft), var(--warn-border)); }
+  &--info { @include pill(var(--info), var(--info-soft), var(--info-border)); }
+}
+
+.flag-card__confidence { color: var(--text-faint); }
+.flag-card__autofix { color: var(--ok); font-weight: var(--fw-medium); }
+.flag-card__manual { color: var(--warn); font-weight: var(--fw-medium); }
+
+.flag-card__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: var(--sp-1);
+}
+
+%flag-action {
+  padding: var(--sp-1) var(--sp-3);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  border-radius: var(--radius-control);
+  border: 1px solid transparent;
+  transition: all var(--dur-1) var(--ease);
+  @include focusable;
+}
+
+.flag-card__accept {
+  @extend %flag-action;
+  color: var(--ok);
+  background: var(--ok-soft);
+  border-color: var(--ok-border);
+  &:hover { background: var(--ok); color: #fff; }
+}
+.flag-card__reject {
+  @extend %flag-action;
+  color: var(--critical);
+  background: var(--critical-soft);
+  border-color: var(--critical-border);
+  &:hover { background: var(--critical); color: #fff; }
+}
+.flag-card__undo {
+  @extend %flag-action;
+  color: var(--text-muted);
+  background: var(--surface);
+  border-color: var(--border-strong);
+  &:hover { border-color: var(--accent); color: var(--accent); }
+}
+.flag-card__resolved {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  text-transform: capitalize;
+  color: var(--text-muted);
+}

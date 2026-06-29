@@ -1,0 +1,72 @@
+// =============================================================================
+// Reusable mixins
+// =============================================================================
+
+// Keyboard focus ring (Fluent-style: crisp outline, offset)
+@mixin focus-ring($color: var(--focus-ring)) {
+  outline: var(--focus-w) solid #{$color};
+  outline-offset: 2px;
+  border-radius: var(--radius-control);
+}
+
+@mixin focusable {
+  &:focus-visible { @include focus-ring; }
+  &:focus:not(:focus-visible) { outline: none; }
+}
+
+// Elevated surface card
+@mixin card($pad: var(--sp-5)) {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-sm);
+  padding: $pad;
+}
+
+@mixin visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@mixin truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Slim, theme-aware scrollbar
+@mixin thin-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+  &::-webkit-scrollbar { width: 10px; height: 10px; }
+  &::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: var(--radius-pill);
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  &::-webkit-scrollbar-track { background: transparent; }
+}
+
+// A soft status pill (used by chips, tags, badges)
+@mixin pill($fg, $bg, $border) {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: 0.15em 0.6em;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  line-height: 1.5;
+  border-radius: var(--radius-pill);
+  color: #{$fg};
+  background: #{$bg};
+  border: 1px solid #{$border};
+  white-space: nowrap;
+}

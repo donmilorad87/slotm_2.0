@@ -5,7 +5,7 @@ import type { AppConfig } from "../config/AppConfig.js";
 import type { FixOp, FlagCategory, FlagDraft, FlagSeverity, ParsedSlide } from "../compliance/model.js";
 import { PptxDocument } from "../compliance/PptxDocument.js";
 import { evaluateDeterministicRules } from "../compliance/deterministic.js";
-import { buildPreviewDeck, renderPptxToPngs } from "../compliance/renderPreview.js";
+import { assignMarkerNumbers, buildPreviewDeck, renderPptxToPngs } from "../compliance/renderPreview.js";
 import type { IComplianceRepository } from "../interfaces/IComplianceRepository.js";
 import type { IDeterministicRuleRepository } from "../interfaces/IDeterministicRuleRepository.js";
 import type { ClaudeStatus } from "../lib/claudeCli.js";
@@ -466,7 +466,16 @@ export class ComplianceService {
       };
     });
 
-    const flagDtos = flags.map((f) => ComplianceService.toFlagDto(f));
+    const markerNumbers = assignMarkerNumbers(
+      flags.map((f) => ({
+        slideIndex: f.slideIndex,
+        dedupeKey: f.dedupeKey,
+        location: ComplianceService.parseLocation(f.locationJson),
+      })),
+    );
+    const flagDtos = flags.map((f) =>
+      ComplianceService.toFlagDto(f, markerNumbers.get(f.dedupeKey) ?? null),
+    );
     return {
       set: {
         id: set.id,
@@ -557,7 +566,7 @@ export class ComplianceService {
     }
   }
 
-  private static toFlagDto(row: FlagRow): ComplianceFlagDto {
+  private static toFlagDto(row: FlagRow, markerNumber: number | null = null): ComplianceFlagDto {
     let location: FlagLocationDto = {};
     if (row.locationJson) {
       try {
@@ -581,6 +590,7 @@ export class ComplianceService {
       autoFixable: row.autoFixable,
       confidence: row.confidence,
       location,
+      markerNumber,
     };
   }
 

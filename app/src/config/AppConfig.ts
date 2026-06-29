@@ -63,7 +63,6 @@ export class AppConfig {
   readonly clientStylesDir: string;
   readonly clientImagesDir: string;
   readonly uploadsDir: string;
-  readonly slotMachineMarkupPath: string;
 
   readonly historyPageSize: number;
   readonly walletTxPageSize: number;
@@ -115,7 +114,6 @@ export class AppConfig {
     this.clientStylesDir = path.join(this.clientDir, "styles");
     this.clientImagesDir = path.join(this.clientDir, "images");
     this.uploadsDir = path.join(distDir, "..", "uploads");
-    this.slotMachineMarkupPath = path.join(this.templateDir, "slot-machine-markup.html");
 
     this.historyPageSize = 20;
     this.walletTxPageSize = 20;

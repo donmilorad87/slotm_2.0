@@ -1,0 +1,12 @@
+@use "mixins" as *;
+
+// =============================================================================
+// Utilities
+// =============================================================================
+.visually-hidden { @include visually-hidden; }
+
+[hidden] { display: none !important; }
+
+.stack { display: flex; flex-direction: column; gap: var(--sp-3); }
+.row { display: flex; align-items: center; gap: var(--sp-3); }
+.spacer { flex: 1; }

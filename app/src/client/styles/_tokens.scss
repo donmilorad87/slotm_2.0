@@ -1,0 +1,232 @@
+// =============================================================================
+// Design tokens — Office / Fluent-familiar theme
+// -----------------------------------------------------------------------------
+// Two tiers:
+//   1. Primitives  — raw SCSS values (compile-time only, never themed directly).
+//   2. Semantic     — CSS custom properties that *reference* primitives and
+//                     switch between light & dark at runtime. Components only
+//                     ever read the semantic custom properties (var(--…)).
+//
+// SCSS variables cannot switch at runtime; CSS custom properties can. That is
+// why the live light/dark toggle is built on custom properties, organised here
+// with SCSS.
+// =============================================================================
+
+// ----- Primitive palette -----------------------------------------------------
+$office-blue:        #2b579a; // Word / ribbon blue — primary accent (light)
+$office-blue-dk:     #234a86;
+$office-blue-dkr:    #1d3f73;
+$office-blue-lt:     #5b9bd5; // PowerPoint accent blue — accent on dark
+$office-blue-ltr:    #6fa8db;
+
+$ink:                #201f1e;
+$ink-2:              #3b3a39;
+$ink-3:              #605e5c;
+$ink-4:              #8a8886;
+
+$paper:              #ffffff;
+$paper-warm:         #faf9f8;
+$grey-10:            #f3f2f1;
+$grey-20:            #edebe9;
+$grey-30:            #e1dfdd;
+$grey-40:            #d2d0ce;
+$grey-50:            #c8c6c4;
+
+$slate-90:           #1b1a19;
+$slate-80:           #252423;
+$slate-75:           #2d2c2b;
+$slate-70:           #323130;
+$slate-60:           #3b3a39;
+$slate-50:           #484644;
+$snow:               #f3f2f1;
+$snow-2:             #e1dfdd;
+$snow-3:             #c8c6c4;
+$snow-4:             #979593;
+
+// Semantic accents (light / dark hand-tuned for contrast)
+$red:                #a4262c;  $red-lt:    #f1707b;
+$amber:              #c19c00;  $amber-lt:  #e8c463;
+$green:              #0e700e;  $green-lt:  #6ccb6c;
+$cyan:               #2f5f8a;  $cyan-lt:   #6aa9dd;
+
+// =============================================================================
+// Theme-independent tokens (typography, geometry, motion, layout)
+// =============================================================================
+:root {
+  // Type families
+  --font-ui: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI",
+             system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Code", "SF Mono",
+               Consolas, monospace;
+
+  // Type scale (14px base — office density)
+  --fs-xs: 0.6875rem;   // 11
+  --fs-sm: 0.75rem;     // 12
+  --fs-cap: 0.8125rem;  // 13
+  --fs-base: 0.875rem;  // 14
+  --fs-md: 1rem;        // 16
+  --fs-lg: 1.125rem;    // 18
+  --fs-xl: 1.375rem;    // 22
+  --fs-2xl: 1.75rem;    // 28
+  --fs-3xl: 2.25rem;    // 36
+
+  --lh-tight: 1.2;
+  --lh-snug: 1.35;
+  --lh-base: 1.55;
+
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+
+  // Spacing — 4px grid
+  --sp-1: 0.25rem;
+  --sp-2: 0.5rem;
+  --sp-3: 0.75rem;
+  --sp-4: 1rem;
+  --sp-5: 1.5rem;
+  --sp-6: 2rem;
+  --sp-7: 3rem;
+  --sp-8: 4rem;
+
+  // Radii — Fluent: small on controls, larger on cards
+  --radius-control: 4px;
+  --radius-card: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+
+  // Motion
+  --ease: cubic-bezier(0.1, 0.9, 0.2, 1);
+  --ease-out: cubic-bezier(0.33, 1, 0.68, 1);
+  --dur-1: 100ms;
+  --dur-2: 160ms;
+  --dur-3: 240ms;
+
+  // Layout
+  --topbar-h: 52px;
+  --content-max: 1180px;
+  --content-narrow: 760px;
+  --focus-w: 2px;
+}
+
+// =============================================================================
+// LIGHT theme (default + [data-theme="light"])
+// =============================================================================
+@mixin theme-light {
+  color-scheme: light;
+
+  --bg-app: #{$grey-10};
+  --bg-canvas: #{$paper-warm};
+  --surface: #{$paper};
+  --surface-raised: #{$paper};
+  --surface-sunken: #{$grey-10};
+  --surface-hover: #{$grey-10};
+  --surface-active: #{$grey-20};
+  --overlay: #{$paper};
+
+  --border: #{$grey-30};
+  --border-strong: #{$grey-50};
+  --border-subtle: #{$grey-20};
+  --divider: #{$grey-30};
+
+  --text-primary: #{$ink};
+  --text-secondary: #{$ink-2};
+  --text-muted: #{$ink-3};
+  --text-faint: #{$ink-4};
+
+  --accent: #{$office-blue};
+  --accent-hover: #{$office-blue-dk};
+  --accent-active: #{$office-blue-dkr};
+  --accent-fg: #{$paper};
+  --accent-soft: #eef3fb;
+  --accent-border: #c5d4ec;
+  --focus-ring: #{$office-blue};
+
+  --critical: #{$red};
+  --critical-soft: #fdf3f4;
+  --critical-border: #f3d6d8;
+  --warn: #8a6d00;
+  --warn-strong: #{$amber};
+  --warn-soft: #fdf8e7;
+  --warn-border: #f1e3b0;
+  --info: #{$cyan};
+  --info-soft: #eef4fa;
+  --info-border: #cfe0f0;
+  --ok: #{$green};
+  --ok-soft: #eef7ee;
+  --ok-border: #cfe8cf;
+
+  --shadow-sm: 0 1px 2px rgba(16, 22, 35, 0.10), 0 0 1px rgba(16, 22, 35, 0.06);
+  --shadow-md: 0 1.6px 3.6px rgba(16, 22, 35, 0.10), 0 0.3px 0.9px rgba(16, 22, 35, 0.07);
+  --shadow-lg: 0 6.4px 14.4px rgba(16, 22, 35, 0.13), 0 1.2px 3.6px rgba(16, 22, 35, 0.10);
+  --shadow-pop: 0 8px 24px rgba(16, 22, 35, 0.16), 0 1px 3px rgba(16, 22, 35, 0.10);
+
+  --grid-dot: rgba(32, 31, 30, 0.045);
+  --scrim: rgba(32, 31, 30, 0.32);
+}
+
+// =============================================================================
+// DARK theme
+// =============================================================================
+@mixin theme-dark {
+  color-scheme: dark;
+
+  --bg-app: #{$slate-90};
+  --bg-canvas: #{$slate-90};
+  --surface: #{$slate-80};
+  --surface-raised: #{$slate-75};
+  --surface-sunken: #1f1e1d;
+  --surface-hover: #2f2e2d;
+  --surface-active: #{$slate-60};
+  --overlay: #{$slate-75};
+
+  --border: #{$slate-60};
+  --border-strong: #{$slate-50};
+  --border-subtle: #{$slate-70};
+  --divider: #{$slate-60};
+
+  --text-primary: #{$snow};
+  --text-secondary: #{$snow-2};
+  --text-muted: #{$snow-3};
+  --text-faint: #{$snow-4};
+
+  --accent: #{$office-blue-lt};
+  --accent-hover: #{$office-blue-ltr};
+  --accent-active: #4a8bc7;
+  --accent-fg: #0a1825;
+  --accent-soft: #1b2c3f;
+  --accent-border: #345a7e;
+  --focus-ring: #{$office-blue-ltr};
+
+  --critical: #{$red-lt};
+  --critical-soft: #2c1b1d;
+  --critical-border: #5a2d31;
+  --warn: #{$amber-lt};
+  --warn-strong: #{$amber-lt};
+  --warn-soft: #2a2517;
+  --warn-border: #57451f;
+  --info: #{$cyan-lt};
+  --info-soft: #18242f;
+  --info-border: #2f4961;
+  --ok: #{$green-lt};
+  --ok-soft: #1a2a1a;
+  --ok-border: #2f4d2f;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.40);
+  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 8px 20px rgba(0, 0, 0, 0.55);
+  --shadow-pop: 0 10px 30px rgba(0, 0, 0, 0.60);
+
+  --grid-dot: rgba(255, 255, 255, 0.04);
+  --scrim: rgba(0, 0, 0, 0.55);
+}
+
+// Apply: explicit choice wins; otherwise follow the OS.
+:root,
+[data-theme="light"] { @include theme-light; }
+
+[data-theme="dark"] { @include theme-dark; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="dark"]) { @include theme-dark; }
+}

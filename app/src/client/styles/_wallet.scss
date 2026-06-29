@@ -1,0 +1,170 @@
+@use "mixins" as *;
+
+// =============================================================================
+// Wallet
+// =============================================================================
+.wallet-page {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: var(--sp-4);
+}
+
+.wallet-balance-card {
+  grid-column: span 5;
+  @include card(var(--sp-6));
+  background: linear-gradient(150deg, var(--accent), var(--accent-active));
+  color: var(--accent-fg);
+  border-color: transparent;
+  box-shadow: var(--shadow-lg);
+  position: relative;
+  overflow: hidden;
+
+  &::after { // soft light bloom
+    content: "";
+    position: absolute;
+    width: 240px; height: 240px;
+    right: -60px; top: -90px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,255,255,0.18), transparent 70%);
+  }
+
+  h1 { color: var(--accent-fg); font-size: var(--fs-md); font-weight: var(--fw-medium); opacity: 0.85; }
+  .wallet-muted { color: var(--accent-fg); opacity: 0.7; font-size: var(--fs-sm); }
+  .flash-msg { color: var(--accent-fg); opacity: 0.95; }
+}
+
+.wallet-balance-value {
+  font-size: var(--fs-3xl);
+  font-weight: var(--fw-bold);
+  letter-spacing: -0.02em;
+  margin: var(--sp-1) 0 var(--sp-2);
+  font-variant-numeric: tabular-nums;
+  span { font-family: var(--font-mono); }
+}
+
+.wallet-actions-card {
+  grid-column: span 7;
+  @include card;
+
+  h2 { font-size: var(--fs-md); margin-bottom: var(--sp-4); }
+}
+
+.wallet-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-4);
+
+  .wallet-topup-btn { min-width: 76px; font-variant-numeric: tabular-nums; }
+}
+
+.wallet-custom-form {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--sp-3);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--divider);
+
+  label { flex: 1; }
+  .btn { flex: none; }
+}
+
+.wallet-card-actions {
+  display: flex;
+  gap: var(--sp-3);
+  margin-top: var(--sp-4);
+  flex-wrap: wrap;
+}
+
+.wallet-table-card {
+  grid-column: span 12;
+  @include card;
+
+  h2 { font-size: var(--fs-md); margin-bottom: var(--sp-4); }
+}
+
+// ----- Tables ----------------------------------------------------------------
+// Wrapper keeps wide tables horizontally scrollable instead of breaking the
+// card layout on narrow screens.
+.wallet-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  @include thin-scrollbar;
+}
+
+.wallet-table {
+  width: 100%;
+  min-width: 520px;
+  border-collapse: collapse;
+  font-size: var(--fs-cap);
+
+  thead th {
+    text-align: left;
+    padding: var(--sp-2) var(--sp-3);
+    font-weight: var(--fw-semibold);
+    font-size: var(--fs-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-faint);
+    border-bottom: 1px solid var(--border-strong);
+  }
+
+  tbody td {
+    padding: var(--sp-3);
+    border-bottom: 1px solid var(--divider);
+    color: var(--text-secondary);
+    vertical-align: middle;
+  }
+
+  tbody tr:hover td { background: var(--surface-hover); }
+  tbody tr:last-child td { border-bottom: none; }
+
+  .tx-credit { color: var(--ok); font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; }
+  .tx-debit { color: var(--critical); font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; }
+}
+
+// ----- History pagination ----------------------------------------------------
+.wallet-history-status { margin-top: var(--sp-3); color: var(--text-muted); font-size: var(--fs-sm); }
+
+.wallet-history-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-top: var(--sp-3);
+}
+
+.wallet-history-pagination {
+  display: flex;
+  gap: var(--sp-1);
+  flex-wrap: wrap;
+
+  button {
+    min-width: 32px;
+    padding: var(--sp-1) var(--sp-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    background: var(--surface);
+    color: var(--text-secondary);
+    font-size: var(--fs-sm);
+    &:hover { border-color: var(--accent); color: var(--accent); }
+    &[aria-current="true"], &.is-active {
+      background: var(--accent); border-color: var(--accent); color: var(--accent-fg);
+    }
+  }
+}
+
+.wallet-history-jump {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  input { width: 64px; }
+}
+
+@media (max-width: 860px) {
+  .wallet-balance-card,
+  .wallet-actions-card { grid-column: span 12; }
+}

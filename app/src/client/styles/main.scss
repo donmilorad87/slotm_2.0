@@ -1,0 +1,23 @@
+// =============================================================================
+// Brand Check — global stylesheet entry point
+// -----------------------------------------------------------------------------
+// Authored in SCSS (partials below), compiled to dist/client/styles/main.css by
+// scripts/build.mjs. Theme tokens are emitted as CSS custom properties so the
+// light/dark toggle switches live at runtime.
+//
+// Order matters: tokens → base → shell → components → utilities.
+// =============================================================================
+@use "tokens";
+@use "base";
+@use "topbar";
+@use "buttons";
+@use "forms";
+@use "auth";
+@use "profile";
+@use "wallet";
+@use "guidelines";
+@use "history";
+@use "rules";
+@use "compliance";
+@use "flag-card";
+@use "utilities";

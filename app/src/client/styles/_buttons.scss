@@ -1,0 +1,68 @@
+@use "mixins" as *;
+
+// =============================================================================
+// Buttons
+// =============================================================================
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  padding: 0.5rem 1rem;
+  min-height: 34px;
+  font-size: var(--fs-cap);
+  font-weight: var(--fw-semibold);
+  line-height: 1.2;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--text-primary);
+  white-space: nowrap;
+  user-select: none;
+  transition: background var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease),
+              color var(--dur-1) var(--ease), box-shadow var(--dur-1) var(--ease),
+              transform var(--dur-1) var(--ease);
+  @include focusable;
+
+  &:active { transform: translateY(0.5px); }
+
+  &:disabled,
+  &[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+}
+
+// Primary — filled accent
+.btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+  box-shadow: var(--shadow-sm);
+
+  &:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+  &:active:not(:disabled) { background: var(--accent-active); border-color: var(--accent-active); }
+}
+
+// Ghost / secondary — outlined neutral
+.btn--ghost {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+
+  &:hover:not(:disabled) { background: var(--surface-hover); border-color: var(--accent); color: var(--accent); }
+  &:active:not(:disabled) { background: var(--surface-active); }
+}
+
+// Danger
+.btn--danger {
+  background: transparent;
+  border-color: var(--critical-border);
+  color: var(--critical);
+
+  &:hover:not(:disabled) { background: var(--critical-soft); border-color: var(--critical); }
+}
+
+.btn--sm { min-height: 28px; padding: 0.3rem 0.65rem; font-size: var(--fs-sm); }
+.btn--block { width: 100%; }
